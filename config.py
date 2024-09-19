@@ -1,64 +1,74 @@
 import json
 import os
 from typing import Dict, List
+from test import Test
+from toolchain import ToolChain, Step
 
-class TestConfig:
+import json
+import os
+from typing import Dict, List
+from test import Test
+from toolchain import ToolChain, Step
+
+class Executable:
+    def __init__(self, **kwargs):
+        self.id = kwargs['id']
+        self.binary = kwargs['binary']
+        self.runtimes = kwargs.get('runtimes', [])
+        self.is_baseline = kwargs.get('isBaseline', False)
+
+    def to_dict(self) -> Dict:
+        return {
+            'id': self.id,
+            'binary': self.binary,
+            'runtimes': self.runtimes,
+            'isBaseline': self.is_baseline
+        }
+
+class Config:
     def __init__(self, config_data: Dict):
         self.test_dir = config_data['testDir']
-        self.tested_executable_paths = config_data['testedExecutablePaths']
-        self.solution_executable = config_data['solutionExecutable']
-        self.runtimes = config_data.get('runtimes', {})
-        self.toolchains = self._parse_toolchains(config_data['toolchains'])
+        self.executables = self.parse_executables(config_data['executables'])
+        self.toolchains = self.parse_toolchains(config_data['toolchains'])
 
-    def _parse_toolchains(self, toolchains_data: Dict[str, List[Dict]]) -> Dict[str, List[Dict]]:
-        parsed_toolchains = {}
+    def parse_executables(self, executables_data: List[Dict]) -> List[Executable]:
+        return [Executable(**exe) for exe in executables_data]
+
+    def parse_toolchains(self, toolchains_data: Dict[str, List[Dict]]) -> List[ToolChain]:
+        parsed_toolchains = []
         for toolchain_name, steps in toolchains_data.items():
-            parsed_steps = []
-            for step in steps:
-                parsed_step = {
-                    'stepName': step['stepName'],
-                    'executablePath': step['executablePath'],
-                    'arguments': step['arguments'],
-                    'output': step.get('output', "-"),
-                    'allowError': step.get('allowError', False),
-                    'usesInStr': step.get('usesInStr', False),
-                    'usesRuntime': step.get('usesRuntime', False)
-                }
-                parsed_steps.append(parsed_step)
-            parsed_toolchains[toolchain_name] = parsed_steps
+            parsed_steps = [Step(**step) for step in steps]
+            parsed_toolchains.append(ToolChain(toolchain_name, parsed_steps))
         return parsed_toolchains
 
     def to_dict(self) -> Dict:
         return {
-            'test_dir': self.test_dir,
-            'tested_executable_paths': self.tested_executable_paths,
-            'solution_executable': self.solution_executable,
-            'runtimes': self.runtimes,
-            'toolchains': self.toolchains
+            'testDir': self.test_dir,
+            'executables': [exe.to_dict() for exe in self.executables],
+            'toolchains': {tc.name: tc.to_dict()[tc.name] for tc in self.toolchains}
         }
 
     def __repr__(self):
         return json.dumps(self.to_dict(), indent=2)
 
-def load_config(file_path: str) -> TestConfig:
+def load_config(file_path: str) -> Config:
     """
     Load and parse the JSON configuration file.
     """
     with open(file_path, 'r') as config_file:
         config_data = json.load(config_file)
-    return TestConfig(config_data)
+    return Config(config_data)
 
-def gather_tests(test_dir: str) -> List[str]:
+def gather_tests(test_dir: str) -> List[Test]:
     """
     Recursively gather all test files in the specified directory.
     A test file is any file that doesn't end with '.out' or '.ins'.
     """
-    test_files = []
+    tests = []
     for root, _, files in os.walk(test_dir):
         for file in files:
-            if not file.endswith(('.out', '.ins')):
-                relative_path = os.path.relpath(os.path.join(root, file), test_dir)
-                test_files.append(relative_path)
-    
-    return sorted(test_files)
+            if not file.endswith(('.out', '.ins')):             
+                test_path = os.path.join(root, file)
+                tests.append(Test(test_path))
+    return tests
 
