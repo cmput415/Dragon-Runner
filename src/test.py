@@ -45,8 +45,8 @@ class Test:
         return self.get_file_or_directive_content(".ins", "INPUT:", "input-stream")
 
     def __repr__(self):
-        return (f"Test(path='{self.test_path}', "
-                f"expected_out_len={len(self.expected_out)}, "
-                f"input_stream_len={len(self.input_stream)})")
+        return (f"test='{os.path.basename(self.test_path)}'"
+                f" expected_out_len={len(self.expected_out)}, "
+                f" input_stream_len={len(self.input_stream)}")
 
 
