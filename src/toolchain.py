@@ -6,7 +6,7 @@ class Step:
         self.name           = kwargs['stepName']
         self.command        = kwargs['command']
         self.arguments      = kwargs['arguments']
-        self.output         = kwargs.get('output', "-")
+        self.output         = kwargs.get('output', None)
         self.allow_error    = kwargs.get('allowError', False)
         self.uses_ins       = kwargs.get('usesInStr', False)
         self.uses_runtime   = kwargs.get('usesRuntime', False)

@@ -1,0 +1,10 @@
+procedure main() returns integer {
+    integer i = 3;
+    integer j = 4;
+    integer k = 5;
+    ((i + j) * k) -> std_output;
+    return 0;
+}
+
+
+//CHECK_FILE:./int_arithmetic_1.out

@@ -1,0 +1,69 @@
+{
+  "testDir": "/home/justin/projects/mini-tester/tests",
+  "executables": [
+    {
+      "id": "justin",
+      "binary": "/home/justin/projects/zig-tester/frontend/bin/gazc",
+      "env" : {
+        "RT_PATH": "/home/justin/projects/zig-tester/frontend/bin",
+        "RT_LIB": "libgart.so"
+      }
+    },
+    {
+      "id": "anthony",
+      "binary": "/home/justin/projects/zig-tester/frontend/bin/gazc",
+      "env" : {
+        "RT_PATH": "/home/justin/other/",
+        "RT_LIB": "other-rt.so"
+      }
+    } 
+  ],
+  "toolchains": {
+    "gazprea-llc": [
+      {
+        "stepName": "gazprea",
+        "command": "@EXE",
+        "arguments": ["@INPUT", "@OUTPUT"],
+        "output": "gaz.ll",
+        "allowError": true 
+      }, 
+      {
+        "stepName": "llc",
+        "command": "/home/justin/install/llvm/llvm-18/bin/llc",
+        "arguments": ["-filetype=obj", "-relocation-model=pic", "@INPUT", "-o", "@OUTPUT"],
+        "output": "gaz.o"
+      },
+      {
+        "stepName": "clang",
+        "command": "/usr/bin/clang",
+        "arguments": ["@INPUT", "-o", "@OUTPUT", "-L${RT_PATH}", "-l${RT_LIB}", "-lm"],
+        "output": "gaz"
+      },
+      {
+        "stepName": "run",
+        "command": "@INPUT",
+        "arguments": [],
+        "usesInStr": true,
+        "usesRuntime": true,
+        "allowError": true
+      }
+    ],
+    "gazprea-lli": [
+      {
+        "stepName": "gazprea",
+        "command": "@EXE",
+        "arguments": ["@INPUT", "@OUTPUT"],
+        "output": "gaz.ll",
+        "allowError": true
+      },
+      {
+        "stepName": "lli",
+        "command": "/home/justin/install/llvm/llvm-18/bin/lli",
+        "arguments": [ "@INPUT" ],
+        "usesInStr": true,
+        "usesRuntime": true,
+        "allowError": true
+      }
+    ]
+  }
+}

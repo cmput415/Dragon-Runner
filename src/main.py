@@ -1,9 +1,16 @@
-from typing import List, Dict, Tuple
-from cli import parse_cli_args
 import os
-
-from config import load_config, gather_tests, Config
+from typing import List, Dict
+from cli import parse_cli_args
+from config import load_config, gather_tests, Executable
 from runner import run_toolchain
+
+def source_executable_env(exe: Executable):
+    """
+    Source all environment variables defined in the env
+    map of the current executable.
+    """
+    for key, value in exe.env.items():
+        os.environ[key] = value
 
 def main():
 
@@ -16,15 +23,12 @@ def main():
     
     for exe in config.executables:
         print("-- Running executable:\t", exe.id)
+        source_executable_env(exe)
+
         for toolchain in config.toolchains:
             print("-- Running Toolchain:\t", toolchain.name) 
             for test in tests:
                 run_toolchain(test, toolchain, exe)
-    #toolchain = config.toolchains['gazprea-llc']
-
-    #for test in tests:
-    #    print(f"Running test: {test}")
-    #    run_toolchain(toolchain, triple, config.to_dict())
 
 if __name__ == "__main__":
     main()

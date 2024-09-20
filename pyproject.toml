@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mini-tester"
+version = "0.1.0"
+description = "An experimental successor"
+authors = [{name = "Justin Meimar", email = "meimar@ualberta.ca"}]
+license = {file = "LICENSE"}
+readme = "README.md"
+requires-python = ">=3.6"
+classifiers = ["Tester"]

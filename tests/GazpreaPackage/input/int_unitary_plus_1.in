@@ -1,0 +1,8 @@
+procedure main() returns integer {
+    integer i = 3;
+    +i -> std_output;
+    return 0;
+}
+
+
+//CHECK_FILE:./int_unitary_plus_1.out

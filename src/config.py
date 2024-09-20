@@ -4,24 +4,18 @@ from typing import Dict, List
 from test import Test
 from toolchain import ToolChain, Step
 
-import json
-import os
-from typing import Dict, List
-from test import Test
-from toolchain import ToolChain, Step
-
 class Executable:
     def __init__(self, **kwargs):
-        self.id = kwargs['id']
-        self.binary = kwargs['binary']
-        self.runtimes = kwargs.get('runtimes', [])
-        self.is_baseline = kwargs.get('isBaseline', False)
+        self.id             = kwargs['id']
+        self.binary         = kwargs['binary']
+        self.env            = kwargs.get('env', {})
+        self.is_baseline    = kwargs.get('isBaseline', False)
 
     def to_dict(self) -> Dict:
         return {
             'id': self.id,
             'binary': self.binary,
-            'runtimes': self.runtimes,
+            'env': self.env,
             'isBaseline': self.is_baseline
         }
 
