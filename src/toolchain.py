@@ -40,9 +40,9 @@ class Step(Verifiable):
         return json.dumps(self.to_dict(), indent=2)
 
 class ToolChain(Verifiable):
-    def __init__(self, name: str, steps: List[Step]):
+    def __init__(self, name: str, steps: List[Dict]):
         self.name       = name
-        self.steps      = steps
+        self.steps      = [Step(**step) for step in steps]
     
     def verify(self) -> ErrorCollection:
         errors = ErrorCollection()

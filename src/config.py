@@ -1,9 +1,9 @@
 import json
 import os
-from typing import Dict, List, Optional
-from test import Test
-from errors import ConfigError, Verifiable, ErrorCollection
-from toolchain import ToolChain, Step
+from typing     import Dict, List
+from test       import Test
+from errors     import ConfigError, Verifiable, ErrorCollection
+from toolchain  import ToolChain
 
 class Executable(Verifiable):
     def __init__(self, **kwargs):
@@ -16,7 +16,8 @@ class Executable(Verifiable):
     def verify(self) -> ErrorCollection:
         errors = ErrorCollection()
         if not os.path.exists(self.binary):
-            errors.add(ConfigError(f"Cannot find binary file: {self.binary} in Executable: {self.id}"))
+            errors.add(ConfigError(f"Cannot find binary file: {self.binary}\
+                                     in Executable: {self.id}"))
         return errors
     
     def to_dict(self) -> Dict:
@@ -36,27 +37,20 @@ class Config:
 
     def parse_executables(self, executables_data: List[Dict]) -> List[Executable]:
         return [Executable(**exe) for exe in executables_data]
-
+    
     def parse_toolchains(self, toolchains_data: Dict[str, List[Dict]]) -> List[ToolChain]:
-        parsed_toolchains = []
-        for toolchain_name, steps in toolchains_data.items():
-            parsed_steps = [Step(**step) for step in steps]
-            parsed_toolchains.append(ToolChain(toolchain_name, parsed_steps))
-
-        return parsed_toolchains
-
+        return [ToolChain(name, steps) for name, steps in toolchains_data.items()]
+        
     def verify(self) -> ErrorCollection:
         errors = ErrorCollection()
         if not os.path.exists(self.test_dir):
             errors.add(ConfigError(f"Cannot find test directory: {self.test_dir}")) 
-        
+         
         for exe in self.executables:
-            errors.extend(exe.verify().errors)  
-        
+            errors.extend(exe.verify().errors)       
         for tc in self.toolchains:
             errors.extend(tc.verify().errors)
         
-        errors.add(ConfigError(f"This is a test error"))
         return errors
 
     def to_dict(self) -> Dict:
