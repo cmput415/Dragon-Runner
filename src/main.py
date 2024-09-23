@@ -6,6 +6,10 @@ from runner import run_toolchain, ToolchainResult
 from log import log
 from test import Test
 from typing import List
+from colorama import init, Fore, Style
+
+# Initialize colorama
+init(autoreset=True)
 
 def source_executable_env(exe: Executable):
     """
@@ -16,7 +20,6 @@ def source_executable_env(exe: Executable):
         os.environ[key] = value
 
 def result_diff(produced_out: str, expected_out: str):
-    
     diff = list(unified_diff(
         expected_out.splitlines(keepends=True),
         produced_out.splitlines(keepends=True),
@@ -33,14 +36,28 @@ def error_diff(produced_err: str, expected_out: str):
 def print_diff(diff):
     if diff:
         print("Diff between expected and produced output:")
-        print(''.join(diff))
+        for line in diff:
+            if line.startswith('+'):
+                print(Fore.GREEN + line, end='')
+            elif line.startswith('-'):
+                print(Fore.RED + line, end='')
+            else:
+                print(line, end='')
     else:
         print("No differences found.")
+    print("")
+
+
+def log_result(test: Test, did_pass: bool):
+    if did_pass:
+        log(Fore.GREEN + "  [PASS] " + Fore.RESET + test.stem)
+    else:
+        log(Fore.RED + "  [FAIL] " + Fore.RESET + test.stem)
 
 def main():
     args = parse_cli_args()
-    config: Config      = load_config(args.config_file)
-    tests : List[Test]  = gather_tests(config.test_dir)
+    config: Config = load_config(args.config_file)
+    tests: List[Test] = gather_tests(config.test_dir)
      
     for triple in tests:
         log(triple, level=0)
@@ -58,15 +75,12 @@ def main():
                     log("Toolchain Failed: ", result)
                 else: 
                     diff = result_diff(result.stdout, test.expected_out)
-                    if not diff:
-                        log("[PASS]") 
-                        pass_count += 1
-                    elif not error_diff(result.stderr, test.expected_out):
-                        log("[PASS]")
+                    error_diff(result.stderr, test.expected_out)
+                    if not diff or not error_diff:
+                        log_result(test, True)
                         pass_count += 1
                     else:
-                        log("[FAIL]")
-                        print_diff(diff)
+                        log_result(test, False)
             
             print("PASSED: ", pass_count, "/", len(tests))
 
