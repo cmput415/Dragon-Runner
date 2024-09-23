@@ -56,9 +56,17 @@ def log_result(test: Test, did_pass: bool):
 
 def main():
     args = parse_cli_args()
-    config: Config = load_config(args.config_file)
-    tests: List[Test] = gather_tests(config.test_dir)
      
+    config: Config = load_config(args.config_file)
+    errors = config.verify()
+    if errors is not None:
+        print(errors)
+
+    tests: List[Test] = gather_tests(config.test_dir)
+        
+    print("Exit now for testing verifications...")
+    exit(1)
+
     for triple in tests:
         log(triple, level=0)
     

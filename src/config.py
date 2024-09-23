@@ -1,8 +1,10 @@
 import json
 import os
-from typing import Dict, List
+from typing import Dict, List, Optional
 from test import Test
+from errors import ConfigError
 from toolchain import ToolChain, Step
+from dataclasses import dataclass
 
 class Executable:
     def __init__(self, **kwargs):
@@ -10,7 +12,11 @@ class Executable:
         self.binary         = kwargs['binary']
         self.env            = kwargs.get('env', {})
         self.is_baseline    = kwargs.get('isBaseline', False)
-
+         
+    def verify(self) -> Optional[ConfigError]:
+        if not os.path.exists(self.binary):
+            return ConfigError(f"Can not find binary file: {self.binary}")
+    
     def to_dict(self) -> Dict:
         return {
             'id': self.id,
@@ -21,9 +27,9 @@ class Executable:
 
 class Config:
     def __init__(self, config_data: Dict):
-        self.test_dir = config_data['testDir']
-        self.executables = self.parse_executables(config_data['executables'])
-        self.toolchains = self.parse_toolchains(config_data['toolchains'])
+        self.test_dir       = config_data['testDir']
+        self.executables    = self.parse_executables(config_data['executables'])
+        self.toolchains     = self.parse_toolchains(config_data['toolchains'])
 
     def parse_executables(self, executables_data: List[Dict]) -> List[Executable]:
         return [Executable(**exe) for exe in executables_data]
@@ -33,7 +39,24 @@ class Config:
         for toolchain_name, steps in toolchains_data.items():
             parsed_steps = [Step(**step) for step in steps]
             parsed_toolchains.append(ToolChain(toolchain_name, parsed_steps))
+
         return parsed_toolchains
+
+    def verify(self) -> Optional[ConfigError]:
+        errors = ConfigError() 
+        if not os.path.exists(self.test_dir):
+            errors.add(f"Cannot find test directory: {self.test_dir}") 
+        
+        for exe in self.executables:
+            if error := exe.verify():
+                errors.add(error)  
+        
+        for tc in self.toolchains:
+            if error := tc.verify():
+                errors.add(error)
+        
+        errors.add(f"CONFIG_ERROR: This is a test error") 
+        return errors if errors.errors else None
 
     def to_dict(self) -> Dict:
         return {
@@ -41,7 +64,7 @@ class Config:
             'executables': [exe.to_dict() for exe in self.executables],
             'toolchains': {tc.name: tc.to_dict()[tc.name] for tc in self.toolchains}
         }
-
+   
     def __repr__(self):
         return json.dumps(self.to_dict(), indent=2)
 
