@@ -2,20 +2,22 @@ import json
 import os
 from typing import Dict, List, Optional
 from test import Test
-from errors import ConfigError
+from errors import ConfigError, Verifiable, ErrorCollection
 from toolchain import ToolChain, Step
-from dataclasses import dataclass
 
-class Executable:
+class Executable(Verifiable):
     def __init__(self, **kwargs):
         self.id             = kwargs['id']
         self.binary         = kwargs['binary']
         self.env            = kwargs.get('env', {})
         self.is_baseline    = kwargs.get('isBaseline', False)
-         
-    def verify(self) -> Optional[ConfigError]:
+        self.errors         = self.verify()
+        
+    def verify(self) -> ErrorCollection:
+        errors = ErrorCollection()
         if not os.path.exists(self.binary):
-            return ConfigError(f"Can not find binary file: {self.binary}")
+            errors.add(ConfigError(f"Cannot find binary file: {self.binary} in Executable: {self.id}"))
+        return errors
     
     def to_dict(self) -> Dict:
         return {
@@ -30,6 +32,7 @@ class Config:
         self.test_dir       = config_data['testDir']
         self.executables    = self.parse_executables(config_data['executables'])
         self.toolchains     = self.parse_toolchains(config_data['toolchains'])
+        self.errors         = self.verify()
 
     def parse_executables(self, executables_data: List[Dict]) -> List[Executable]:
         return [Executable(**exe) for exe in executables_data]
@@ -42,21 +45,19 @@ class Config:
 
         return parsed_toolchains
 
-    def verify(self) -> Optional[ConfigError]:
-        errors = ConfigError() 
+    def verify(self) -> ErrorCollection:
+        errors = ErrorCollection()
         if not os.path.exists(self.test_dir):
-            errors.add(f"Cannot find test directory: {self.test_dir}") 
+            errors.add(ConfigError(f"Cannot find test directory: {self.test_dir}")) 
         
         for exe in self.executables:
-            if error := exe.verify():
-                errors.add(error)  
+            errors.extend(exe.verify().errors)  
         
         for tc in self.toolchains:
-            if error := tc.verify():
-                errors.add(error)
+            errors.extend(tc.verify().errors)
         
-        errors.add(f"CONFIG_ERROR: This is a test error") 
-        return errors if errors.errors else None
+        errors.add(ConfigError(f"This is a test error"))
+        return errors
 
     def to_dict(self) -> Dict:
         return {
@@ -65,7 +66,7 @@ class Config:
             'toolchains': {tc.name: tc.to_dict()[tc.name] for tc in self.toolchains}
         }
    
-    def __repr__(self):
+    def __repr__(self) -> str:
         return json.dumps(self.to_dict(), indent=2)
 
 def load_config(file_path: str) -> Config:

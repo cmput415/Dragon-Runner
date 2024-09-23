@@ -1,20 +1,29 @@
+from typing     import List
+
 class ConfigError:
-    def __init__(self, *errors):
-        self.errors = list(errors)
-   
-    def add(self, error):
-        if isinstance(error, ConfigError):
-            self.errors.extend(error.errors)
-        elif isinstance(error, str):
-            self.errors.append(error)
-        elif error is not None:
-            raise TypeError("Can only add ConfigError, str, or None to ConfigError")
-    
+    def __init__(self, message: str):
+        self.message = message
+
+    def __str__(self):
+        return f"CONFIG_ERROR: {self.message}"
+
+class ErrorCollection:
+    def __init__(self):
+        self.errors: List[ConfigError] = []
+
+    def add(self, error: ConfigError):
+        self.errors.append(error)
+
+    def extend(self, errors: List[ConfigError]):
+        self.errors.extend(errors)
+
     def __bool__(self):
         return len(self.errors) > 0
-    
-    def __repr__(self):
-        return "\n".join(self.errors)
-    
+
     def __str__(self):
-        return self.__repr__()
+        return "\n".join(str(error) for error in self.errors)
+
+class Verifiable:
+    def verify(self) -> ErrorCollection:
+        raise NotImplementedError("Subclasses must implement verify method")
+

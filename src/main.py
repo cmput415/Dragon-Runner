@@ -1,14 +1,15 @@
 import os
-from cli import parse_cli_args
-from difflib import unified_diff
-from config import load_config, gather_tests, Executable, Config
-from runner import run_toolchain, ToolchainResult
-from log import log
-from test import Test
-from typing import List
-from colorama import init, Fore, Style
 
-# Initialize colorama
+from cli        import parse_cli_args
+from difflib    import unified_diff
+from config     import load_config, gather_tests, Executable, Config
+from runner     import run_toolchain, ToolchainResult
+from log        import log
+from test       import Test
+from typing     import List
+from colorama   import init, Fore
+
+# initialize terminal colors
 init(autoreset=True)
 
 def source_executable_env(exe: Executable):
@@ -54,22 +55,34 @@ def log_result(test: Test, did_pass: bool):
     else:
         log(Fore.RED + "  [FAIL] " + Fore.RESET + test.stem)
 
+
+def grade_mode():
+    # TODO
+    pass
+
 def main():
-    args = parse_cli_args()
-     
-    config: Config = load_config(args.config_file)
-    errors = config.verify()
-    if errors is not None:
-        print(errors)
-
-    tests: List[Test] = gather_tests(config.test_dir)
-        
-    print("Exit now for testing verifications...")
-    exit(1)
-
-    for triple in tests:
-        log(triple, level=0)
     
+    # parse and verify the CLI arguments
+    args = parse_cli_args()
+    
+    # parse and verify the config
+    config: Config = load_config(args.config_file)
+    if config.errors is not None:
+        log(config.errors)
+        exit(1)
+    
+    # gather the tests
+    tests: List[Test] = gather_tests(config.test_dir)
+    
+    # log the tests
+    for triple in tests:
+        log(triple, level=0) 
+
+    # run the tester in grade mode
+    if args.grade_file is not None:
+        return grade_mode()
+    
+    # run the toolchain
     for exe in config.executables:
         log("-- Running executable:\t", exe.id)
         source_executable_env(exe)
