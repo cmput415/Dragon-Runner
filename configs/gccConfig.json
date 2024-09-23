@@ -1,0 +1,27 @@
+{
+  "testDir": "/home/justin/projects/mini-tester/tests/CPackage",
+  "executables": [
+    {
+      "id": "justin",
+      "binary": "/usr/bin/clang"
+    }
+  ],
+  "toolchains": {
+    "LLVM": [
+      {
+        "stepName": "compile",
+        "command": "@EXE",
+        "arguments": ["@INPUT", "-o", "@OUTPUT"],
+        "output": "/tmp/test.o",
+        "allowError": true
+      },
+      {
+        "stepName": "run",
+        "command": "@INPUT",
+        "arguments": [],
+        "usesInStr": true,
+        "allowError": true
+      }
+    ]
+  } 
+}

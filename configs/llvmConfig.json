@@ -1,5 +1,5 @@
 {
-  "testDir": "/home/justin/projects/mini-tester/tests/CPackage",
+  "testDir": "/home/justin/projects/mini-tester/tests/LLVMPackage",
   "executables": [
     {
       "id": "justin",
@@ -37,7 +37,7 @@
         "command": "@INPUT",
         "arguments": [],
         "usesInStr": true,
-        "usesEnv": true,
+        "usesRuntime": true,
         "allowError": true
       }
     ],

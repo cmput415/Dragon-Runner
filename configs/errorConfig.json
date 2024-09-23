@@ -28,12 +28,12 @@
       },
       {
         "stepName": "clang",
-        "command": "/usr/bin/clang",
+        "command": "/usr/bin/this_binary_dne",
         "arguments": ["@INPUT", "-o", "@OUTPUT", "-L${RT_PATH}", "-l${RT_LIB}", "-lm"],
         "output": "gaz"
       },
       {
-        "stepName": "run",
+        "name": "run",
         "command": "@INPUT",
         "arguments": [],
         "usesInStr": true,

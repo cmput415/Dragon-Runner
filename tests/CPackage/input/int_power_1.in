@@ -1,9 +1,0 @@
-procedure main() returns integer {
-    integer i = 2;
-    integer j = 3;
-    i ^ j -> std_output;
-    return 0;
-}
-
-
-//CHECK_FILE:./int_power_1.out
