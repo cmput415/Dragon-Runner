@@ -20,7 +20,7 @@ class Step(Verifiable):
             errors.add(ConfigError(f"Missing required filed 'stepName' in Step {self.name}"))
         if not self.command:
             errors.add(ConfigError(f"Missing required field 'command' in Step: {self.name}"))
-        elif not os.path.exists(self.command):
+        elif not os.path.exists(self.command) and not self.command.startswith('@'):
             errors.add(ConfigError(f"Cannot find command '{self.command}' in Step: {self.name}"))
 
         return errors 

@@ -1,6 +1,7 @@
 import subprocess
 import os
 import re
+import io
 
 from utils import dump_file
 from typing import List, Dict, Optional
@@ -30,8 +31,7 @@ def replace_env_vars(args: List[str]) -> List[str]:
                 env_value = os.environ.get(var_name)
                 if env_value is not None: 
                     arg = arg.replace(f"${var_name}", env_value)\
-                             .replace(f"${{{var_name}}}", env_value)
-                
+                             .replace(f"${{{var_name}}}", env_value) 
             resolved.append(arg)
         else:
             resolved.append(arg)
@@ -61,13 +61,11 @@ def run_toolchain(test: Test, toolchain: ToolChain, exe: Executable) -> Toolchai
     
     test.get_input_stream()
     for step in toolchain:
-        if step.output:
-            output_file = os.path.join(current_dir, step.output)
-        else:
-            output_file = input_file
         
+        # TODO: how to handle when step has no output
+        output_file = os.path.join(current_dir, step.output) if step.output else input_file
         input_stream = test.get_input_stream() if step.uses_ins else None
-        
+
         command = [step.command] + step.arguments
         command = replace_magic_args(command, exe.binary, input_file, output_file)
         command = replace_env_vars(command)
@@ -76,9 +74,12 @@ def run_toolchain(test: Test, toolchain: ToolChain, exe: Executable) -> Toolchai
         if not os.path.isabs(command[0]):
             command[0] = os.path.abspath(os.path.join(current_dir, command[0]))
         
+        log("Command: ", command, level=2)
+        if input_stream is not None:
+            log("Input stream:", input_stream.getvalue(), level=2)
+        
         result = run_command(command, input_stream)
          
-        log("Command: ", command, level=2)
         log("Result exit code: ", result.returncode, level=2)
         log("Result stdout:", result.stdout, level=2)
         log("Result stderr:", result.stderr, level=2)
@@ -100,14 +101,17 @@ def run_toolchain(test: Test, toolchain: ToolChain, exe: Executable) -> Toolchai
     )
 
 def run_command(command: List[str],
-                input_stream: Optional[str],
+                input_stream: Optional[io.StringIO],
                 env: Dict[str, str] = {}) -> subprocess.CompletedProcess:
       
     env = os.environ.copy() 
-    stdin = subprocess.PIPE if input_stream else None
     stdout = subprocess.PIPE
     stderr = subprocess.PIPE 
+    
+    if input_stream is not None:
+        input_bytes = input_stream.getvalue().encode('utf-8')
+    else:
+        input_bytes = ""
 
-    return subprocess.run(command, env=env, stdin=stdin, stdout=stdout, stderr=stderr, text=True)
-
+    return subprocess.run(command, env=env, input=input_bytes, stdout=stdout, stderr=stderr, text=False) 
 

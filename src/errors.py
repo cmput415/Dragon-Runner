@@ -1,4 +1,4 @@
-from typing     import List
+from typing import List
 
 class ConfigError:
     def __init__(self, message: str):
