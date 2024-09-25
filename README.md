@@ -1,13 +1,13 @@
-# mini-tester
+# Serpent-Runner
 
-Mini-Tester is an experimental successor to 415-tester which aims to de-complexify
-the code.
+Serpent-Runner is an experimental successor to the [415-tester](). Its name is derived by being a test runner written in python, for a compiler class that likes dragon iconography.
 
-GOALS: 
+![Alt Text](/docs/logo.png)
 
-* Sub 1000 lines
-* Better error handling, debug support and testfile flexbility
-* Make well defined API boundary points between the front, middle and backend 
+Serpent-Runner inherits much of the previous testers design but with greater emphasis on the following aspects:
 
-FUTURE GOALS:
-* Add a FFI for a multithreaded testrunner.
+* Simplicity: Sub 1000 lines of heavily type hinted python.
+* Reliability: Offer observability and verifibaility of each step throughout a tests transformation through the runner.
+* User Experience: Better error handling, debug support and testfile flexbility.
+* Design: Well defined points between the front, middle and backend.
+* Speed: Serpent-Runner hands off the parallel work when python becomes a bottle neck. A multi-threaded C++ library is ready to churn through tests once their parameters have been resolved. 
