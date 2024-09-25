@@ -3,6 +3,7 @@ import os
 import re
 import io
 
+from io import BytesIO
 from utils import dump_file
 from typing import List, Dict, Optional
 from test import Test 
@@ -13,8 +14,8 @@ from log import log
 @dataclass
 class ToolchainResult:
     success: bool
-    stdout: str
-    stderr: str
+    stdout: BytesIO 
+    stderr: BytesIO
     time: Optional[float] = 0
     exeption: Optional[Exception] = None
 
@@ -53,6 +54,23 @@ def replace_magic_args(args: List[str], binary: str, input_file: str, output_fil
             resolved.append(arg)
     return resolved
 
+import subprocess
+import io
+from typing import List, Optional, Dict
+import os
+
+def run_command(command: List[str],
+                input_stream: Optional[io.BytesIO],
+                env: Dict[str, str] = {}) -> subprocess.CompletedProcess:
+      
+    env = os.environ.copy() 
+    stdout = subprocess.PIPE
+    stderr = subprocess.PIPE 
+    
+    input_bytes = input_stream.getvalue() if input_stream is not None else None
+    print("INPUT_BYTES:", input_bytes)
+    return subprocess.run(command, env=env, input=input_bytes, stdout=stdout, stderr=stderr, check=False)
+
 def run_toolchain(test: Test, toolchain: ToolChain, exe: Executable) -> ToolchainResult:
     log(f"Running test: {test.stem} ToolChain: {toolchain.name} Binary: {exe.id}", level=1)
    
@@ -65,7 +83,6 @@ def run_toolchain(test: Test, toolchain: ToolChain, exe: Executable) -> Toolchai
         # TODO: how to handle when step has no output
         output_file = os.path.join(current_dir, step.output) if step.output else input_file
         input_stream = test.get_input_stream() if step.uses_ins else None
-
         command = [step.command] + step.arguments
         command = replace_magic_args(command, exe.binary, input_file, output_file)
         command = replace_env_vars(command)
@@ -88,30 +105,15 @@ def run_toolchain(test: Test, toolchain: ToolChain, exe: Executable) -> Toolchai
             log("Aborting toolchain early")
             return ToolchainResult(
                 success=False,
-                stdout=result.stdout,
-                stderr=result.stderr,
+                stdout=io.BytesIO(result.stdout),
+                stderr=io.BytesIO(result.stderr),
             )
         
         input_file = output_file
  
     return ToolchainResult(
         success=True,
-        stdout=result.stdout,
-        stderr=result.stderr
+        stdout=io.BytesIO(result.stdout),
+        stderr=io.BytesIO(result.stderr)
     )
-
-def run_command(command: List[str],
-                input_stream: Optional[io.StringIO],
-                env: Dict[str, str] = {}) -> subprocess.CompletedProcess:
-      
-    env = os.environ.copy() 
-    stdout = subprocess.PIPE
-    stderr = subprocess.PIPE 
-    
-    if input_stream is not None:
-        input_bytes = input_stream.getvalue().encode('utf-8')
-    else:
-        input_bytes = ""
-
-    return subprocess.run(command, env=env, input=input_bytes, stdout=stdout, stderr=stderr, text=False) 
 

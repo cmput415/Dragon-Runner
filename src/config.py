@@ -81,9 +81,9 @@ def gather_tests(test_dir: str) -> List[Test]:
         for file in files:
             if not file.endswith(('.out', '.ins')):             
                 test_path = os.path.join(root, file)
-                try:
-                    tests.append(Test(test_path))
-                except:
-                    print("Bad test: ", test_path)
+                #try:
+                tests.append(Test(test_path))
+                #except:
+                #    print("Bad test: ", test_path)
     return tests
 
