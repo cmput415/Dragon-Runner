@@ -1,9 +1,6 @@
-/*
-this is a block comment
-INPUT:a
-*/
 
 // below is a line comment
+// INPUT:a
 // INPUT:bc
 
 #include <stdio.h>

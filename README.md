@@ -2,7 +2,9 @@
 
 Serpent-Runner is an experimental successor to the [415-tester](https://github.com/cmput415/Tester). Its name is derived by being a test runner written in python, for a compiler class that likes dragon iconography.
 
-![Alt Text](/docs/logo-bg.png){width=300px}
+<p align="center">
+  <img src="/docs/logo-bg.png" alt="Alt text for the image", width=400>
+</p>
 
 Serpent-Runner inherits much of the previous testers design but with greater emphasis on the following aspects:
 

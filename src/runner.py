@@ -4,7 +4,6 @@ import re
 import io
 
 from io import BytesIO
-from utils import dump_file
 from typing import List, Dict, Optional
 from test import Test 
 from config import Executable, ToolChain
@@ -54,11 +53,6 @@ def replace_magic_args(args: List[str], binary: str, input_file: str, output_fil
             resolved.append(arg)
     return resolved
 
-import subprocess
-import io
-from typing import List, Optional, Dict
-import os
-
 def run_command(command: List[str],
                 input_stream: Optional[io.BytesIO],
                 env: Dict[str, str] = {}) -> subprocess.CompletedProcess:
@@ -68,7 +62,6 @@ def run_command(command: List[str],
     stderr = subprocess.PIPE 
     
     input_bytes = input_stream.getvalue() if input_stream is not None else None
-    print("INPUT_BYTES:", input_bytes)
     return subprocess.run(command, env=env, input=input_bytes, stdout=stdout, stderr=stderr, check=False)
 
 def run_toolchain(test: Test, toolchain: ToolChain, exe: Executable) -> ToolchainResult:

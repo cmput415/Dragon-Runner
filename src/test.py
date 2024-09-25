@@ -1,13 +1,25 @@
 import os
-from io import StringIO, BytesIO
-from typing import Optional, List
+from io     import BytesIO
+from typing import Optional
+
+def str_to_bytes(string: str, chop_newline: bool=False) -> bytes:
+ 
+    if chop_newline and string.endswith('\n'):
+        string = string[:-1]
+
+    bytes_io = BytesIO(string.encode('utf-8'))
+    bytes_io.seek(0)
+    return bytes_io.getvalue()
+
+def bytes_to_str(bytes_io: BytesIO, encoding: str='utf-8') -> str: 
+    bytes_io.seek(0)
+    return bytes_io.getvalue().decode(encoding)
 
 class Test:
     def __init__(self, test_path, input_dir="input",
                                   input_stream_dir="input-stream",
                                   output_dir="output",
-                                  comment_syntax="//"):
-        
+                                  comment_syntax="//"):   
         self.test_path              = test_path
         self.stem, self.extension   = os.path.splitext(os.path.basename(test_path))
        
@@ -24,20 +36,34 @@ class Test:
     def get_file_bytes(self, file_path: str) -> BytesIO:
         with open(file_path, "rb") as f:
             return BytesIO(f.read())
-    
-    def get_directive_contents(self, directive_prefix: str) -> Optional[List[str]]:
+
+    def get_directive_contents(self, directive_prefix: str) -> Optional[BytesIO]:
         """
-        Look into the testifle itself for contents defined in directives.
+        Look into the testfile itself for contents defined in directives.
+        Directives can appear anywhere in a line, as long as they're preceded by a comment syntax.
         """
-        content = []
+        contents = BytesIO()
+        first_match = True
         with open(self.test_path, 'r') as test_file:
             for line in test_file:
-                # TODO: assert comment syntax occurs before directive prefix
-                if directive_prefix in line and line.startswith(self.comment_syntax):
+                
+                comment_index = line.find(self.comment_syntax)
+                directive_index = line.find(directive_prefix)
+                if comment_index == -1 or directive_index == -1 or comment_index > directive_index:
+                    continue
+                 
+                rhs_line = line.split(directive_prefix, 1)[1]
+                rhs_bytes = str_to_bytes(rhs_line, chop_newline=True)
 
-                    content.append(line.split(directive_prefix, 1)[1].strip())
-        return content if content is not [] else None 
-    
+                if not first_match:
+                    contents.write(b'\n')
+
+                contents.write(rhs_bytes)                
+                first_match = False
+        
+        contents.seek(0)    
+        return contents if contents.getvalue() else None
+
     def get_file_contents(self, file_suffix, symmetric_dir) -> Optional[BytesIO]:
         """
         Look into a symetric directory and current directory for a file with an
@@ -64,12 +90,13 @@ class Test:
         
         out_bytes = self.get_directive_contents("CHECK:")
         if out_bytes:
-            return BytesIO("\n".join(out_bytes).encode('utf-8'))
+            return out_bytes
 
-        out_file = self.get_directive_contents("CHECK_FILE:")
-        if out_file:
+        check_file = self.get_directive_contents("CHECK_FILE:")
+        if check_file:
             test_dir = os.path.dirname(self.test_path)
-            return self.get_file_bytes(os.path.join(test_dir, out_file[0]))
+            check_file_path = os.path.join(test_dir, bytes_to_str(check_file))
+            return self.get_file_bytes(check_file_path)
         
         # default expect empty output
         return BytesIO()
@@ -84,14 +111,15 @@ class Test:
         
         out_bytes = self.get_directive_contents("INPUT:")
         if out_bytes:
-            return BytesIO("\n".join(out_bytes).encode('utf-8'))
+            return out_bytes
 
-        out_file = self.get_directive_contents("INPUT_FILE:")
-        if out_file:
+        input_file = self.get_directive_contents("INPUT_FILE:")
+        if input_file:
             test_dir = os.path.dirname(self.test_path)
-            return self.get_file_bytes(os.path.join(test_dir, out_file[0]))
+            check_file_path = os.path.join(test_dir, bytes_to_str(input_file))
+            return self.get_file_bytes(check_file_path)
         
-        # default empty input stream
+        # default expect empty output
         return BytesIO()
     
     def __repr__(self):

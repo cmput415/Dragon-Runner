@@ -106,11 +106,11 @@ def main():
                     log("Toolchain Failed: ", result)
                 else: 
                     diff = diff_byte_strings(result.stdout, test.expected_out)
-                    print(diff)
                     if not diff:
                         log_result(test, True)
                         pass_count += 1
                     else:
+                        log(diff)
                         log_result(test, False)
             
             print("PASSED: ", pass_count, "/", len(tests))
