@@ -112,8 +112,13 @@ def main():
                     else:
                         log(diff)
                         log_result(test, False)
-            
+             
             print("PASSED: ", pass_count, "/", len(tests))
+    
+    if pass_count == len(tests):
+        exit(0)
+    else:
+        exit(1)
 
 if __name__ == "__main__":
     main()
