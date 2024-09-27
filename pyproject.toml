@@ -3,11 +3,26 @@ requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mini-tester"
+name = "dragon-runner"
 version = "0.1.0"
-description = "An experimental successor"
+description = "An experimental successor to the 415 tester"
 authors = [{name = "Justin Meimar", email = "meimar@ualberta.ca"}]
 license = {file = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.6"
 classifiers = ["Tester"]
+
+dependencies = [
+    "colorama==0.4.6",
+    "pytest==8.3.3"
+]
+
+[project.scripts]
+dragon-runner = "dragon_runner.main:main"
+
+[tool.setuptools]
+packages = ["dragon_runner"]
+
+[tool.setuptools.package-data]
+dragon_runner = ["py.typed"]
+

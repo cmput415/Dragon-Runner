@@ -1,9 +1,9 @@
 import json
 import os
-from typing     import Dict, List
-from test       import Test
-from errors     import ConfigError, Verifiable, ErrorCollection
-from toolchain  import ToolChain
+from typing                     import Dict, List
+from dragon_runner.test         import Test
+from dragon_runner.errors       import ConfigError, Verifiable, ErrorCollection
+from dragon_runner.toolchain    import ToolChain
 
 class Executable(Verifiable):
     def __init__(self, **kwargs):

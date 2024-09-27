@@ -1,14 +1,14 @@
 import os
 import difflib
 
-from io         import BytesIO
-from cli        import parse_cli_args
-from config     import load_config, gather_tests, Executable, Config
-from runner     import run_toolchain, ToolchainResult
-from log        import log
-from test       import Test
-from typing     import List
-from colorama   import init, Fore
+from io                     import BytesIO
+from colorama               import init, Fore
+from typing                 import List
+from dragon_runner.cli      import parse_cli_args
+from dragon_runner.config   import load_config, gather_tests, Executable, Config
+from dragon_runner.runner   import run_toolchain, ToolchainResult
+from dragon_runner.log      import log
+from dragon_runner.test     import Test
 
 # initialize terminal colors
 init(autoreset=True)

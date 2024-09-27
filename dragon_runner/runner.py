@@ -3,12 +3,12 @@ import os
 import re
 import io
 
-from io import BytesIO
-from typing import List, Dict, Optional
-from test import Test 
-from config import Executable, ToolChain
-from dataclasses import dataclass
-from log import log
+from io                     import BytesIO
+from typing                 import List, Dict, Optional
+from dataclasses            import dataclass
+from dragon_runner.test     import Test 
+from dragon_runner.config   import Executable, ToolChain
+from dragon_runner.log      import log
 
 @dataclass
 class ToolchainResult:

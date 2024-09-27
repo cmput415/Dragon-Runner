@@ -1,6 +1,4 @@
-
-def dump_file(file_path: str):
-    
+def dump_file(file_path: str):    
     try:
         with open(file_path, 'r') as f:
             print(f.read())

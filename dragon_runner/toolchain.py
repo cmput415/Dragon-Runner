@@ -1,7 +1,7 @@
 import json
 import os
 from typing import Dict, List, Iterator
-from errors import ConfigError, ErrorCollection, Verifiable
+from dragon_runner.errors import *
 
 class Step(Verifiable):
     def __init__(self, **kwargs):
