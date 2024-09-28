@@ -21,6 +21,13 @@ class Executable(Verifiable):
                                      in Executable: {self.id}"))
         return errors
     
+    def source_env(self):
+        """
+        Source all env variables defined in this executables map
+        """
+        for key, value in self.env.items():
+            os.environ[key] = value
+ 
     def to_dict(self) -> Dict:
         return {
             'id': self.id,
@@ -35,13 +42,27 @@ class Config:
         self.executables    = self.parse_executables(config_data['executables'])
         self.toolchains     = self.parse_toolchains(config_data['toolchains'])
         self.errors         = self.verify()
+        self.tests          = self.gather_tests()
 
     def parse_executables(self, executables_data: List[Dict]) -> List[Executable]:
         return [Executable(**exe) for exe in executables_data]
     
     def parse_toolchains(self, toolchains_data: Dict[str, List[Dict]]) -> List[ToolChain]:
         return [ToolChain(name, steps) for name, steps in toolchains_data.items()]
-        
+    
+    def gather_tests(self) -> List[TestFile]:
+        """
+        Recursively gather all test files in the specified directory.
+        A test file is any file that doesn't end with '.out' or '.ins'.
+        """
+        tests = []
+        for root, _, files in os.walk(self.test_dir):
+            for file in files:
+                if not file.endswith(('.out', '.ins')):             
+                    test_path = os.path.join(root, file)
+                    tests.append(TestFile(test_path))
+        return tests
+
     def verify(self) -> ErrorCollection:
         errors = ErrorCollection()
         if not os.path.exists(self.test_dir):
@@ -60,9 +81,10 @@ class Config:
             'executables': [exe.to_dict() for exe in self.executables],
             'toolchains': {tc.name: tc.to_dict()[tc.name] for tc in self.toolchains}
         }
-   
+    
     def __repr__(self) -> str:
         return json.dumps(self.to_dict(), indent=2)
+
 
 def load_config(file_path: str) -> Config:
     """
@@ -72,19 +94,5 @@ def load_config(file_path: str) -> Config:
         config_data = json.load(config_file)
     return Config(config_data)
 
-def gather_tests(test_dir: str) -> List[TestFile]:
-    """
-    Recursively gather all test files in the specified directory.
-    A test file is any file that doesn't end with '.out' or '.ins'.
-    """
-    tests = []
-    for root, _, files in os.walk(test_dir):
-        for file in files:
-            if not file.endswith(('.out', '.ins')):             
-                test_path = os.path.join(root, file)
-                #try:
-                tests.append(TestFile(test_path))
-                #except:
-                #    print("Bad test: ", test_path)
-    return tests
+
 

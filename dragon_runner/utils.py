@@ -36,7 +36,7 @@ def precise_diff(produced: BytesIO, expected: BytesIO) -> str:
     differ = Differ()
     diff = list(differ.compare(str_lines1, str_lines2))
 
-    return '\n'.join(diff)
+    return color_diff('\n'.join(diff))
 
 def lenient_diff(produced: BytesIO, expected: BytesIO, pattern: str) -> str:
     """
@@ -46,7 +46,7 @@ def lenient_diff(produced: BytesIO, expected: BytesIO, pattern: str) -> str:
     # TODO: implement the proper Error substring leniency 
     return precise_diff(produced, expected)
 
-def get_test_result_string(diff) -> str:
+def color_diff(diff) -> str:
     """
     Returns a colored string representation of the diff.
     """
