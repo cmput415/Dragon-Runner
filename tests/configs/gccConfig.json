@@ -1,5 +1,5 @@
 {
-  "testDir": "CPackage",
+  "testDir": "packages/CPackage",
   "executables": [
     {
       "id": "justin",

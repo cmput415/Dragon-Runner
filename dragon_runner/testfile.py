@@ -15,7 +15,8 @@ def bytes_to_str(bytes_io: BytesIO, encoding: str='utf-8') -> str:
     bytes_io.seek(0)
     return bytes_io.getvalue().decode(encoding)
 
-class Test:
+class TestFile:
+    __test__ = False 
     def __init__(self, test_path, input_dir="input",
                                   input_stream_dir="input-stream",
                                   output_dir="output",

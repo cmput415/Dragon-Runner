@@ -8,7 +8,7 @@ from dragon_runner.cli      import parse_cli_args
 from dragon_runner.config   import load_config, gather_tests, Executable, Config
 from dragon_runner.runner   import run_toolchain, ToolchainResult
 from dragon_runner.log      import log
-from dragon_runner.test     import Test
+from dragon_runner.testfile import TestFile
 
 # initialize terminal colors
 init(autoreset=True)
@@ -62,7 +62,7 @@ def print_diff(diff):
     print("")
 
 
-def log_result(test: Test, did_pass: bool):
+def log_result(test: TestFile, did_pass: bool):
     if did_pass:
         log(Fore.GREEN + "  [PASS] " + Fore.RESET + test.stem)
     else:

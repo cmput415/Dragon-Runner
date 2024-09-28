@@ -6,7 +6,7 @@ import io
 from io                     import BytesIO
 from typing                 import List, Dict, Optional
 from dataclasses            import dataclass
-from dragon_runner.test     import Test 
+from dragon_runner.testfile import TestFile 
 from dragon_runner.config   import Executable, ToolChain
 from dragon_runner.log      import log
 
@@ -64,7 +64,7 @@ def run_command(command: List[str],
     input_bytes = input_stream.getvalue() if input_stream is not None else None
     return subprocess.run(command, env=env, input=input_bytes, stdout=stdout, stderr=stderr, check=False)
 
-def run_toolchain(test: Test, toolchain: ToolChain, exe: Executable) -> ToolchainResult:
+def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> ToolchainResult:
     log(f"Running test: {test.stem} ToolChain: {toolchain.name} Binary: {exe.id}", level=1)
    
     input_file = test.test_path

@@ -19,7 +19,7 @@
         "arguments": ["@INPUT", "@OUTPUT"],
         "output": "gaz.ll",
         "allowError": true 
-      }, 
+      },
       {
         "stepName": "llc",
         "command": "/home/justin/install/llvm/llvm-18/bin/llc",
