@@ -3,7 +3,7 @@
   "executables": [
     {
       "id": "justin",
-      "binary": "/usr/bin/clang"
+      "binary": "/usr/bin/clang2"
     }
   ],
   "toolchains": {

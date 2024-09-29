@@ -22,17 +22,13 @@ class TestFile:
                                   output_dir="output",
                                   comment_syntax="//"):   
         self.test_path              = test_path
-        self.stem, self.extension   = os.path.splitext(os.path.basename(test_path))
-       
-        # default initialized
+        self.stem, self.extension   = os.path.splitext(os.path.basename(test_path))  
         self.input_dir              = input_dir
-        self.input_stream_dir       = input_stream_dir
-        self.output_dir             = output_dir
-        self.comment_syntax         = comment_syntax
-    
-        # saturate byte streams 
-        self.expected_out           = self.get_expected_out()
-        self.input_stream           = self.get_input_stream()
+        self.input_stream_dir       = input_stream_dir          
+        self.output_dir             = output_dir                
+        self.comment_syntax         = comment_syntax            # default C99 //
+        self.expected_out           = self.get_expected_out()   # fill expected output
+        self.input_stream           = self.get_input_stream()   # fill std input stream
  
     def get_file_bytes(self, file_path: str) -> BytesIO:
         with open(file_path, "rb") as f:

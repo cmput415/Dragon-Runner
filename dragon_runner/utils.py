@@ -4,17 +4,14 @@ from io         import BytesIO
 from difflib    import Differ
 from colorama   import Fore
 
-def resolve_path(path) -> str:
+def resolve_relative_path(rel_path, dir) -> str:
     """
-    return an absolute path given a relative or absolute path and
-    empty string if the path does not exist (responsibility of user to verify)
+    resolve relative path into an absolute path w.r.t dir
     """
-    try: 
-        expanded_path = os.path.expanduser(path)    
-        absolute_path = os.path.abspath(expanded_path) 
-        return absolute_path
-    except Exception:
+    if not os.path.isdir(dir):
         return ""
+    
+    return os.path.abspath(os.path.join(dir, rel_path))
 
 def precise_diff(produced: BytesIO, expected: BytesIO) -> str:
     """

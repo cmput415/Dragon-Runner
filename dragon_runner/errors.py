@@ -20,6 +20,11 @@ class ErrorCollection:
     def __bool__(self):
         return len(self.errors) > 0
 
+    def __eq__(self, other):
+        if isinstance(other, bool):
+            return bool(self) == other
+        return False
+
     def __str__(self):
         return "\n".join(str(error) for error in self.errors)
 

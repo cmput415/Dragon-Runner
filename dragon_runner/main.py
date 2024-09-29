@@ -27,11 +27,17 @@ def main():
     args = parse_cli_args()
     
     # parse and verify the config
-    config: Config = load_config(args.config_file)
-    if config.errors:
-        log(config.errors)
-        exit(1) 
-    
+    config = load_config(args.config_file)
+    if not config:
+        log(f"Could not open config file: {args.config_file}")
+        return 1
+    if config.error_collection:
+        log(config.error_collection)
+        return 1
+
+    # display the config info before running tests
+    config.log_test_info()
+
     # run the tester in grade mode
     if args.grade_file is not None:
         return grade_mode()
@@ -54,9 +60,8 @@ def main():
                         pass_count += 1
                     else:
                         log(diff)
-                        log_result(test, False)
-             
-            print("PASSED: ", pass_count, "/", len(config.tests))
+                        log_result(test, False) 
+            log("PASSED: ", pass_count, "/", len(config.tests))
     
     if pass_count == len(config.tests):
         exit(0)

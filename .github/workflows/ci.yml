@@ -17,5 +17,5 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
-      - name: run tests 
-        run: pytest tests/test_io.py
+      - name: run config tests
+        run: pytest tests/test_config.py
