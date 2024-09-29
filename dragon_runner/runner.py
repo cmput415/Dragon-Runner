@@ -2,6 +2,7 @@ import subprocess
 import os
 import re
 import io
+import time
 
 from io                         import BytesIO
 from typing                     import List, Dict, Optional
@@ -32,6 +33,41 @@ class TestResult:
     error_test: bool
     time: Optional[float] = 0
     diff: Optional[str] = None
+
+@dataclass
+class CommandResult:
+    subps_result: subprocess.CompletedProcess
+    time: float 
+    def __iter__(self):
+        return iter((self.subps_result, self.time))
+
+def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> ToolChainResult:
+    """
+    Entry point for toolchain running. 
+    """  
+    input_file = test.test_path
+    current_dir = os.getcwd()
+    log("Test expected out", test.get_expected_out().getvalue(), level=2)
+    for step in toolchain:
+
+        # resolve the variables in the command 
+        command, output_file = prepare_command(step, exe, input_file, current_dir)
+
+        # set the input stream if the step uses it 
+        input_stream = test.get_input_stream() if step.uses_ins else None 
+
+        # run the command and retrieve the result and time
+        result, wall_time = run_command(command, input_stream)
+        log_step(command, input_stream, result, wall_time) 
+        
+        if result.returncode != 0:
+            if not step.allow_error:
+                log("Aborting toolchain early", level=1)
+            return create_tc_result(step.allow_error, result, command, step, wall_time)
+         
+        input_file = output_file or make_tmp_file(BytesIO(result.stdout))
+    
+    return create_tc_result(True, result, command, step, wall_time)
 
 def replace_env_vars(args: List[str]) -> List[str]:
     """
@@ -70,63 +106,50 @@ def replace_magic_args(args: List[str], binary: str, input_file: str, output_fil
 
 def run_command(command: List[str],
                 input_stream: Optional[io.BytesIO],
-                env: Dict[str, str] = {}) -> subprocess.CompletedProcess: 
+                env: Dict[str, str] = {}) -> CommandResult: 
+    """
+    Fork and exec the command once it has been resolved and return the result 
+    """ 
     env = os.environ.copy() 
     stdout = subprocess.PIPE
     stderr = subprocess.PIPE 
     input_bytes = input_stream.getvalue() if input_stream is not None else None
-    return subprocess.run(command, env=env, input=input_bytes, stdout=stdout, stderr=stderr, check=False)
 
-import time
+    # time the completion of the subprocess
+    start_time = time.time()
+    result = subprocess.run(command, env=env, input=input_bytes, stdout=stdout,
+                                              stderr=stderr, check=False)
+    wall_time = time.time() - start_time
+    return CommandResult(subps_result=result, time=wall_time)
 
-def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> ToolChainResult:
-    input_file = test.test_path
-    current_dir = os.getcwd() 
-    test.get_input_stream()
-    log("Test expected out", test.get_expected_out().getvalue(), level=2)
+def prepare_command(step, exe, input_file, current_dir):
+    """
+    Resolve arguments and environment variables for the current command.
+    """ 
+    output_file = os.path.join(current_dir, step.output) if step.output else None
+    command = replace_magic_args([step.exe_path] + step.arguments,
+                                  exe.exe_path, input_file, output_file)
+    command = replace_env_vars(command)
+    command[0] = os.path.abspath(command[0]) if not os.path.isabs(command[0]) else command[0]
+    return command, output_file
 
-    for step in toolchain: 
-        output_file = os.path.join(current_dir, step.output) if step.output else None
-        input_stream = test.get_input_stream() if step.uses_ins else None
-        command = [step.exe_path] + step.arguments
-        command = replace_magic_args(command, exe.exe_path, input_file, output_file)
-        command = replace_env_vars(command)
-        
-        if not os.path.isabs(command[0]):
-            command[0] = os.path.abspath(os.path.join(current_dir, command[0]))
-        
-        log("Command: ", command, level=2)
-        if input_stream is not None:
-            log("Input stream:", input_stream.getvalue(), level=2)
-        
-        start_time = time.time()
-        result = run_command(command, input_stream) 
-        end_time = time.time()
-        wall_time = end_time - start_time
+def log_step(command: List[str], input_stream: BytesIO, result, wall_time):
+    """
+    Report what happened for a single step in the toolchain
+    """
+    log("Command:", ' '.join(command), level=2)
+    if input_stream:
+        log("Input stream:", input_stream.getvalue(), level=2, indent=4)
+    log("Result exit code:", result.returncode, level=2, indent=4)
+    log("Result stdout:", result.stdout, level=2, indent=4)
+    log("Result stderr:", result.stderr, level=2, indent=4)
+    log("Step execution time:", f"{wall_time:.3f} seconds", level=2, indent=4)
 
-        log("Result exit code: ", result.returncode, level=2)
-        log("Result stdout:", result.stdout, level=2)
-        log("Result stderr:", result.stderr, level=2)
-        log("Step execution time:", wall_time, "seconds", level=2)
-        
-        if result.returncode != 0:
-            if not step.allow_error:
-                log("Aborting toolchain early", level=1)
-            return ToolChainResult(
-                success=step.allow_error,
-                stdout=io.BytesIO(result.stdout),
-                stderr=io.BytesIO(result.stderr),
-                exit_code=result.returncode,
-                last_command=command,
-                last_step=step,
-                time=wall_time
-            )
-        input_file = output_file if step.output else make_tmp_file(io.BytesIO(result.stdout))
- 
+def create_tc_result(success: bool, result, command, step, wall_time) -> ToolChainResult:
     return ToolChainResult(
-        success=True,
-        stdout=io.BytesIO(result.stdout),
-        stderr=io.BytesIO(result.stderr),
+        success=success,
+        stdout=BytesIO(result.stdout),
+        stderr=BytesIO(result.stderr),
         exit_code=result.returncode,
         last_command=command,
         last_step=step,
