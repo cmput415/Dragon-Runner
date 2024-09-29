@@ -16,17 +16,15 @@ class SubPackage():
         self.dir_path: str          = dir_path
         self.rel_dir_path: str      = os.path.relpath(dir_path)
         self.tests: List[TestFile]  = self.gather_tests()
-    
+
     @staticmethod
     def is_test(test_path: str):
         """
-        Determine if a file is test or not. Ignore reserved output and input stream
-        extensions and hidden files.
+        Ignore reserved output and input stream extensions and hidden files
         """
-        if os.path.isfile(test_path) and not test_path.endswith(('.out', '.ins'))\
-                                     and not test_path.startswith('.'):
-            return True
-        return False
+        return (os.path.isfile(test_path) and
+                not os.path.basename(test_path).startswith('.') and
+                not test_path.endswith(('.out', '.ins')))
 
     def gather_tests(self) -> List[TestFile]:
         """

@@ -74,7 +74,7 @@ class TestHarness:
                                 sp_pass_count += 1
                             else:
                                 self.failures.append(test)
-                                log(test_result.diff)
+                                log(test_result.diff, level=1)
                                 log_result(test, test_result)
                             sp_test_count +=1 
                     log("Subpackage Passed: ", sp_pass_count, "/", sp_test_count)
