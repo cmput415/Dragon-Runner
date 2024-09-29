@@ -23,13 +23,13 @@ def log_toolchain_result(test: TestFile, result: ToolChainResult, tc: ToolChain)
     if result.success:
         return
     log(Fore.RED + "[TOOLCHAIN ERROR] " + Fore.RESET + test.file)
-    log("Failed on step: ", result.last_step.name, indent=2)
-    log("Exited with status: ", result.exit_code, indent=2)
-    log("With command: ", ' '.join(result.last_command), indent=2)
-    log(f"With stderr: ({len(result.stderr.getbuffer())} bytes)", indent=2)
-    log_multiline(bytes_to_str(result.stderr), indent=4)
-    log(f"With stdout: ({len(result.stdout.getbuffer())} bytes)", indent=2)
-    log_multiline(bytes_to_str(result.stdout), indent=4)
+    log("Failed on step: ", result.last_step.name, indent=2, level=1)
+    log("Exited with status: ", result.exit_code, indent=2, level=1)
+    log("With command: ", ' '.join(result.last_command), indent=2, level=1)
+    log(f"With stderr: ({len(result.stderr.getbuffer())} bytes)", indent=2, level=1)
+    log_multiline(bytes_to_str(result.stderr), indent=4, level=1)
+    log(f"With stdout: ({len(result.stdout.getbuffer())} bytes)", indent=2, level=1)
+    log_multiline(bytes_to_str(result.stdout), indent=4, level=1)
 
 class TestHarness:
     def __init__(self, config: Config):
@@ -41,7 +41,7 @@ class TestHarness:
         for test in self.failures:
             log(Fore.RED + "[FAILED] " + Fore.RESET + test.file, indent=4)
 
-    def run_all(self) -> bool:
+    def run_all(self, timeout: float) -> bool:
         """
         Iterate over all tested executables, toolchains, subpackages and tests.
         Return True is all pass, false otherwise.
@@ -61,9 +61,11 @@ class TestHarness:
                     sp_pass_count = 0
                     sp_test_count = 0
                     for test in spkg.tests:
-                        tc_result: ToolChainResult = run_toolchain(test, toolchain, exe)
+                        tc_result: ToolChainResult = run_toolchain(test, toolchain, exe, timeout)
                         if not tc_result.success:
-                            log_toolchain_result(test, tc_result, toolchain)
+                            self.failures.append(test)
+                            log_toolchain_result(test, tc_result, toolchain, )
+                            sp_test_count +=1 
                         else:
                             test_result: TestResult = get_test_result(tc_result, test.expected_out)
                             if test_result.did_pass:

@@ -24,12 +24,12 @@ def get_logger():
         _logger_instance = Logger()
     return _logger_instance
 
-def log_multiline(content: str, indent: int):
+def log_multiline(content: str, level=0, indent=0):
     """
     Log multiline content with proper indentation
     """
     for line in content.splitlines():
-        log(line.rstrip(), indent=indent)
+        log(line.rstrip(), level=level, indent=indent)
 
 def log(*args, level=0, indent=0, **kwargs):
     get_logger().log(level, indent, *args, **kwargs)

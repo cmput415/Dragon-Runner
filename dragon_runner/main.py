@@ -1,6 +1,6 @@
 import os
 from colorama               import init, Fore
-from dragon_runner.cli      import parse_cli_args
+from dragon_runner.cli      import parse_cli_args, CLIArgs
 from dragon_runner.config   import load_config, Config
 from dragon_runner.runner   import ToolChainResult, TestResult, ToolChain
 from dragon_runner.runner   import run_toolchain, get_test_result
@@ -15,7 +15,7 @@ init(autoreset=True)
 
 def main(): 
     # parse and verify the CLI arguments
-    args = parse_cli_args()
+    args: CLIArgs = parse_cli_args()
     
     # parse and verify the config
     config = load_config(args.config_file)
@@ -35,7 +35,7 @@ def main():
     
     # create a regular test harness
     harness = TestHarness(config)
-    success = harness.run_all()
+    success = harness.run_all(args.timeout)
     if success:
         return 0
 

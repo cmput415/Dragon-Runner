@@ -3,7 +3,7 @@ import os
 import re
 import io
 import time
-
+from subprocess                 import TimeoutExpired, CompletedProcess
 from io                         import BytesIO
 from typing                     import List, Dict, Optional
 from dataclasses                import dataclass
@@ -23,51 +23,24 @@ class ToolChainResult:
     stdout: BytesIO 
     stderr: BytesIO
     exit_code: int
-    last_command: List[str] = [],
+    last_command: List[str]=[],
     last_step: Step={},
-    time: Optional[float] = 0
+    time: Optional[float]=0
 
 @dataclass
 class TestResult:
     did_pass: bool
     error_test: bool
-    time: Optional[float] = 0
-    diff: Optional[str] = None
+    time: Optional[float]=0
+    diff: Optional[str]=None
 
 @dataclass
 class CommandResult:
-    subps_result: subprocess.CompletedProcess
-    time: float 
+    subps_result: Optional[CompletedProcess]
+    time: float=0
+    timed_out: bool=False 
     def __iter__(self):
-        return iter((self.subps_result, self.time))
-
-def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> ToolChainResult:
-    """
-    Entry point for toolchain running. 
-    """  
-    input_file = test.test_path
-    current_dir = os.getcwd()
-    log("Test expected out", test.get_expected_out().getvalue(), level=2)
-    for step in toolchain:
-
-        # resolve the variables in the command 
-        command, output_file = prepare_command(step, exe, input_file, current_dir)
-
-        # set the input stream if the step uses it 
-        input_stream = test.get_input_stream() if step.uses_ins else None 
-
-        # run the command and retrieve the result and time
-        result, wall_time = run_command(command, input_stream)
-        log_step(command, input_stream, result, wall_time) 
-        
-        if result.returncode != 0:
-            if not step.allow_error:
-                log("Aborting toolchain early", level=1)
-            return create_tc_result(step.allow_error, result, command, step, wall_time)
-         
-        input_file = output_file or make_tmp_file(BytesIO(result.stdout))
-    
-    return create_tc_result(True, result, command, step, wall_time)
+        return iter((self.subps_result, self.time, self.timed_out))
 
 def replace_env_vars(args: List[str]) -> List[str]:
     """
@@ -104,23 +77,57 @@ def replace_magic_args(args: List[str], binary: str, input_file: str, output_fil
             resolved.append(arg)
     return resolved
 
+def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable, timeout: float) -> ToolChainResult:
+    """
+    Entry point for toolchain running. 
+    """  
+    input_file = test.test_path
+    current_dir = os.getcwd()
+    log("Test expected out", test.get_expected_out().getvalue(), level=2)
+    for step in toolchain:
+
+        # resolve the variables in the command 
+        command, output_file = prepare_command(step, exe, input_file, current_dir)
+
+        # set the input stream if the step uses it 
+        input_stream = test.get_input_stream() if step.uses_ins else None 
+
+        # run the command and retrieve the result and time
+        result, wall_time, timed_out = run_command(command, input_stream, timeout=timeout)
+        if timed_out:
+            log(Fore.YELLOW + f"Timed out at step: {step.name} after {timeout} seconds", level=0)
+            return ToolChainResult(False, BytesIO(b''), BytesIO(b''), 1, command, step)
+ 
+        log_step(command, input_stream, result, wall_time) 
+        if result.returncode != 0:
+            if not step.allow_error:
+                log("Aborting toolchain early", level=1)
+            return create_tc_result(step.allow_error, result, command, step, wall_time)
+         
+        input_file = output_file or make_tmp_file(BytesIO(result.stdout))
+    
+    return create_tc_result(True, result, command, step, wall_time)
+
 def run_command(command: List[str],
                 input_stream: Optional[io.BytesIO],
-                env: Dict[str, str] = {}) -> CommandResult: 
+                env: Dict[str, str] = {},
+                timeout: float = 2.0) -> CommandResult:
     """
     Fork and exec the command once it has been resolved and return the result 
-    """ 
-    env = os.environ.copy() 
+    """  
+    env = os.environ.copy()
     stdout = subprocess.PIPE
-    stderr = subprocess.PIPE 
+    stderr = subprocess.PIPE
     input_bytes = input_stream.getvalue() if input_stream is not None else None
 
-    # time the completion of the subprocess
     start_time = time.time()
-    result = subprocess.run(command, env=env, input=input_bytes, stdout=stdout,
-                                              stderr=stderr, check=False)
-    wall_time = time.time() - start_time
-    return CommandResult(subps_result=result, time=wall_time)
+    try:
+        result = subprocess.run(command, env=env, input=input_bytes, stdout=stdout,
+                                stderr=stderr, check=False, timeout=timeout)
+        wall_time = time.time() - start_time
+        return CommandResult(subps_result=result, time=wall_time)
+    except TimeoutExpired:
+        return CommandResult(subps_result=None, time=0, timed_out=True)
 
 def prepare_command(step, exe, input_file, current_dir):
     """
