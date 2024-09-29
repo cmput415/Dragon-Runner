@@ -23,7 +23,6 @@ class CLIArgs(NamedTuple):
             f"  Verbosity: {self.verbosity}"
         )
 
-
 def parse_cli_args() -> CLIArgs:
     parser = argparse.ArgumentParser(description="CMPUT 415 testing utility")
 

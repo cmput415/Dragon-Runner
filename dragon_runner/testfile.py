@@ -10,7 +10,8 @@ class TestFile:
                                   output_dir="output",
                                   comment_syntax="//"):   
         self.test_path              = test_path
-        self.stem, self.extension   = os.path.splitext(os.path.basename(test_path))  
+        self.stem, self.extension   = os.path.splitext(os.path.basename(test_path))
+        self.file              = self.stem + self.extension  
         self.input_dir              = input_dir
         self.input_stream_dir       = input_stream_dir          
         self.output_dir             = output_dir                

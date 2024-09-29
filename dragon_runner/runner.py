@@ -3,15 +3,16 @@ import os
 import re
 import io
 
-from io                     import BytesIO
-from typing                 import List, Dict, Optional
-from dataclasses            import dataclass
-from difflib                import Differ
-from colorama               import Fore, init
-from dragon_runner.testfile import TestFile 
-from dragon_runner.config   import Executable, ToolChain
-from dragon_runner.log      import log
-from dragon_runner.utils    import make_tmp_file, bytes_to_str
+from io                         import BytesIO
+from typing                     import List, Dict, Optional
+from dataclasses                import dataclass
+from difflib                    import Differ
+from colorama                   import Fore, init
+from dragon_runner.testfile     import TestFile 
+from dragon_runner.config       import Executable, ToolChain
+from dragon_runner.log          import log
+from dragon_runner.utils        import make_tmp_file, bytes_to_str
+from dragon_runner.toolchain    import Step
 
 init(autoreset=True)
 
@@ -21,8 +22,9 @@ class ToolChainResult:
     stdout: BytesIO 
     stderr: BytesIO
     exit_code: int
+    last_command: List[str] = [],
+    last_step: Step={},
     time: Optional[float] = 0
-    exeption: Optional[Exception] = None
 
 @dataclass
 class TestResult:
@@ -109,7 +111,9 @@ def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> Tool
                 success=False,
                 stdout=io.BytesIO(result.stdout),
                 stderr=io.BytesIO(result.stderr),
-                exit_code=result.returncode
+                exit_code=result.returncode,
+                last_command=command,
+                last_step=step
             )
         
         input_file = output_file if step.output else make_tmp_file(io.BytesIO(result.stdout))
@@ -118,7 +122,9 @@ def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> Tool
         success=True,
         stdout=io.BytesIO(result.stdout),
         stderr=io.BytesIO(result.stderr),
-        exit_code=result.returncode
+        exit_code=result.returncode,
+        last_command=command,
+        last_step=step
     )
 
 def get_test_result(tool_chain_result: ToolChainResult, expected_out: BytesIO) -> TestResult:

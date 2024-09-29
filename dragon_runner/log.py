@@ -8,22 +8,29 @@ class Logger:
     def _get_debug_level(self):
         return int(os.environ.get('DEBUG', '0'))
 
-    def log(self, level, *args, **kwargs):
+    def log(self, level, indent, *args, **kwargs):
+        prefix = ' '*indent
         if self.debug_level >= level:
-            if level == 0:
-                print(*args, file=sys.stderr, **kwargs)
-            else:
-                prefix = f"[DEBUG {level}]"
-                print(prefix, *args, file=sys.stderr, **kwargs)
+            print(prefix, *args, file=sys.stderr, **kwargs)
 
 _logger_instance = None
 
 def get_logger():
+    """
+    get singleton logger for the entire program
+    """
     global _logger_instance
     if _logger_instance is None:
         _logger_instance = Logger()
     return _logger_instance
 
-def log(*args, level=0, **kwargs):
-    get_logger().log(level, *args, **kwargs)
+def log_multiline(content: str, indent: int):
+    """
+    Log multiline content with proper indentation
+    """
+    for line in content.splitlines():
+        log(line.rstrip(), indent=indent)
+
+def log(*args, level=0, indent=0, **kwargs):
+    get_logger().log(level, indent, *args, **kwargs)
 
