@@ -52,6 +52,7 @@ def main():
                 result: ToolChainResult = run_toolchain(test, toolchain, exe)
                 if not result.success:
                     log("Toolchain Failed: ", result)
+                    log_result(test, False) 
                 else:
                     test_result: TestResult = get_test_result(result, test.expected_out)
                     if test_result.did_pass:

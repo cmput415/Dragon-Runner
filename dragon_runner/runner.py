@@ -104,7 +104,7 @@ def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> Tool
         log("Test expected out:", bytes_to_str(test.get_expected_out()), level=2)
         
         if result.returncode != 0 and not step.allow_error:
-            log("Aborting toolchain early")
+            log("Aborting toolchain early", level=1)
             return ToolChainResult(
                 success=False,
                 stdout=io.BytesIO(result.stdout),
@@ -177,15 +177,12 @@ def lenient_diff(produced: BytesIO, expected: BytesIO, pattern: str) -> str:
     produced_str = produced.getvalue().decode('utf-8').strip()
     expected_str = expected.getvalue().decode('utf-8').strip()
     
-    print("PRODUCED STR:", produced_str)
-    print("EXPECTED STR:", expected_str)
-
     # Apply the mask/filter to both strings
     produced_masked = re.sub(pattern, r'\1', produced_str, flags=re.IGNORECASE | re.DOTALL)
     expected_masked = re.sub(pattern, r'\1', expected_str, flags=re.IGNORECASE | re.DOTALL)
 
-    print("PRODUCED MASKED:", produced_masked)
-    print("EXPECTED MASKED:", expected_masked)
+    log("PRODUCED MASKED:", produced_masked, level=2)
+    log("EXPECTED MASKED:", expected_masked, level=2)
 
     # If the masked strings are identical, return an empty string (no diff)
     if produced_masked == expected_masked:

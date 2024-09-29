@@ -1,5 +1,6 @@
 import json
 import os
+import pathlib
 from typing                     import Dict, List, Optional
 from dragon_runner.testfile     import TestFile
 from dragon_runner.errors       import ConfigError, Verifiable, ErrorCollection
@@ -8,11 +9,12 @@ from dragon_runner.utils        import resolve_relative_path
 from dragon_runner.log          import log
 
 class Executable(Verifiable):
-    def __init__(self, id: str, exe_path: str):
+    def __init__(self, id: str, exe_path: str, runtime: str):
         self.id         = id
         self.exe_path   = exe_path 
+        self.runtime    = runtime 
         self.errors     = self.verify()
-        
+
     def verify(self) -> ErrorCollection:
         errors = ErrorCollection()
         if not os.path.exists(self.exe_path):
@@ -25,8 +27,15 @@ class Executable(Verifiable):
         Source all env variables defined in this executables map
         TODO: update the JSON config to make env variables first class 
         """
-        pass
- 
+        if self.runtime:
+            runtime_path = pathlib.Path(self.runtime) 
+            os.environ["LD_PRELOAD"] = str(runtime_path) 
+            os.environ["RT_PATH"] = str(runtime_path.parent)
+            if runtime_path.suffix.endswith(".so"):
+                os.environ["RT_LIB"] = runtime_path.stem.removeprefix('lib').removesuffix(".so") 
+            else:
+                os.environ["RT_LIB"] = runtime_path.stem.removeprefix('lib').removesuffix(".dynlib") 
+
     def to_dict(self) -> Dict:
         return {
             'id': self.id,
@@ -38,13 +47,23 @@ class Config:
         self.config_path        = config_path
         self.test_dir           = resolve_relative_path(config_data['testDir'], 
                                                         os.path.dirname(config_path))
-        self.executables        = self.parse_executables(config_data['testedExecutablePaths'])
+        self.executables        = self.parse_executables(config_data['testedExecutablePaths'],
+                                                         config_data.get('runtimes', ""))
         self.toolchains         = self.parse_toolchains(config_data['toolchains'])
         self.error_collection   = self.verify()
         self.tests              = self.gather_tests()
+    
+    def parse_executables(self, executables_data: Dict[str, str],
+                                runtimes_data: Dict[str, str]) -> List[Executable]: 
+        def find_runtime(id) -> str:
+            if not runtimes_data:
+                return ""
+            for key, value in runtimes_data.items():
+                if key == id :
+                    return value
+            return ""
 
-    def parse_executables(self, executables_data: Dict[str, str]) -> List[Executable]:
-        return [Executable(id, path) for id, path in executables_data.items()]
+        return [Executable(id, path, find_runtime(id)) for id, path in executables_data.items()]
     
     def parse_toolchains(self, toolchains_data: Dict[str, List[Dict]]) -> List[ToolChain]:
         return [ToolChain(name, steps) for name, steps in toolchains_data.items()]
@@ -78,7 +97,7 @@ class Config:
         for exe in self.executables:
             ec.extend(exe.verify().errors)       
         for tc in self.toolchains:
-            ec.extend(tc.verify().errors) 
+            ec.extend(tc.verify().errors)
         return ec
 
     def to_dict(self) -> Dict:
@@ -97,10 +116,10 @@ def load_config(config_path: str) -> Optional[Config]:
     """
     if not os.path.exists(config_path):
         return None
-    try:
-        with open(config_path, 'r') as config_file:
-            config_data = json.load(config_file)
-        return Config(config_path, config_data)
-    except Exception as e:
-        log(f"Encountered unexpected filesystem error: {e}")
-        return None
+    # try:
+    with open(config_path, 'r') as config_file:
+        config_data = json.load(config_file)
+    return Config(config_path, config_data)
+    # except Exception as e:
+    #     log(f"Encountered unexpected filesystem error: {e}")
+    #     return None
