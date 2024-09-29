@@ -1,19 +1,7 @@
 import os
-from io     import BytesIO
-from typing import Optional
-
-def str_to_bytes(string: str, chop_newline: bool=False) -> bytes:
- 
-    if chop_newline and string.endswith('\n'):
-        string = string[:-1]
-
-    bytes_io = BytesIO(string.encode('utf-8'))
-    bytes_io.seek(0)
-    return bytes_io.getvalue()
-
-def bytes_to_str(bytes_io: BytesIO, encoding: str='utf-8') -> str: 
-    bytes_io.seek(0)
-    return bytes_io.getvalue().decode(encoding)
+from io                     import BytesIO
+from typing                 import Optional
+from dragon_runner.utils    import str_to_bytes, bytes_to_str
 
 class TestFile:
     __test__ = False 
@@ -51,7 +39,6 @@ class TestFile:
                  
                 rhs_line = line.split(directive_prefix, 1)[1]
                 rhs_bytes = str_to_bytes(rhs_line, chop_newline=True)
-
                 if not first_match:
                     contents.write(b'\n')
 

@@ -2,3 +2,5 @@
 venv/
 dist/
 dragon_runner.egg-info/
+
+**/GazpreaPackage/**

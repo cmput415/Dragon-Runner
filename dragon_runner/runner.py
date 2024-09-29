@@ -11,6 +11,7 @@ from colorama               import Fore, init
 from dragon_runner.testfile import TestFile 
 from dragon_runner.config   import Executable, ToolChain
 from dragon_runner.log      import log
+from dragon_runner.utils    import make_tmp_file, bytes_to_str
 
 init(autoreset=True)
 
@@ -26,7 +27,7 @@ class ToolChainResult:
 @dataclass
 class TestResult:
     did_pass: bool
-    did_error: bool
+    error_test: bool
     diff: Optional[str] = None
 
 def replace_env_vars(args: List[str]) -> List[str]:
@@ -66,8 +67,7 @@ def replace_magic_args(args: List[str], binary: str, input_file: str, output_fil
 
 def run_command(command: List[str],
                 input_stream: Optional[io.BytesIO],
-                env: Dict[str, str] = {}) -> subprocess.CompletedProcess:
-      
+                env: Dict[str, str] = {}) -> subprocess.CompletedProcess: 
     env = os.environ.copy() 
     stdout = subprocess.PIPE
     stderr = subprocess.PIPE 
@@ -79,13 +79,11 @@ def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> Tool
     log(f"Running test: {test.stem} ToolChain: {toolchain.name} Binary: {exe.id}", level=1)
    
     input_file = test.test_path
-    current_dir = os.getcwd()
-    
+    current_dir = os.getcwd() 
     test.get_input_stream()
-    for step in toolchain:
-        
-        # TODO: how to handle when step has no output
-        output_file = os.path.join(current_dir, step.output) if step.output else input_file
+
+    for step in toolchain: 
+        output_file = os.path.join(current_dir, step.output) if step.output else None
         input_stream = test.get_input_stream() if step.uses_ins else None
         command = [step.exe_path] + step.arguments
         command = replace_magic_args(command, exe.exe_path, input_file, output_file)
@@ -99,11 +97,11 @@ def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> Tool
         if input_stream is not None:
             log("Input stream:", input_stream.getvalue(), level=2)
         
-        result = run_command(command, input_stream)
-         
+        result = run_command(command, input_stream) 
         log("Result exit code: ", result.returncode, level=2)
         log("Result stdout:", result.stdout, level=2)
         log("Result stderr:", result.stderr, level=2)
+        log("Test expected out:", bytes_to_str(test.get_expected_out()), level=2)
         
         if result.returncode != 0 and not step.allow_error:
             log("Aborting toolchain early")
@@ -114,7 +112,7 @@ def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> Tool
                 exit_code=result.returncode
             )
         
-        input_file = output_file
+        input_file = output_file if step.output else make_tmp_file(io.BytesIO(result.stdout))
  
     return ToolChainResult(
         success=True,
@@ -126,29 +124,36 @@ def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> Tool
 def get_test_result(tool_chain_result: ToolChainResult, expected_out: BytesIO) -> TestResult:
     """
     Determine the test result based on ToolChainResult and expected output.
-
-    Rules:
-    1) If success is True, then stdout and expected_out match precisely and stderr is empty
-       -> TestResult(did_pass=True, did_error=False)
-    2) If success is False, then stderr and expected_out match leniently and stdout is empty
-       -> TestResult(did_pass=True, did_error=True)
-    3) If success is False and rule 2 is not met
-       -> TestResult(did_pass=False, did_error=True, diff)
-    4) If success is True and rule 1 is not met
-       -> TestResult(did_pass=False, did_error=False, diff)
+    Result Rules:
+        (T,F) If tc successful, exit is zero and precise diff on stdout
+        (T,T) If tc successful, exit non zero and a lenient diff on stderr succeeds
+        (F,T) If tc successful, exit non zero and all lenient diffs on stderr fail
+        (F,F) If tc not successful
     """
+    # define capture patterns for lenient diff
+    compile_time_pattern = r'.*?(Error on line \d+):?.*' 
+    runtime_pattern = r'\s*(\w+Error):?.*'
+
     if tool_chain_result.success:
-        if tool_chain_result.stderr.getvalue() == b'' and precise_diff(tool_chain_result.stdout, expected_out) == "":
-            return TestResult(did_pass=True, did_error=False)
-        else:
+        if tool_chain_result.exit_code == 0:
+            # Regular test: Take precise diff from only stdout
             diff = precise_diff(tool_chain_result.stdout, expected_out)
-            return TestResult(did_pass=False, did_error=False, diff=diff)
-    else:
-        if tool_chain_result.stdout.getvalue() == b'' and lenient_diff(tool_chain_result.stderr, expected_out) == "":
-            return TestResult(did_pass=True, did_error=True)
+            if not diff: 
+                return TestResult(did_pass=True, error_test=False)
+            else:
+                return TestResult(did_pass=False, error_test=False, )
         else:
-            diff = lenient_diff(tool_chain_result.stderr, expected_out)
-            return TestResult(did_pass=False, did_error=True, diff=diff)
+            # Error Test: Take lenient diff from only stderr 
+            ct_diff = lenient_diff(tool_chain_result.stderr, expected_out, compile_time_pattern)
+            rt_diff = lenient_diff(tool_chain_result.stderr, expected_out, runtime_pattern)
+            if not ct_diff:
+                return TestResult(did_pass=True, error_test=True)
+            elif not rt_diff:
+                return TestResult(did_pass=True, error_test=True)
+            else:
+                return TestResult(did_pass=False, error_test=True, diff=ct_diff)
+    else:
+        return TestResult(did_pass=False, error_test=True, diff="")
 
 def precise_diff(produced: BytesIO, expected: BytesIO) -> str:
     """
@@ -157,31 +162,39 @@ def precise_diff(produced: BytesIO, expected: BytesIO) -> str:
     produced_str = produced.getvalue().decode('utf-8')
     expected_str = expected.getvalue().decode('utf-8')
 
-    # if the strings are exactly the same produce no diff
+    # identical strings implies no diff 
     if produced_str == expected_str:
         return ""
 
     differ = Differ()
     diff = list(differ.compare(produced_str.splitlines(), expected_str.splitlines()))
-
     return color_diff(diff)
 
-def lenient_diff(produced: BytesIO, expected: BytesIO, pattern: str = r'\S+') -> str:
+def lenient_diff(produced: BytesIO, expected: BytesIO, pattern: str) -> str:
     """
-    Check if the produced bytes are different from the expected bytes with
-    respect to the regex pattern.
+    Perform a lenient diff on error messages, using the pattern as a mask/filter.
     """
-    produced_str = produced.getvalue().decode('utf-8')
-    expected_str = expected.getvalue().decode('utf-8')
+    produced_str = produced.getvalue().decode('utf-8').strip()
+    expected_str = expected.getvalue().decode('utf-8').strip()
+    
+    print("PRODUCED STR:", produced_str)
+    print("EXPECTED STR:", expected_str)
 
-    # Replace pattern matches with a placeholder in both strings
-    produced_normalized = re.sub(pattern, '***', produced_str)
-    expected_normalized = re.sub(pattern, '***', expected_str)
+    # Apply the mask/filter to both strings
+    produced_masked = re.sub(pattern, r'\1', produced_str, flags=re.IGNORECASE | re.DOTALL)
+    expected_masked = re.sub(pattern, r'\1', expected_str, flags=re.IGNORECASE | re.DOTALL)
 
+    print("PRODUCED MASKED:", produced_masked)
+    print("EXPECTED MASKED:", expected_masked)
+
+    # If the masked strings are identical, return an empty string (no diff)
+    if produced_masked == expected_masked:
+        return ""
+
+    # If the masked strings are different, generate a diff
     differ = Differ()
-    diff = list(differ.compare(produced_normalized.splitlines(), expected_normalized.splitlines()))
-
-    return color_diff(diff) if diff else ""
+    diff = list(differ.compare(produced_masked.splitlines(), expected_masked.splitlines()))
+    return color_diff(diff)
 
 def color_diff(diff_lines: list) -> str:
     """

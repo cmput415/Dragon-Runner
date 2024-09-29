@@ -25,4 +25,5 @@ def test_valid_toolchain_failures(sample_valid_fail_config):
         for tc in gcc_config.toolchains:
             for test in gcc_config.tests:
                 result: ToolChainResult = run_toolchain(test, tc, exe)
+                print(test)
                 assert not get_test_result(result, test.expected_out).did_pass
