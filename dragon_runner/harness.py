@@ -57,7 +57,7 @@ class TestHarness:
                 tc_pass_count = 0
                 tc_test_count = 0
                 for spkg in self.config.sub_packages:
-                    log(f"Entering subpackage {spkg.rel_dir_path}")
+                    log(f"Entering subpackage {spkg.package_name}")
                     sp_pass_count = 0
                     sp_test_count = 0
                     for test in spkg.tests:

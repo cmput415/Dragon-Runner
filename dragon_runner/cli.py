@@ -10,6 +10,7 @@ class CLIArgs(NamedTuple):
     debug_package: str
     time: bool
     verbosity: int
+    verify: bool
 
     def __repr__(self) -> str:
         return (
@@ -21,6 +22,7 @@ class CLIArgs(NamedTuple):
             f"  Debug Package: {self.debug_package}\n"
             f"  Time: {self.time}\n"
             f"  Verbosity: {self.verbosity}"
+            f"  Verify: {self.verify}"
         )
 
 def parse_cli_args() -> CLIArgs:
@@ -30,12 +32,12 @@ def parse_cli_args() -> CLIArgs:
     parser.add_argument("--grade", dest="grade_file", help="Perform grading analysis and output to this file")
     parser.add_argument("--log-failures", dest="failure_log", help="Log the testcases the solution compiler fails.")
     parser.add_argument("--timeout", type=float, default=2.0, help="Specify timeout length for EACH command in a toolchain.")
+    parser.add_argument("--verify", action="store_true", default=False, help="Verify that config and tests are configured correctly")
     parser.add_argument("--debug-package", help="Provide a sub-path to run the tester on.") 
     parser.add_argument("-t", "--time", action="store_true", help="Include the timings (seconds) of each test in the output.")
     parser.add_argument("-v", "--verbosity", action="count", default=0, help="Increase verbosity level")
 
     args: CLIArgs = parser.parse_args()
-
     if not os.path.isfile(args.config_file):
         parser.error(f"The config file {args.config_file} does not exist.")
     if bool(args.grade_file) != bool(args.failure_log):
@@ -50,6 +52,7 @@ def parse_cli_args() -> CLIArgs:
         timeout         = args.timeout,
         debug_package   = args.debug_package,
         time            = args.time,
-        verbosity       = args.verbosity
+        verbosity       = args.verbosity,
+        verify          = args.verify
     )
 

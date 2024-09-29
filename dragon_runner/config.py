@@ -12,9 +12,9 @@ class SubPackage():
     """
     Represents a set of tests in a directory
     """
-    def __init__(self, dir_path: str):
-        self.dir_path: str          = dir_path
-        self.rel_dir_path: str      = os.path.relpath(dir_path)
+    def __init__(self, base_path: str, parent_path: str, package_name: str): 
+        self.dir_path: str          = os.path.join(parent_path, package_name)
+        self.package_name: str      = package_name
         self.tests: List[TestFile]  = self.gather_tests()
 
     @staticmethod
@@ -113,10 +113,10 @@ class Config:
         Collect any directory beneath the top level package and create a subpackage.
         """
         subpackages = []
-        for root, dirs, _ in os.walk(self.test_dir):
-            for dir in dirs:
-                subpkg_path = os.path.join(root, dir)
-                subpackages.append(SubPackage(subpkg_path))
+        base_path = self.test_dir
+        for parent_path, dirs, _ in os.walk(self.test_dir):
+            for dirname in dirs:
+                subpackages.append(SubPackage(base_path, parent_path, dirname)) 
         return subpackages 
     
     def log_test_info(self):
@@ -126,7 +126,7 @@ class Config:
         log("Test file"+ ' '*22 + "Expected bytes  Stdin bytes")
         log("-" * 60)
         for sp in self.sub_packages:
-            log(f"Sub Package: {sp.rel_dir_path} ({len(sp.tests)} tests)")
+            log(f"Sub Package: {sp.package_name} ({len(sp.tests)} tests)")
 
     def verify(self) -> ErrorCollection:
         """

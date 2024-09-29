@@ -16,7 +16,7 @@ init(autoreset=True)
 def main(): 
     # parse and verify the CLI arguments
     args: CLIArgs = parse_cli_args()
-    
+
     # parse and verify the config
     config = load_config(args.config_file)
     if not config:
@@ -25,6 +25,18 @@ def main():
     if config.error_collection:
         log(config.error_collection)
         return 1
+
+    if args.verify:
+        ccid = input("Enter your CCID: ")
+        assert config and not config.error_collection
+        found = False
+        for sp in config.sub_packages:
+            log("Searching.. ", sp.package_name, indent=2)
+            if sp.package_name == ccid:
+                found = True
+        if not found:
+            print(f"Could not find package named after CCID: {ccid}")
+            return 1
 
     # display the config info before running tests
     config.log_test_info()
