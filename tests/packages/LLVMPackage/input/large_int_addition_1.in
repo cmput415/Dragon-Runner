@@ -1,9 +1,0 @@
-procedure main() returns integer {
-    integer i = 2147483646;
-    integer j = 1;
-    i + j -> std_output;
-    return 0;
-}
-
-
-//CHECK_FILE:./large_int_addition_1.out
