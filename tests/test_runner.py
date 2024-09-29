@@ -1,7 +1,5 @@
 import os
-from dragon_runner.runner   import run_toolchain
-from dragon_runner.runner   import ToolChainResult
-from dragon_runner.utils    import precise_diff
+from dragon_runner.runner   import run_toolchain, ToolChainResult, get_test_result
 from dragon_runner.config   import Config
 def test_valid_toolchain_success(sample_valid_config): 
     """
@@ -14,7 +12,7 @@ def test_valid_toolchain_success(sample_valid_config):
         for tc in gcc_config.toolchains:
             for test in gcc_config.tests:
                 result: ToolChainResult = run_toolchain(test, tc, exe)
-                assert precise_diff(result.stdout, test.expected_out) is ""
+                assert get_test_result(result, test.expected_out).did_pass
 
 def test_valid_toolchain_failures(sample_valid_fail_config):
     """
@@ -22,9 +20,9 @@ def test_valid_toolchain_failures(sample_valid_fail_config):
     """
     gcc_config = sample_valid_fail_config 
     assert gcc_config.tests is not None
-    
-    # for exe in gcc_config.executables:
-    #     for tc in gcc_config.toolchains:
-    #         for test in gcc_config.tests:
-    #             result: ToolChainResult = run_toolchain(test, tc, exe)
-    #             assert precise_match(result.stdout, test.expected_out) is not ""
+  
+    for exe in gcc_config.executables:
+        for tc in gcc_config.toolchains:
+            for test in gcc_config.tests:
+                result: ToolChainResult = run_toolchain(test, tc, exe)
+                assert not get_test_result(result, test.expected_out).did_pass

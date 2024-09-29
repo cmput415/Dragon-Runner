@@ -4,10 +4,9 @@ from colorama               import init, Fore
 from typing                 import List
 from dragon_runner.cli      import parse_cli_args
 from dragon_runner.config   import load_config, Config
-from dragon_runner.runner   import run_toolchain, ToolChainResult
+from dragon_runner.runner   import run_toolchain, ToolChainResult, get_test_result, TestResult
 from dragon_runner.log      import log
 from dragon_runner.testfile import TestFile
-from dragon_runner.utils    import precise_diff
 
 # initialize terminal colors
 init(autoreset=True)
@@ -54,24 +53,18 @@ def main():
                 if not result.success:
                     log("Toolchain Failed: ", result)
                 else:
-                    #diff = get_test_diff(
-                    #    result.stdout, result.stderr, test.expected_out
-                    #) 
-                    #diff = precise_match(result.stdout, result.stderr, test.expected_out)
-                    diff = precise_diff(result.stdout, test.expected_out) 
-                    if not diff:
+                    test_result: TestResult = get_test_result(result, test.expected_out)
+                    if test_result.did_pass:
                         log_result(test, True)
                         pass_count += 1
                     else:
-                        log(diff)
+                        log(test_result.diff)
                         log_result(test, False) 
             log("PASSED: ", pass_count, "/", len(config.tests))
     
     if pass_count == len(config.tests):
-        exit(0)
-    else:
-        exit(1)
+        return 0
+    return 1
 
 if __name__ == "__main__":
     main()
-
