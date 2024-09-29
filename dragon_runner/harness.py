@@ -7,17 +7,14 @@ from dragon_runner.testfile import TestFile
 from dragon_runner.runner   import ToolChainResult, TestResult, ToolChain
 from dragon_runner.runner   import run_toolchain, get_test_result
 
-def log_result(test: TestFile, result: TestResult): 
+def log_result(test: TestFile, result: TestResult):
     if result.did_pass:
-        if result.error_test:
-            log(Fore.GREEN + "[ERROR PASS] " + Fore.RESET + test.file)
-        else:
-            log(Fore.GREEN + "[PASS] " + Fore.RESET + test.file)
+        status = "[ERROR PASS]" if result.error_test else "[PASS]"
+        time_str = f"{result.time:.5f}s" if result.time else ""
+        log(f"{Fore.GREEN}{status:<15}{Fore.RESET}{test.file:<48}{time_str}")
     else:
-        if result.error_test:
-            log(Fore.RED + "[FAIL] " + Fore.RESET + test.file)
-        else:
-            log(Fore.RED + "[ERROR FAIL] " + Fore.RESET + test.file)
+        status = "[FAIL]" if result.error_test else "[ERROR FAIL]"
+        log(f"{Fore.RED}{status:<15}{Fore.RESET}{test.file}")
 
 def log_toolchain_result(test: TestFile, result: ToolChainResult, tc: ToolChain):
     """

@@ -30,6 +30,7 @@ class ToolChainResult:
 class TestResult:
     did_pass: bool
     error_test: bool
+    time: Optional[float] = 0
     diff: Optional[str] = None
 
 def replace_env_vars(args: List[str]) -> List[str]:
@@ -76,8 +77,9 @@ def run_command(command: List[str],
     input_bytes = input_stream.getvalue() if input_stream is not None else None
     return subprocess.run(command, env=env, input=input_bytes, stdout=stdout, stderr=stderr, check=False)
 
-def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> ToolChainResult:
+import time
 
+def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> ToolChainResult:
     input_file = test.test_path
     current_dir = os.getcwd() 
     test.get_input_stream()
@@ -90,7 +92,6 @@ def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> Tool
         command = replace_magic_args(command, exe.exe_path, input_file, output_file)
         command = replace_env_vars(command)
         
-        # Wrap the command with os.path.abspath if it's not an absolute path
         if not os.path.isabs(command[0]):
             command[0] = os.path.abspath(os.path.join(current_dir, command[0]))
         
@@ -98,10 +99,15 @@ def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> Tool
         if input_stream is not None:
             log("Input stream:", input_stream.getvalue(), level=2)
         
+        start_time = time.time()
         result = run_command(command, input_stream) 
+        end_time = time.time()
+        wall_time = end_time - start_time
+
         log("Result exit code: ", result.returncode, level=2)
         log("Result stdout:", result.stdout, level=2)
         log("Result stderr:", result.stderr, level=2)
+        log("Step execution time:", wall_time, "seconds", level=2)
         
         if result.returncode != 0:
             if not step.allow_error:
@@ -112,7 +118,8 @@ def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> Tool
                 stderr=io.BytesIO(result.stderr),
                 exit_code=result.returncode,
                 last_command=command,
-                last_step=step
+                last_step=step,
+                time=wall_time
             )
         input_file = output_file if step.output else make_tmp_file(io.BytesIO(result.stdout))
  
@@ -122,10 +129,11 @@ def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> Tool
         stderr=io.BytesIO(result.stderr),
         exit_code=result.returncode,
         last_command=command,
-        last_step=step
+        last_step=step,
+        time=wall_time
     )
 
-def get_test_result(tool_chain_result: ToolChainResult, expected_out: BytesIO) -> TestResult:
+def get_test_result(tc_result: ToolChainResult, expected_out: BytesIO) -> TestResult:
     """
     Determine the test result based on ToolChainResult and expected output.
     Result Rules:
@@ -138,18 +146,18 @@ def get_test_result(tool_chain_result: ToolChainResult, expected_out: BytesIO) -
     compile_time_pattern = r'.*?(Error on line \d+):?.*' 
     runtime_pattern = r'\s*(\w+Error):?.*'
 
-    if tool_chain_result.success:
-        if tool_chain_result.exit_code == 0:
+    if tc_result.success:
+        if tc_result.exit_code == 0:
             # Regular test: Take precise diff from only stdout
-            diff = precise_diff(tool_chain_result.stdout, expected_out)
+            diff = precise_diff(tc_result.stdout, expected_out)
             if not diff: 
-                return TestResult(did_pass=True, error_test=False)
+                return TestResult(did_pass=True, error_test=False, time=tc_result.time)
             else:
-                return TestResult(did_pass=False, error_test=False, )
+                return TestResult(did_pass=False, error_test=False)
         else:
             # Error Test: Take lenient diff from only stderr 
-            ct_diff = lenient_diff(tool_chain_result.stderr, expected_out, compile_time_pattern)
-            rt_diff = lenient_diff(tool_chain_result.stderr, expected_out, runtime_pattern)
+            ct_diff = lenient_diff(tc_result.stderr, expected_out, compile_time_pattern)
+            rt_diff = lenient_diff(tc_result.stderr, expected_out, runtime_pattern)
             if not ct_diff:
                 return TestResult(did_pass=True, error_test=True)
             elif not rt_diff:
