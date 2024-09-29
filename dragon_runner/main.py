@@ -1,13 +1,9 @@
 import os
 from colorama               import init, Fore
 from dragon_runner.cli      import parse_cli_args, CLIArgs
-from dragon_runner.config   import load_config, Config
-from dragon_runner.runner   import ToolChainResult, TestResult, ToolChain
-from dragon_runner.runner   import run_toolchain, get_test_result
+from dragon_runner.config   import load_config
 from dragon_runner.log      import log, log_multiline
-from dragon_runner.testfile import TestFile
 from dragon_runner.grader   import grade
-from dragon_runner.utils    import bytes_to_str
 from dragon_runner.harness  import TestHarness
 
 # initialize terminal colors
@@ -23,7 +19,10 @@ def main():
         log(f"Could not open config file: {args.config_file}")
         return 1
     if config.error_collection:
-        log(config.error_collection)
+        log(f"Found Config {len(config.error_collection)} error(s):")
+        log(f"Parsed {args.config_file} below:")
+        log_multiline(str(config), indent=2)
+        log(Fore.RED + str(config.error_collection) + Fore.RESET)
         return 1
 
     if args.verify:

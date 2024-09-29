@@ -146,7 +146,7 @@ class Config:
             'testDir': self.test_dir,
             'executables': [exe.to_dict() for exe in self.executables],
             'toolchains': {tc.name: tc.to_dict()[tc.name] for tc in self.toolchains},
-            'subpackages': [os.path.basename(subpkg.subpkg_path) for subpkg in self.subpackages]
+            'subpackages': [subpkg.package_name for subpkg in self.sub_packages]
         }
     
     def __repr__(self) -> str:

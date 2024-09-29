@@ -25,6 +25,9 @@ class ErrorCollection:
             return bool(self) == other
         return False
 
+    def __len__(self):
+        return len(self.errors)
+
     def __str__(self):
         return "\n".join(str(error) for error in self.errors)
 
