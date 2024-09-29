@@ -12,7 +12,7 @@ def test_valid_toolchain_success(sample_valid_config):
         for tc in gcc_config.toolchains:
             for sp in gcc_config.sub_packages:
                 for test in sp.tests:
-                    result: ToolChainResult = run_toolchain(test, tc, exe)
+                    result: ToolChainResult = run_toolchain(test, tc, exe, timeout=5.0)
                     assert get_test_result(result, test.expected_out).did_pass
 
 def test_valid_toolchain_failures(sample_valid_fail_config):
@@ -26,6 +26,6 @@ def test_valid_toolchain_failures(sample_valid_fail_config):
         for tc in gcc_config.toolchains:
             for sp in gcc_config.sub_packages:
                 for test in sp.tests:
-                    result: ToolChainResult = run_toolchain(test, tc, exe)
+                    result: ToolChainResult = run_toolchain(test, tc, exe, timeout=5.0)
                     print(test)
                     assert not get_test_result(result, test.expected_out).did_pass
