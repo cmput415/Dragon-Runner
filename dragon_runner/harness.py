@@ -39,7 +39,7 @@ class TestHarness:
     def log_failures(self) -> str:
         log(f"Failure Summary: ({len(self.failures)} tests)")
         for test in self.failures:
-            log(Fore.RED + "[FAILED] " + Fore.RESET + test.file, indent=4)
+            log(Fore.RED + "[FAILED] " + Fore.RESET + test.file, indent=2)
 
     def run_all(self, timeout: float) -> bool:
         """

@@ -40,3 +40,11 @@ def bytes_to_str(bytes_io: BytesIO, encoding: str='utf-8') -> str:
         return bytes_io.getvalue().decode(encoding)
     except:
         return bytes_io.getvalue()
+    
+def file_to_bytes(file: str) -> Optional[BytesIO]:
+    try:
+        with open(file, 'rb') as f:
+            return BytesIO(f.read())
+    except Exception as e:
+        print("Unknown exception: {e}")
+        return None

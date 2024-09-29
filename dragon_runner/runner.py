@@ -11,8 +11,8 @@ from difflib                    import Differ
 from colorama                   import Fore, init
 from dragon_runner.testfile     import TestFile 
 from dragon_runner.config       import Executable, ToolChain
-from dragon_runner.log          import log
-from dragon_runner.utils        import make_tmp_file, bytes_to_str
+from dragon_runner.log          import log, log_multiline
+from dragon_runner.utils        import make_tmp_file, bytes_to_str, file_to_bytes
 from dragon_runner.toolchain    import Step
 
 init(autoreset=True)
@@ -28,19 +28,19 @@ class ToolChainResult:
     time: Optional[float]=0
 
 @dataclass
-class TestResult:
-    did_pass: bool
-    error_test: bool
-    time: Optional[float]=0
-    diff: Optional[str]=None
-
-@dataclass
 class CommandResult:
     subps_result: Optional[CompletedProcess]
     time: float=0
     timed_out: bool=False 
     def __iter__(self):
         return iter((self.subps_result, self.time, self.timed_out))
+
+@dataclass
+class TestResult:
+    did_pass: bool
+    error_test: bool
+    time: Optional[float]=0
+    diff: Optional[str]=None
 
 def replace_env_vars(args: List[str]) -> List[str]:
     """
@@ -84,28 +84,37 @@ def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable, timeout
     input_file = test.test_path
     current_dir = os.getcwd()
     log("Test expected out", test.get_expected_out().getvalue(), level=2)
-    for step in toolchain:
-
-        # resolve the variables in the command 
-        command, output_file = prepare_command(step, exe, input_file, current_dir)
-
-        # set the input stream if the step uses it 
+    
+    for index, step in enumerate(toolchain):
+        is_last_step = index == len(toolchain) - 1
+        
         input_stream = test.get_input_stream() if step.uses_ins else None 
-
-        # run the command and retrieve the result and time
+        
+        command, output_file         = prepare_command(step, exe, input_file, current_dir)
         result, wall_time, timed_out = run_command(command, input_stream, timeout=timeout)
+
+        # check timeout 
         if timed_out:
             log(Fore.YELLOW + f"Timed out at step: {step.name} after {timeout} seconds", level=0)
             return ToolChainResult(False, BytesIO(b''), BytesIO(b''), 1, command, step)
- 
-        log_step(command, input_stream, result, wall_time) 
+
+        # check result status
+        log_step(step, command, input_stream, result, wall_time) 
         if result.returncode != 0:
             if not step.allow_error:
                 log("Aborting toolchain early", level=1)
             return create_tc_result(step.allow_error, result, command, step, wall_time)
          
-        input_file = output_file or make_tmp_file(BytesIO(result.stdout))
+        if is_last_step: 
+            if output_file:
+                file_contents = file_to_bytes(output_file)
+                return ToolChainResult(True, file_contents, b'', result.returncode, command, step, wall_time) 
+            else:
+                return create_tc_result(True, result, command, step, wall_time)
+        else:
+            input_file = output_file or make_tmp_file(BytesIO(result.stdout))
     
+    # This line should never be reached, but it's good to have as a fallback
     return create_tc_result(True, result, command, step, wall_time)
 
 def run_command(command: List[str],
@@ -140,17 +149,19 @@ def prepare_command(step, exe, input_file, current_dir):
     command[0] = os.path.abspath(command[0]) if not os.path.isabs(command[0]) else command[0]
     return command, output_file
 
-def log_step(command: List[str], input_stream: BytesIO, result, wall_time):
+def log_step(step: Step, command: List[str], input_stream: BytesIO, result, wall_time):
     """
     Report what happened for a single step in the toolchain
     """
-    log("Command:", ' '.join(command), level=2)
+    log('=' * 20 + f" Step: {step.name} " + '='*20)
+    log_multiline("Command: [" + ',\n\t'.join(command) + "]", indent=2)
+
     if input_stream:
-        log("Input stream:", input_stream.getvalue(), level=2, indent=4)
-    log("Result exit code:", result.returncode, level=2, indent=4)
-    log("Result stdout:", result.stdout, level=2, indent=4)
-    log("Result stderr:", result.stderr, level=2, indent=4)
-    log("Step execution time:", f"{wall_time:.3f} seconds", level=2, indent=4)
+        log("Input stream:", input_stream.getvalue(), level=2, indent=2)
+    log("Result exit code:", result.returncode, level=2, indent=2)
+    log("Result stdout:", result.stdout, level=2, indent=2)
+    log("Result stderr:", result.stderr, level=2, indent=2)
+    log("Step execution time:", f"{wall_time:.3f} seconds", level=2, indent=2)
 
 def create_tc_result(success: bool, result, command, step, wall_time) -> ToolChainResult:
     return ToolChainResult(

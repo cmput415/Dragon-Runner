@@ -2,6 +2,11 @@
 venv/
 dist/
 dragon_runner.egg-info/
-**/GazpreaPackage/**
-gazpreaConfig.json
 
+**/GazpreaPackage/**
+**/GeneratorPackage/**
+**/VCalcPackage/**
+
+gazpreaConfig.json
+GeneratorConfig.json
+vcalcConfig.json
