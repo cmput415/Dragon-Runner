@@ -73,16 +73,15 @@ def run_command(command: List[str],
     env = os.environ.copy() 
     stdout = subprocess.PIPE
     stderr = subprocess.PIPE 
-    
     input_bytes = input_stream.getvalue() if input_stream is not None else None
     return subprocess.run(command, env=env, input=input_bytes, stdout=stdout, stderr=stderr, check=False)
 
 def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> ToolChainResult:
-    log(f"Running test: {test.stem} ToolChain: {toolchain.name} Binary: {exe.id}", level=1)
-   
+
     input_file = test.test_path
     current_dir = os.getcwd() 
     test.get_input_stream()
+    log("Test expected out", test.get_expected_out().getvalue(), level=2)
 
     for step in toolchain: 
         output_file = os.path.join(current_dir, step.output) if step.output else None
@@ -103,7 +102,6 @@ def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> Tool
         log("Result exit code: ", result.returncode, level=2)
         log("Result stdout:", result.stdout, level=2)
         log("Result stderr:", result.stderr, level=2)
-        log("Test expected out:", bytes_to_str(test.get_expected_out()), level=2)
         
         if result.returncode != 0:
             if not step.allow_error:

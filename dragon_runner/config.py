@@ -9,21 +9,40 @@ from dragon_runner.utils        import resolve_relative_path
 from dragon_runner.log          import log
 
 class SubPackage():
+    """
+    Represents a set of tests in a directory
+    """
     def __init__(self, dir_path: str):
         self.dir_path: str          = dir_path
         self.rel_dir_path: str      = os.path.relpath(dir_path)
         self.tests: List[TestFile]  = self.gather_tests()
- 
+    
+    @staticmethod
+    def is_test(test_path: str):
+        """
+        Determine if a file is test or not. Ignore reserved output and input stream
+        extensions and hidden files.
+        """
+        if os.path.isfile(test_path) and not test_path.endswith(('.out', '.ins'))\
+                                     and not test_path.startswith('.'):
+            return True
+        return False
+
     def gather_tests(self) -> List[TestFile]:
+        """
+        Find all tests in the directory of the subpackage.
+        """
         tests = []
         for file in os.listdir(self.dir_path):
             test_path = os.path.join(self.dir_path, file)
-            if os.path.isfile(test_path) and not file.endswith(('.out', '.ins'))\
-                                         and not file.startswith('.'):
+            if self.is_test(test_path):
                 tests.append(TestFile(test_path))
         return tests 
 
 class Executable(Verifiable):
+    """
+    Represents a single tested executable along with an optional associated runtime.
+    """
     def __init__(self, id: str, exe_path: str, runtime: str):
         self.id         = id
         self.exe_path   = exe_path 
@@ -58,6 +77,9 @@ class Executable(Verifiable):
         }
 
 class Config:
+    """
+    An in memory representation of the JSON configuration file which directs the tester. 
+    """
     def __init__(self, config_path: str, config_data: Dict):
         self.config_path        = config_path
         self.test_dir           = resolve_relative_path(config_data['testDir'], 
@@ -69,7 +91,10 @@ class Config:
         self.sub_packages       = self.gather_subpackages()
     
     def parse_executables(self, executables_data: Dict[str, str],
-                                runtimes_data: Dict[str, str]) -> List[Executable]: 
+                                runtimes_data: Dict[str, str]) -> List[Executable]:
+        """
+        Parse each executable and assign a corresponding runtime if supplied
+        """
         def find_runtime(id) -> str:
             if not runtimes_data:
                 return ""
@@ -77,13 +102,18 @@ class Config:
                 if key == id :
                     return value
             return ""
-
         return [Executable(id, path, find_runtime(id)) for id, path in executables_data.items()]
     
     def parse_toolchains(self, toolchains_data: Dict[str, List[Dict]]) -> List[ToolChain]:
+        """
+        Parse each toolchain from the config file and return a list of them.
+        """
         return [ToolChain(name, steps) for name, steps in toolchains_data.items()]
 
     def gather_subpackages(self) -> List[SubPackage]:
+        """
+        Collect any directory beneath the top level package and create a subpackage.
+        """
         subpackages = []
         for root, dirs, _ in os.walk(self.test_dir):
             for dir in dirs:
@@ -92,13 +122,18 @@ class Config:
         return subpackages 
     
     def log_test_info(self):
-        """Prints a simple formatted table of test information."""
+        """
+        Prints a simple formatted table of test information.
+        """
         log("Test file"+ ' '*22 + "Expected bytes  Stdin bytes")
         log("-" * 60)
         for sp in self.sub_packages:
             log(f"Sub Package: {sp.rel_dir_path} ({len(sp.tests)} tests)")
 
     def verify(self) -> ErrorCollection:
+        """
+        Assert valid paths and that all compositetoolchains and executables also verify.
+        """
         ec = ErrorCollection()
         if not os.path.exists(self.test_dir):
             ec.add(ConfigError(f"Cannot find test directory: {self.test_dir}"))  
@@ -125,10 +160,10 @@ def load_config(config_path: str) -> Optional[Config]:
     """
     if not os.path.exists(config_path):
         return None
-    # try:
-    with open(config_path, 'r') as config_file:
-        config_data = json.load(config_file)
-    return Config(config_path, config_data)
-    # except Exception as e:
-    #     log(f"Encountered unexpected filesystem error: {e}")
-    #     return None
+    try:
+        with open(config_path, 'r') as config_file:
+            config_data = json.load(config_file)
+        return Config(config_path, config_data)
+    except Exception as e:
+        log(f"Failed to create the JSON configuration with error: {e}")
+        return None
