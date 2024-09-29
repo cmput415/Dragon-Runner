@@ -1,7 +1,5 @@
 import os
-
 from colorama               import init, Fore
-from typing                 import List
 from dragon_runner.cli      import parse_cli_args
 from dragon_runner.config   import load_config, Config
 from dragon_runner.runner   import ToolChainResult, TestResult, ToolChain
@@ -68,19 +66,27 @@ def main():
         for toolchain in config.toolchains:
             log("Running Toolchain:\t", toolchain.name)
             pass_count = 0
-            for test in config.tests:
-                tc_result: ToolChainResult = run_toolchain(test, toolchain, exe)
-                if not tc_result.success:
-                    log_toolchain_result(test, tc_result, toolchain)
-                else:
-                    test_result: TestResult = get_test_result(tc_result, test.expected_out)
-                    if test_result.did_pass:
-                        log_result(test, test_result)
-                        pass_count += 1
+            test_count = 0
+            for spkg in config.sub_packages:
+                log(f"Entering subpackage {spkg.rel_dir_path}")
+                sp_pass_count = 0
+                sp_test_count = len(spkg.tests)
+                for test in spkg.tests:
+                    tc_result: ToolChainResult = run_toolchain(test, toolchain, exe)
+                    if not tc_result.success:
+                        log_toolchain_result(test, tc_result, toolchain)
                     else:
-                        log(test_result.diff)
-                        log_result(test, test_result) 
-            log("PASSED: ", pass_count, "/", len(config.tests))
+                        test_result: TestResult = get_test_result(tc_result, test.expected_out)
+                        if test_result.did_pass:
+                            log_result(test, test_result)
+                            sp_pass_count += 1
+                        else:
+                            log(test_result.diff)
+                            log_result(test, test_result)
+                pass_count += sp_pass_count
+                test_count += sp_test_count
+                log("Passed: ", sp_pass_count, "/", sp_test_count)
+            log("PASSED: ", pass_count, "/", test_count)
     
     if pass_count == len(config.tests):
         return 0

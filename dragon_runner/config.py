@@ -8,6 +8,20 @@ from dragon_runner.toolchain    import ToolChain
 from dragon_runner.utils        import resolve_relative_path
 from dragon_runner.log          import log
 
+class SubPackage():
+    def __init__(self, dir_path: str):
+        self.dir_path: str          = dir_path
+        self.rel_dir_path: str     = os.path.relpath(dir_path)
+        self.tests: List[TestFile]  = self.gather_tests()
+ 
+    def gather_tests(self) -> List[TestFile]:
+        tests = []
+        for file in os.listdir(self.dir_path):
+            test_path = os.path.join(self.dir_path, file)
+            if os.path.isfile(test_path) and not file.endswith(('.out', '.ins')):
+                tests.append(TestFile(test_path))
+        return tests 
+
 class Executable(Verifiable):
     def __init__(self, id: str, exe_path: str, runtime: str):
         self.id         = id
@@ -51,7 +65,7 @@ class Config:
                                                          config_data.get('runtimes', ""))
         self.toolchains         = self.parse_toolchains(config_data['toolchains'])
         self.error_collection   = self.verify()
-        self.tests              = self.gather_tests()
+        self.sub_packages       = self.gather_subpackages()
     
     def parse_executables(self, executables_data: Dict[str, str],
                                 runtimes_data: Dict[str, str]) -> List[Executable]: 
@@ -67,28 +81,21 @@ class Config:
     
     def parse_toolchains(self, toolchains_data: Dict[str, List[Dict]]) -> List[ToolChain]:
         return [ToolChain(name, steps) for name, steps in toolchains_data.items()]
-    
-    def gather_tests(self) -> List[TestFile]:
-        """
-        Recursively gather all test files in the specified directory.
-        A test file is any file that doesn't end with '.out' or '.ins'.
-        """
-        tests = []
-        for root, _, files in os.walk(self.test_dir):
-            for file in files:
-                if not file.endswith(('.out', '.ins')):             
-                    test_path = os.path.join(root, file)
-                    tests.append(TestFile(test_path))
-        return tests
+
+    def gather_subpackages(self) -> List[SubPackage]:
+        subpackages = []
+        for root, dirs, _ in os.walk(self.test_dir):
+            for dir in dirs:
+                subpkg_path = os.path.join(root, dir)
+                subpackages.append(SubPackage(subpkg_path))
+        return subpackages 
     
     def log_test_info(self):
         """Prints a simple formatted table of test information."""
         log("Test file"+ ' '*22 + "Expected bytes  Stdin bytes")
         log("-" * 60)
-        for test in self.tests:
-            out_bytes = len(test.expected_out.getbuffer())
-            ins_bytes = len(test.input_stream.getbuffer())
-            log(f"{test.stem:<25} {out_bytes:>15} {ins_bytes:>12}")
+        for sp in self.sub_packages:
+            log(f"Sub Package: {sp.dir_path} ({len(sp.tests)} tests)")
 
     def verify(self) -> ErrorCollection:
         ec = ErrorCollection()
@@ -100,11 +107,12 @@ class Config:
             ec.extend(tc.verify().errors)
         return ec
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> Dict: 
         return {
             'testDir': self.test_dir,
             'executables': [exe.to_dict() for exe in self.executables],
-            'toolchains': {tc.name: tc.to_dict()[tc.name] for tc in self.toolchains}
+            'toolchains': {tc.name: tc.to_dict()[tc.name] for tc in self.toolchains},
+            'subpackages': [os.path.basename(subpkg.subpkg_path) for subpkg in self.subpackages]
         }
     
     def __repr__(self) -> str:

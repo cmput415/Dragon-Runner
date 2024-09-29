@@ -36,4 +36,7 @@ def str_to_bytes(string: str, chop_newline: bool=False) -> bytes:
 
 def bytes_to_str(bytes_io: BytesIO, encoding: str='utf-8') -> str: 
     bytes_io.seek(0)
-    return bytes_io.getvalue().decode(encoding)
+    try:
+        return bytes_io.getvalue().decode(encoding)
+    except:
+        return bytes_io.getvalue()

@@ -165,8 +165,8 @@ def precise_diff(produced: BytesIO, expected: BytesIO) -> str:
     """
     Return the difference of two byte strings, otherwise empty string 
     """
-    produced_str = produced.getvalue().decode('utf-8')
-    expected_str = expected.getvalue().decode('utf-8')
+    produced_str = bytes_to_str(produced)
+    expected_str = bytes_to_str(expected)
 
     # identical strings implies no diff 
     if produced_str == expected_str:
@@ -180,15 +180,12 @@ def lenient_diff(produced: BytesIO, expected: BytesIO, pattern: str) -> str:
     """
     Perform a lenient diff on error messages, using the pattern as a mask/filter.
     """
-    produced_str = produced.getvalue().decode('utf-8').strip()
-    expected_str = expected.getvalue().decode('utf-8').strip()
+    produced_str = bytes_to_str(produced).strip()
+    expected_str = bytes_to_str(expected).strip()
     
     # Apply the mask/filter to both strings
     produced_masked = re.sub(pattern, r'\1', produced_str, flags=re.IGNORECASE | re.DOTALL)
     expected_masked = re.sub(pattern, r'\1', expected_str, flags=re.IGNORECASE | re.DOTALL)
-
-    log("PRODUCED MASKED:", produced_masked, level=2)
-    log("EXPECTED MASKED:", expected_masked, level=2)
 
     # If the masked strings are identical, return an empty string (no diff)
     if produced_masked == expected_masked:
