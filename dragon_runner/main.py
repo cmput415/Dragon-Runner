@@ -4,7 +4,7 @@ from colorama               import init, Fore
 from typing                 import List
 from dragon_runner.cli      import parse_cli_args
 from dragon_runner.config   import load_config, Config
-from dragon_runner.runner   import run_toolchain, ToolchainResult
+from dragon_runner.runner   import run_toolchain, ToolChainResult
 from dragon_runner.log      import log
 from dragon_runner.testfile import TestFile
 from dragon_runner.utils    import precise_diff
@@ -50,11 +50,15 @@ def main():
             log("Running Toolchain:\t", toolchain.name)
             pass_count = 0
             for test in config.tests:
-                result: ToolchainResult = run_toolchain(test, toolchain, exe)
+                result: ToolChainResult = run_toolchain(test, toolchain, exe)
                 if not result.success:
                     log("Toolchain Failed: ", result)
-                else: 
-                    diff = precise_diff(result.stdout, test.expected_out)
+                else:
+                    #diff = get_test_diff(
+                    #    result.stdout, result.stderr, test.expected_out
+                    #) 
+                    #diff = precise_match(result.stdout, result.stderr, test.expected_out)
+                    diff = precise_diff(result.stdout, test.expected_out) 
                     if not diff:
                         log_result(test, True)
                         pass_count += 1

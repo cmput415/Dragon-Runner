@@ -19,3 +19,7 @@ jobs:
 
       - name: run config tests
         run: pytest tests/test_config.py
+
+      - name: run runner tests
+        run: pytest tests/test_runner.py
+

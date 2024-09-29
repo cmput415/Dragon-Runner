@@ -8,33 +8,29 @@ from dragon_runner.utils        import resolve_relative_path
 from dragon_runner.log          import log
 
 class Executable(Verifiable):
-    def __init__(self, **kwargs):
-        self.id             = kwargs['id']
-        self.binary         = kwargs['binary']
-        self.env            = kwargs.get('env', {})
-        self.is_baseline    = kwargs.get('isBaseline', False)
-        self.errors         = self.verify()
+    def __init__(self, id: str, exe_path: str):
+        self.id         = id
+        self.exe_path   = exe_path 
+        self.errors     = self.verify()
         
     def verify(self) -> ErrorCollection:
         errors = ErrorCollection()
-        if not os.path.exists(self.binary):
-            errors.add(ConfigError(f"Cannot find binary file: {self.binary}\
+        if not os.path.exists(self.exe_path):
+            errors.add(ConfigError(f"Cannot find binary file: {self.exe_path}\
                                      in Executable: {self.id}"))
         return errors
     
     def source_env(self):
         """
         Source all env variables defined in this executables map
+        TODO: update the JSON config to make env variables first class 
         """
-        for key, value in self.env.items():
-            os.environ[key] = value
+        pass
  
     def to_dict(self) -> Dict:
         return {
             'id': self.id,
-            'binary': self.binary,
-            'env': self.env,
-            'isBaseline': self.is_baseline
+            'exe_path': self.exe_path
         }
 
 class Config:
@@ -42,13 +38,13 @@ class Config:
         self.config_path        = config_path
         self.test_dir           = resolve_relative_path(config_data['testDir'], 
                                                         os.path.dirname(config_path))
-        self.executables        = self.parse_executables(config_data['executables'])
+        self.executables        = self.parse_executables(config_data['testedExecutablePaths'])
         self.toolchains         = self.parse_toolchains(config_data['toolchains'])
         self.error_collection   = self.verify()
         self.tests              = self.gather_tests()
 
-    def parse_executables(self, executables_data: List[Dict]) -> List[Executable]:
-        return [Executable(**exe) for exe in executables_data]
+    def parse_executables(self, executables_data: Dict[str, str]) -> List[Executable]:
+        return [Executable(id, path) for id, path in executables_data.items()]
     
     def parse_toolchains(self, toolchains_data: Dict[str, List[Dict]]) -> List[ToolChain]:
         return [ToolChain(name, steps) for name, steps in toolchains_data.items()]

@@ -6,7 +6,7 @@ from dragon_runner.errors import *
 class Step(Verifiable):
     def __init__(self, **kwargs):
         self.name           = kwargs.get('stepName', None)
-        self.command        = kwargs.get('command', None)
+        self.exe_path       = kwargs.get('executablePath', None)
         self.arguments      = kwargs.get('arguments', None)
         self.output         = kwargs.get('output', None)
         self.allow_error    = kwargs.get('allowError', False)
@@ -15,20 +15,18 @@ class Step(Verifiable):
     
     def verify(self) -> ErrorCollection:
         errors = ErrorCollection()
-
         if not self.name:
             errors.add(ConfigError(f"Missing required filed 'stepName' in Step {self.name}"))
-        if not self.command:
-            errors.add(ConfigError(f"Missing required field 'command' in Step: {self.name}"))
-        elif not os.path.exists(self.command) and not self.command.startswith('@'):
-            errors.add(ConfigError(f"Cannot find command '{self.command}' in Step: {self.name}"))
-
+        if not self.exe_path:
+            errors.add(ConfigError(f"Missing required field 'exe_path' in Step: {self.name}"))
+        elif not os.path.exists(self.exe_path) and not self.exe_path.startswith('$'):
+            errors.add(ConfigError(f"Cannot find exe_path '{self.exe_path}' in Step: {self.name}"))
         return errors 
 
     def to_dict(self) -> Dict:
         return {
             'stepName': self.name,
-            'command': self.command,
+            'exe_path': self.exe_path,
             'arguments': self.arguments,
             'output': self.output,
             'allowError': self.allow_error,

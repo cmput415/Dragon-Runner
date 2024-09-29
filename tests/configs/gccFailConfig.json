@@ -1,5 +1,5 @@
 {
-  "testDir": "../packages/CPackage",
+  "testDir": "../packages/FailCPackage",
   "testedExecutablePaths": {
     "gcc": "/usr/bin/gcc"
   },

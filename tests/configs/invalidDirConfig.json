@@ -1,27 +1,24 @@
 {
   "testDir": "../../DNE/packages/CPackage",
-  "executables": [
-    {
-      "id": "justin",
-      "binary": "/usr/bin/clang"
-    }
-  ],
+  "testedExecutablePaths": {
+    "gcc": "/usr/bin/gcc"
+  },
   "toolchains": {
-    "LLVM": [
+    "GCC-toolchain": [
       {
         "stepName": "compile",
-        "command": "@EXE",
-        "arguments": ["@INPUT", "-o", "@OUTPUT"],
+        "executablePath": "$EXE",
+        "arguments": ["$INPUT", "-o", "$OUTPUT"],
         "output": "/tmp/test.o",
         "allowError": true
       },
       {
         "stepName": "run",
-        "command": "@INPUT",
+        "executablePath": "$INPUT",
         "arguments": [],
         "usesInStr": true,
         "allowError": true
       }
     ]
-  } 
+  }
 }

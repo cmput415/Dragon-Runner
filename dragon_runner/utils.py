@@ -13,6 +13,12 @@ def resolve_relative_path(rel_path, dir) -> str:
     
     return os.path.abspath(os.path.join(dir, rel_path))
 
+def get_test_result():
+    """
+    TODO: make a single interface for checkign if a test has passed
+    """
+    pass
+
 def precise_diff(produced: BytesIO, expected: BytesIO) -> str:
     """
     return the difference of two byte strings, otherwise empty string 

@@ -11,7 +11,7 @@ from dragon_runner.config   import Executable, ToolChain
 from dragon_runner.log      import log
 
 @dataclass
-class ToolchainResult:
+class ToolChainResult:
     success: bool
     stdout: BytesIO 
     stderr: BytesIO
@@ -43,11 +43,11 @@ def replace_magic_args(args: List[str], binary: str, input_file: str, output_fil
     """
     resolved = []
     for arg in args:
-        if arg == "@EXE":
+        if arg == "$EXE":
             resolved.append(binary)
-        elif arg == '@INPUT':
+        elif arg == '$INPUT':
             resolved.append(input_file)
-        elif arg == '@OUTPUT':
+        elif arg == '$OUTPUT':
             resolved.append(output_file) 
         else:
             resolved.append(arg)
@@ -64,7 +64,7 @@ def run_command(command: List[str],
     input_bytes = input_stream.getvalue() if input_stream is not None else None
     return subprocess.run(command, env=env, input=input_bytes, stdout=stdout, stderr=stderr, check=False)
 
-def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> ToolchainResult:
+def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> ToolChainResult:
     log(f"Running test: {test.stem} ToolChain: {toolchain.name} Binary: {exe.id}", level=1)
    
     input_file = test.test_path
@@ -76,8 +76,8 @@ def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> Tool
         # TODO: how to handle when step has no output
         output_file = os.path.join(current_dir, step.output) if step.output else input_file
         input_stream = test.get_input_stream() if step.uses_ins else None
-        command = [step.command] + step.arguments
-        command = replace_magic_args(command, exe.binary, input_file, output_file)
+        command = [step.exe_path] + step.arguments
+        command = replace_magic_args(command, exe.exe_path, input_file, output_file)
         command = replace_env_vars(command)
         
         # Wrap the command with os.path.abspath if it's not an absolute path
@@ -96,7 +96,7 @@ def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> Tool
         
         if result.returncode != 0 and not step.allow_error:
             log("Aborting toolchain early")
-            return ToolchainResult(
+            return ToolChainResult(
                 success=False,
                 stdout=io.BytesIO(result.stdout),
                 stderr=io.BytesIO(result.stderr),
@@ -104,7 +104,7 @@ def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> Tool
         
         input_file = output_file
  
-    return ToolchainResult(
+    return ToolChainResult(
         success=True,
         stdout=io.BytesIO(result.stdout),
         stderr=io.BytesIO(result.stderr)
