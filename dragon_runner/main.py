@@ -15,14 +15,14 @@ init(autoreset=True)
 def log_result(test: TestFile, result: TestResult): 
     if result.did_pass:
         if result.error_test:
-            log(Fore.GREEN + "[ERROR PASS] " + Fore.RESET + test.stem)
+            log(Fore.GREEN + "[ERROR PASS] " + Fore.RESET + test.file)
         else:
-            log(Fore.GREEN + "[PASS] " + Fore.RESET + test.stem)
+            log(Fore.GREEN + "[PASS] " + Fore.RESET + test.file)
     else:
         if result.error_test:
-            log(Fore.RED + "[FAIL] " + Fore.RESET + test.stem)
+            log(Fore.RED + "[FAIL] " + Fore.RESET + test.file)
         else:
-            log(Fore.RED + "[ERROR FAIL] " + Fore.RESET + test.stem)
+            log(Fore.RED + "[ERROR FAIL] " + Fore.RESET + test.file)
 
 def log_toolchain_result(test: TestFile, result: ToolChainResult, tc: ToolChain):
     """
@@ -38,7 +38,7 @@ def log_toolchain_result(test: TestFile, result: ToolChainResult, tc: ToolChain)
     log_multiline(bytes_to_str(result.stderr), indent=4)
     log(f"With stdout: ({len(result.stdout.getbuffer())} bytes)", indent=2)
     log_multiline(bytes_to_str(result.stdout), indent=4)
-    
+ 
 def main(): 
     # parse and verify the CLI arguments
     args = parse_cli_args()
@@ -88,7 +88,7 @@ def main():
                 log("Passed: ", sp_pass_count, "/", sp_test_count)
             log("PASSED: ", pass_count, "/", test_count)
     
-    if pass_count == len(config.tests):
+    if pass_count == test_count:
         return 0
     return 1
 

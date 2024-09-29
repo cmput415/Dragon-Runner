@@ -105,17 +105,17 @@ def run_toolchain(test: TestFile, toolchain: ToolChain, exe: Executable) -> Tool
         log("Result stderr:", result.stderr, level=2)
         log("Test expected out:", bytes_to_str(test.get_expected_out()), level=2)
         
-        if result.returncode != 0 and not step.allow_error:
-            log("Aborting toolchain early", level=1)
+        if result.returncode != 0:
+            if not step.allow_error:
+                log("Aborting toolchain early", level=1)
             return ToolChainResult(
-                success=False,
+                success=step.allow_error,
                 stdout=io.BytesIO(result.stdout),
                 stderr=io.BytesIO(result.stderr),
                 exit_code=result.returncode,
                 last_command=command,
                 last_step=step
             )
-        
         input_file = output_file if step.output else make_tmp_file(io.BytesIO(result.stdout))
  
     return ToolChainResult(

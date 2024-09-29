@@ -11,14 +11,15 @@ from dragon_runner.log          import log
 class SubPackage():
     def __init__(self, dir_path: str):
         self.dir_path: str          = dir_path
-        self.rel_dir_path: str     = os.path.relpath(dir_path)
+        self.rel_dir_path: str      = os.path.relpath(dir_path)
         self.tests: List[TestFile]  = self.gather_tests()
  
     def gather_tests(self) -> List[TestFile]:
         tests = []
         for file in os.listdir(self.dir_path):
             test_path = os.path.join(self.dir_path, file)
-            if os.path.isfile(test_path) and not file.endswith(('.out', '.ins')):
+            if os.path.isfile(test_path) and not file.endswith(('.out', '.ins'))\
+                                         and not file.startswith('.'):
                 tests.append(TestFile(test_path))
         return tests 
 
@@ -95,7 +96,7 @@ class Config:
         log("Test file"+ ' '*22 + "Expected bytes  Stdin bytes")
         log("-" * 60)
         for sp in self.sub_packages:
-            log(f"Sub Package: {sp.dir_path} ({len(sp.tests)} tests)")
+            log(f"Sub Package: {sp.rel_dir_path} ({len(sp.tests)} tests)")
 
     def verify(self) -> ErrorCollection:
         ec = ErrorCollection()
