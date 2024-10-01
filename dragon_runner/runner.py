@@ -161,6 +161,9 @@ class ToolChainRunner():
                                                     last_step=step, time=0)
 
             elif last_step and output_file is not None:
+                if not os.path.exists(output_file):
+                    raise RuntimeError(f"Command did not create specified output file {output_file}")
+
                 output_file_contents = file_to_bytes(output_file)
                 tc_result = ToolChainResult(success=True, result=output_file_contents, last_step=step,
                                                     time=command_result.time)

@@ -50,5 +50,14 @@ def file_to_bytes(file: str) -> Optional[BytesIO]:
         with open(file, 'rb') as f:
             return BytesIO(f.read())
     except Exception as e:
-        print("Unknown exception: {e}")
+        print(f"Reading bytes from file failed with: {e}")
+        return None
+    
+def bytes_to_file(file: str, bytes: BytesIO) -> Optional[str]:
+    try:
+        with open(file, 'w') as f:
+            f.write(bytes_to_str(bytes))
+            return file
+    except Exception as e:
+        print(f"Writting bytes to file failed with: {e}")
         return None
