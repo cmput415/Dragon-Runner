@@ -29,9 +29,9 @@ def main():
         ccid = input("Enter your CCID: ")
         assert config and not config.error_collection
         found = False
-        for sp in config.sub_packages:
-            log("Searching.. ", sp.package_name, indent=2)
-            if sp.package_name == ccid:
+        for pkg in config.pkgs:
+            log("Searching.. ", pkg.name, indent=2)
+            if pkg.name == ccid:
                 found = True
         if not found:
             print(f"Could not find package named after CCID: {ccid}")

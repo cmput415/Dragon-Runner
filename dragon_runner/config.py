@@ -168,7 +168,7 @@ class Config:
             'testDir': self.test_dir,
             'executables': [exe.to_dict() for exe in self.executables],
             'toolchains': {tc.name: tc.to_dict()[tc.name] for tc in self.toolchains},
-            'subpackages': [subpkg.package_name for subpkg in self.sub_packages]
+            'subpackages': [pkg.name for pkg in self.packages]
         }
     
     def __repr__(self) -> str:
