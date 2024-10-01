@@ -1,7 +1,7 @@
 from colorama               import init, Fore
 from typing                 import List
 from dragon_runner.config   import Config
-from dragon_runner.log      import log, log_multiline
+from dragon_runner.log      import log, log_multiline, log_delimiter
 from dragon_runner.utils    import bytes_to_str
 from dragon_runner.testfile import TestFile
 from dragon_runner.runner   import ToolChainResult, TestResult, ToolChain, ToolChainRunner
@@ -11,25 +11,21 @@ def log_result(test: TestFile, result: TestResult):
     if result.did_pass:
         status = "[ERROR PASS]" if result.error_test else "[PASS]"
         time_str = f"{result.time:.5f}s" if result.time else ""
-        log(f"{Fore.GREEN}{status:<15}{Fore.RESET}{test.file:<48}{time_str}")
+        log(f"{Fore.GREEN}{status:<20}{Fore.RESET}{test.file:<48}{time_str}", indent=2)
     else:
         status = "[FAIL]" if result.error_test else "[ERROR FAIL]"
-        log(f"{Fore.RED}{status:<15}{Fore.RESET}{test.file}")
+        log(f"{Fore.RED}{status:<20}{Fore.RESET}{test.file}", indent=2)
 
-def log_toolchain_result(test: TestFile, result: ToolChainResult, tc: ToolChain):
+def log_toolchain_failure(test: TestFile, result: ToolChainResult, tc: ToolChain):
     """
     log relevant info when the toolchain panics at some intermediate step
     """
-    if result.success:
-        return
-    log(Fore.RED + "[TOOLCHAIN ERROR] " + Fore.RESET + test.file)
-    log("Failed on step: ", result.last_step.name, indent=2, level=1)
-    log("Exited with status: ", result.exit_code, indent=2, level=1)
-    log("With command: ", result.last_step.exe_path, indent=2, level=1)
-    log(f"With stderr: ({len(result.stderr.getbuffer())} bytes)", indent=2, level=1)
-    log_multiline(bytes_to_str(result.stderr), indent=4, level=1)
-    log(f"With stdout: ({len(result.stdout.getbuffer())} bytes)", indent=2, level=1)
-    log_multiline(bytes_to_str(result.stdout), indent=4, level=1)
+    status = "[TOOLCHAIN ERROR]"
+    log(f"{Fore.RED}{status:<20}{Fore.RESET}{test.file}", indent=2)
+    log_delimiter(title=f"Failed on toolchain: {tc.name}", indent=2, level=1)
+    log(f"Failed on step: {result.last_step.name}", indent=4, level=1) 
+    log(f"Exited with status: {result.exit_code}", indent=4, level=1)
+    log(f"Stderr: {result.stderr.getvalue()}", indent=4, level=1)
 
 class TestHarness:
     def __init__(self, config: Config):
@@ -65,7 +61,7 @@ class TestHarness:
                         tc_result : ToolChainResult = tc_runner.run(test, exe)
                         if not tc_result.success:
                             self.failures.append(test)
-                            log_toolchain_result(test, tc_result, toolchain, )
+                            log_toolchain_failure(test, tc_result, toolchain, )
                             sp_test_count +=1 
                         else:
                             test_result: TestResult = get_test_result(tc_result, test.expected_out)

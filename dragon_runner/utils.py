@@ -1,4 +1,5 @@
 import os
+import io
 import re
 import tempfile
 from typing     import Optional, Tuple
@@ -23,6 +24,7 @@ def make_tmp_file(content: BytesIO) -> str:
     """ 
     with tempfile.NamedTemporaryFile(delete=False) as tmp:
         tmp.write(content.getvalue())
+        os.chmod(tmp.name, 0o700)
         return tmp.name
 
 def str_to_bytes(string: str, chop_newline: bool=False) -> bytes:
@@ -34,13 +36,15 @@ def str_to_bytes(string: str, chop_newline: bool=False) -> bytes:
     bytes_io.seek(0)
     return bytes_io.getvalue()
 
-def bytes_to_str(bytes_io: BytesIO, encoding: str='utf-8') -> str: 
-    bytes_io.seek(0)
+def bytes_to_str(data, encoding: str='utf-8') -> str:
+    if isinstance(data, BytesIO):
+        data.seek(0)
+        data = data.getvalue()
     try:
-        return bytes_io.getvalue().decode(encoding)
+        return data.decode(encoding)
     except:
-        return bytes_io.getvalue()
-    
+        return str(data)
+
 def file_to_bytes(file: str) -> Optional[BytesIO]:
     try:
         with open(file, 'rb') as f:

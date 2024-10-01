@@ -1,17 +1,17 @@
 import subprocess
 import os
 import re
-import io
+import json
 import time
 from subprocess                 import TimeoutExpired, CompletedProcess
 from io                         import BytesIO
 from typing                     import List, Dict, Optional, Union
-from dataclasses                import dataclass
+from dataclasses                import dataclass, asdict
 from difflib                    import Differ
 from colorama                   import Fore, init
 from dragon_runner.testfile     import TestFile 
 from dragon_runner.config       import Executable, ToolChain
-from dragon_runner.log          import log, log_multiline
+from dragon_runner.log          import log, log_multiline, log_delimiter
 from dragon_runner.utils        import make_tmp_file, bytes_to_str, file_to_bytes
 from dragon_runner.toolchain    import Step
 
@@ -48,7 +48,24 @@ class ToolChainResult:
 class MagicParams:
     exe_path: str       # $EXE
     input_file: str     # $INPUT
-    output_file: str    # $OUTPUT
+    output_file: str    # $OUTPUT 
+    def __repr__(self):
+        return json.dumps(asdict(self), indent=2)
+
+@dataclass
+class TestResult:
+    did_pass: bool
+    error_test: bool
+    time: Optional[float] = 0
+    diff: Optional[str] = None
+    def __repr__(self):
+        return json.dumps(asdict(self), indent=2)
+
+@dataclass
+class Command:
+    args: List[str] 
+    def log(self, level:int=0):
+        log("Command: ", ' '.join(self.args), indent=2, level=level)
 
 @dataclass
 class CommandResult:
@@ -57,16 +74,20 @@ class CommandResult:
     time: float=0
     timed_out: bool=False
 
+    def log(self, level:int=0):
+        if self.subprocess:
+            stdout = self.subprocess.stdout
+            stderr = self.subprocess.stderr
+            log(f"stdout ({len(stdout)} bytes):", stdout, indent=4, level=level)
+            log(f"stderr ({len(stderr)} bytes):", stderr, indent=4, level=level)
+            log(f"exit code: {self.exit_status}", indent=4, level=level)
+
 @dataclass
 class TestResult:
     did_pass: bool
     error_test: bool
     time: Optional[float]=0
     diff: Optional[str]=None
-
-@dataclass
-class Command:
-    args: List[str] 
 
 class ToolChainRunner():
     def __init__(self, tc: ToolChain, timeout: float, env: Dict[str, str]={}):
@@ -90,14 +111,20 @@ class ToolChainRunner():
             wall_time = time.time() - start_time
             return CommandResult(subprocess=result, exit_status=result.returncode, time=wall_time, timed_out=False)
         except TimeoutExpired:
-            return CommandResult(subprocess=None, exit_status=result.returncode, time=0, timed_out=True)
+            return CommandResult(subprocess=None, exit_status=255, time=0, timed_out=True)
         
     def resolve_output_file(self, step: Step) -> str:
+        """
+        make absolute path from output file in step
+        """
         current_dir = os.getcwd()
         output_file = os.path.join(current_dir, step.output) if step.output else None
         return output_file
     
     def resolve_command(self, step: Step, params: MagicParams) -> Command:
+        """
+        replace magic parameters with real arguments
+        """
         command = Command([step.exe_path] + step.arguments)
         command = self.replace_magic_args(command, params)
         command = self.replace_env_vars(command)
@@ -118,16 +145,18 @@ class ToolChainRunner():
             output_file     = self.resolve_output_file(step) 
             command         = self.resolve_command(step, MagicParams(exe.exe_path, input_file, output_file))
             command_result  = self.run_command(command, input_stream)
-            log_step(step=step, resolved_cmd=command, ins=input_stream, result=command_result)
-            
+
+            command.log(level=2)
+            command_result.log(level=2)
+
             tc_result: Optional[ToolChainResult] = None
             if command_result.timed_out:
-                log(Fore.YELLOW + f"Timed out at step: {step.name} after {self.timeout} seconds", level=0)
+                log(Fore.YELLOW + f"Timed out at step: {step.name} after {self.timeout} seconds", indent=2)
                 return ToolChainResult(success=False, result=None, last_step=step, time=0)
 
             elif command_result.subprocess.returncode != 0:
                 if not step.allow_error:
-                    log("Aborting toolchain early", level=1)
+                    log("Aborting toolchain early", level=1, indent=2)
                 return ToolChainResult(success=step.allow_error, result=command_result.subprocess,
                                                     last_step=step, time=0)
 
@@ -180,12 +209,6 @@ class ToolChainRunner():
             else:
                 resolved.append(arg)
         return Command(resolved)
-
-def log_step(step: Step, resolved_cmd: CommandResult, ins: BytesIO, result: CommandResult):
-    """
-    Report what happened for a single step in the toolchain
-    """
-    log('=' * 20 + f" Step: {step.name} " + '='*20, level=2)
 
 def get_test_result(tc_result: ToolChainResult, expected_out: BytesIO) -> TestResult:
     """
