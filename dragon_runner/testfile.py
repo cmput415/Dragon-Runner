@@ -9,9 +9,9 @@ class TestFile:
                                   input_stream_dir="input-stream",
                                   output_dir="output",
                                   comment_syntax="//"):   
-        self.test_path              = test_path
+        self.path                   = test_path
         self.stem, self.extension   = os.path.splitext(os.path.basename(test_path))
-        self.file              = self.stem + self.extension  
+        self.file                   = self.stem + self.extension  
         self.input_dir              = input_dir
         self.input_stream_dir       = input_stream_dir          
         self.output_dir             = output_dir                
@@ -30,7 +30,7 @@ class TestFile:
         """
         contents = BytesIO()
         first_match = True
-        with open(self.test_path, 'r') as test_file:
+        with open(self.path, 'r') as test_file:
             for line in test_file:
                 
                 comment_index = line.find(self.comment_syntax)
@@ -54,12 +54,12 @@ class TestFile:
         Look into a symetric directory and current directory for a file with an
         identical file path but differnt suffix.
         """
-        sym_path = self.test_path.replace(self.input_dir, f"/{symmetric_dir}/")\
+        sym_path = self.path.replace(self.input_dir, f"/{symmetric_dir}/")\
                                  .replace(self.extension, file_suffix)
         if os.path.exists(sym_path):
             return self.get_file_bytes(sym_path)
              
-        same_dir_path = self.test_path.replace(self.extension, file_suffix)
+        same_dir_path = self.path.replace(self.extension, file_suffix)
         if os.path.exists(same_dir_path):
             return self.get_file_bytes(same_dir_path)
         
@@ -79,7 +79,7 @@ class TestFile:
 
         check_file = self.get_directive_contents("CHECK_FILE:")
         if check_file:
-            test_dir = os.path.dirname(self.test_path)
+            test_dir = os.path.dirname(self.path)
             check_file_path = os.path.join(test_dir, bytes_to_str(check_file))
             return self.get_file_bytes(check_file_path)
         
@@ -100,7 +100,7 @@ class TestFile:
 
         input_file = self.get_directive_contents("INPUT_FILE:")
         if input_file:
-            test_dir = os.path.dirname(self.test_path)
+            test_dir = os.path.dirname(self.path)
             check_file_path = os.path.join(test_dir, bytes_to_str(input_file))
             return self.get_file_bytes(check_file_path)
         
@@ -109,7 +109,7 @@ class TestFile:
     
     def __repr__(self):
         max_test_name_length = 30
-        test_name = os.path.basename(self.test_path)
+        test_name = os.path.basename(self.path)
         if len(test_name) > max_test_name_length:
             test_name = test_name[:max_test_name_length - 3] + "..."
         
