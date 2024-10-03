@@ -1,3 +1,4 @@
+import json
 from colorama               import Fore
 from typing                 import List
 from dragon_runner.cli      import CLIArgs
@@ -73,10 +74,8 @@ class TestHarness:
         """ 
         if self.cli_args.grade_file:
             assert self.cli_args.failure_log is not None, "Need to supply failure log!"
-            log("Run grader") 
             return self.run_grader_json()
         else:
-            log("Run regular") 
             return self.run_regular()
 
     def run_grader_json(self):
@@ -89,30 +88,61 @@ class TestHarness:
 
         attacking_pkgs = [pkg for pkg in self.config.packages]
         defending_exes = [exe for exe in self.config.executables]
-        
-        for toolchain in self.config.toolchains:
-            tc_runner = ToolChainRunner(toolchain, self.cli_args.timeout)
 
-            print(f"toolchain: {toolchain.name}")
-            for d_exe in defending_exes:
-                
-                print(f"  defender: {d_exe.id}") 
-                with open(f"{d_exe.id}-feedback.txt", 'w+') as def_f:
-                    
-                    for a_pkg in attacking_pkgs: 
-                        print(f"    ({a_pkg.name}) -> ({d_exe.id}) ", end='')
-                        for a_spkg in a_pkg.subpackages:
-                            for test in a_spkg.tests:
-                                d_result : ToolChainResult = tc_runner.run(test, d_exe)
-                                if not d_result.success:
-                                    print('x', end='')
-                                else:
-                                    test_result: TestResult = get_test_result(d_result, test.expected_out)
-                                    if test_result.did_pass:
-                                        print('.', end='')
+        with open(self.cli_args.failure_log, 'w') as fail_log:
+            
+            results_json = [] 
+            for toolchain in self.config.toolchains:
+                tc_runner = ToolChainRunner(toolchain, self.cli_args.timeout)
+                tc_json = {"toolchain": toolchain.name, "toolchainResults": []}
+                print(f"Toolchain: {toolchain.name}")
+                for def_exe in defending_exes: 
+                    def_json = {"defender": def_exe.id, "defenderResults": []}
+                    with open(f"{def_exe.id}-{toolchain.name}feedback.txt", 'w') as def_f:
+                        for a_pkg in attacking_pkgs:
+                            a_json = {
+                                "attacker": a_pkg.name,
+                                "testCount": a_pkg.n_tests,
+                                "timings": []
+                            }
+                            result_string = ""
+                            for a_spkg in a_pkg.subpackages:
+                                for test in a_spkg.tests:
+                                    d_result : ToolChainResult = tc_runner.run(test, def_exe)
+                                    result_json = {"test": test.file}
+                                    if not d_result.success:
+                                        result_string += Fore.RED + 'x' + Fore.RESET
+                                        result_json.update({"pass": False, "time": 0 })
+                                        def_f.write(f"Toolchain Failed: {test.file}\n")
                                     else:
-                                        print('x', end='')
-                        print("")
+                                        test_result: TestResult = get_test_result(d_result, test.expected_out)
+                                        if test_result.did_pass:
+                                            result_string += Fore.GREEN + '.' + Fore.RESET
+                                            result_json.update({"pass": True})
+                                        else:
+                                            result_string += Fore.RED + '.' + Fore.RESET
+                                            result_json.update({"pass": False})
+                                            def_f.write(f"Test Failed: {test.file}\n")                                    
+                                        result_json.update({"time": test_result.time}) 
+                                    a_json["timings"].append(result_json) 
+                            print(f"  {a_pkg.name:<12} --> {def_exe.id:<12} {result_string}")
+                            def_json["defenderResults"].append(a_json)
+                    tc_json["toolchainResults"].append(def_json)
+                results_json.append(tc_json)
+                print("")
+            
+        grade_dict = {
+            "title": "415 Grades",
+            "testSummary": {
+                "executables": [exe.id for exe in defending_exes],
+                "packages": [{"name": pkg.name, "count": pkg.n_tests} for pkg in attacking_pkgs]
+            },
+            "results": results_json
+        }
+
+        grade_json = json.dumps(grade_dict, indent=2)
+        with open(self.cli_args.grade_file, 'w') as grade_f:
+            grade_f.write(grade_json)
 
     def log_result(self, test: TestFile, result: TestResult):
         if result.did_pass:

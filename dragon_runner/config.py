@@ -44,7 +44,16 @@ class Package():
     def __init__(self, path: str):
         self.path: str      = path
         self.name: str      = os.path.basename(path)
-        self.subpackages    = self.gather_subpackages()
+        self.n_tests        = 0
+        self.subpackages    = [] 
+        self.gather_subpackages()
+
+    def add_subpackage(self, spkg: SubPackage):
+        """
+        Add a subpackage while keeping total test count up to date
+        """
+        self.n_tests += len(spkg.tests)
+        self.subpackages.append(spkg)
 
     def gather_subpackages(self) -> List[SubPackage]:
         """
@@ -54,11 +63,11 @@ class Package():
         for parent_path, dirs, files in os.walk(self.path):
             top_level_spkg = SubPackage(parent_path) 
             if len(top_level_spkg.tests) > 0:
-                subpackages.append(top_level_spkg)
+                self.add_subpackage(top_level_spkg)
             for dirname in dirs:
                 spkg = SubPackage(os.path.join(parent_path, dirname))
                 if len(spkg.tests) > 0:
-                    subpackages.append(spkg) 
+                    self.add_subpackage(spkg)
         return subpackages
 
 class Executable(Verifiable):
@@ -189,10 +198,10 @@ def load_config(config_path: str) -> Optional[Config]:
     """
     if not os.path.exists(config_path):
         return None
-    try:
-        with open(config_path, 'r') as config_file:
-            config_data = json.load(config_file)
-        return Config(config_path, config_data)
-    except Exception as e:
-        log(f"Failed to create the JSON configuration with error: {e}")
-        return None
+    # try:
+    with open(config_path, 'r') as config_file:
+        config_data = json.load(config_file)
+    return Config(config_path, config_data)
+    # except Exception as e:
+        # log(f"Failed to create the JSON configuration with error: {e}")
+        # return None
