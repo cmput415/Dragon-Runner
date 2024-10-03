@@ -3,7 +3,6 @@ from colorama               import init, Fore
 from dragon_runner.cli      import parse_cli_args, CLIArgs
 from dragon_runner.config   import load_config
 from dragon_runner.log      import log, log_multiline
-from dragon_runner.grader   import grade
 from dragon_runner.harness  import TestHarness
 
 # initialize terminal colors

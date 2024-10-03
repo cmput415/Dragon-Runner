@@ -159,14 +159,11 @@ class Config:
         Prints a simple formatted table of test information.
         """
         for pkg in self.packages:
-            print(f"-- ({pkg.name})")
+            log(f"-- ({pkg.name})", level=1)
             for spkg in pkg.subpackages:
-                print(f"  -- ({spkg.name})")
+                log(f"  -- ({spkg.name})", level=2)
                 for test in spkg.tests:
-                    print(f"    -- ({test.file})")
-
-        for pkg in self.packages:
-            log(f"Package: {pkg.name} ({len(pkg.subpackages)} subpackages)")
+                    log(f"    -- ({test.file})", level=3)
 
     def verify(self) -> ErrorCollection:
         """
@@ -198,10 +195,10 @@ def load_config(config_path: str) -> Optional[Config]:
     """
     if not os.path.exists(config_path):
         return None
-    # try:
-    with open(config_path, 'r') as config_file:
-        config_data = json.load(config_file)
-    return Config(config_path, config_data)
-    # except Exception as e:
-        # log(f"Failed to create the JSON configuration with error: {e}")
-        # return None
+    try:
+        with open(config_path, 'r') as config_file:
+            config_data = json.load(config_file)
+        return Config(config_path, config_data)
+    except Exception as e:
+        log(f"Failed to create the JSON configuration with error: {e}")
+        return None

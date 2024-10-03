@@ -17,7 +17,7 @@ int main() {
     if (pid == 0) {
         // child process
         printf("Child taking a nap.\n");
-        sleep(2); 
+        sleep(1); 
         exit(EXIT_SUCCESS);
     }
 

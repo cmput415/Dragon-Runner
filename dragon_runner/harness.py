@@ -8,6 +8,7 @@ from dragon_runner.testfile import TestFile
 from dragon_runner.runner   import TestResult, ToolChainRunner
 
 class TestHarness:
+    __test__ = False 
     def __init__(self, config: Config, cli_args: CLIArgs):
         self.config                     = config
         self.cli_args                   = cli_args
@@ -77,8 +78,8 @@ class TestHarness:
         """ 
         log("Running in grade mode")
 
-        attacking_pkgs = [pkg for pkg in self.config.packages]
-        defending_exes = [exe for exe in self.config.executables]
+        attacking_pkgs = sorted(self.config.packages, key=lambda pkg: pkg.name.lower())
+        defending_exes = sorted(self.config.executables, key=lambda exe: exe.id.lower())
 
         with open(self.cli_args.failure_log, 'w') as fail_log:
             
@@ -97,18 +98,21 @@ class TestHarness:
                                 "timings": []
                             }
                             result_string = ""
+                            pass_count = 0
                             for a_spkg in a_pkg.subpackages:
                                 for test in a_spkg.tests:
                                     result_json = {"test": test.file}
                                     test_result: TestResult = tc_runner.run(test, def_exe)
                                     if test_result.did_pass:
                                         result_string += Fore.GREEN + '.' + Fore.RESET
-                                        result_json.update({"pass": False, "time": test_result.time})
+                                        result_json.update({"pass": True, "time": test_result.time})
+                                        pass_count += 1
                                     if not test_result.did_pass:      
                                         result_string += Fore.RED + '.' + Fore.RESET
                                         result_json.update({"pass": False})
                                         def_f.write(f"Test Failed: {test.file}\n")                                    
-                                    a_json["timings"].append(result_json) 
+                                    a_json["timings"].append(result_json)
+                            a_json.update({"passCount": pass_count})
                             print(f"  {a_pkg.name:<12} --> {def_exe.id:<12} {result_string}")
                             def_json["defenderResults"].append(a_json)
                     tc_json["toolchainResults"].append(def_json)

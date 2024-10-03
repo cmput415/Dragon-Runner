@@ -1,0 +1,44 @@
+{
+  "testDir": "./testfiles/GradePackages",
+  "testedExecutablePaths": {
+    "team1": "/usr/bin/clang",
+    "team2": "/usr/bin/clang",
+    "team3": "/usr/bin/clang",
+    "TA": "/usr/bin/clang"
+  },
+  "solutionExecutable": "TA",
+  "toolchains": {
+    "LLVM": [
+      {
+        "stepName": "compile",
+        "executablePath": "$EXE",
+        "arguments": ["$INPUT", "-o", "$OUTPUT"],
+        "output": "test.o",
+        "allowError": true 
+      },
+      {
+        "stepName": "run",
+        "executablePath": "$INPUT",
+        "arguments": [],
+        "usesInStr": true,
+        "allowError": true
+      }
+    ],
+    "LLVM-opt": [
+      {
+        "stepName": "compile",
+        "executablePath": "$EXE",
+        "arguments": ["$INPUT", "-O3", "-o", "$OUTPUT"],
+        "output": "test.o",
+        "allowError": true 
+      },
+      {
+        "stepName": "run",
+        "executablePath": "$INPUT",
+        "arguments": [],
+        "usesInStr": true,
+        "allowError": true
+      }
+    ] 
+  }
+}

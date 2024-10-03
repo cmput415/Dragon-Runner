@@ -1,41 +1,31 @@
 import pytest
-import os
 from pathlib import Path
 from dragon_runner.config import load_config, Config
+from dragon_runner.cli import CLIArgs
 
-## ======== CONFIG UTIL ============ ##
 def get_config_path(config_name: str) -> Path:
-    cur_dir = Path(__file__).parent
-    return cur_dir / "configs" / config_name
+    return Path(__file__).parent / "configs" / config_name
 
-def load_config_by_name(config_name: str) -> Config:
+def create_config(config_name: str) -> Config:
     config_path = get_config_path(config_name)
     return load_config(str(config_path))
 
-## ======== CONFIG FIXTURES ======== ##
+def create_cli_args(**kwargs) -> CLIArgs:
+    return CLIArgs(
+        kwargs.get('config_file', None),
+        kwargs.get('grade_file', None),
+        kwargs.get('failure_file', None),
+        kwargs.get('timeout', None),
+        kwargs.get('debug-package', None),
+        kwargs.get('time', None),
+        kwargs.get('verbosity', None),
+        kwargs.get('verify', None)
+    )
 
 @pytest.fixture(scope="session")
 def config_factory():
-    def _config_factory(config_name: str) -> Config:
-        return load_config_by_name(config_name)
-    return _config_factory
+    return create_config
 
 @pytest.fixture(scope="session")
-def sample_valid_config(config_factory):
-    return config_factory("gccConfig.json")
-
-@pytest.fixture(scope="session")
-def sample_valid_fail_config(config_factory):
-    return config_factory("gccFailConfig.json")
-
-@pytest.fixture(scope="session")
-def sample_invalid_dir_config(config_factory):
-    return config_factory("invalidDirConfig.json")
-
-@pytest.fixture(scope="session")
-def sample_invalid_exe_config(config_factory):
-    return config_factory("invalidExeConfig.json")
-
-@pytest.fixture(scope="session")
-def sample_cat_config(config_factory):
-    return config_factory("catConfig.json")
+def cli_factory():
+    return create_cli_args
