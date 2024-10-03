@@ -34,3 +34,4 @@ def test_valid_toolchain_failures(sample_valid_fail_config):
                         result: ToolChainResult = tc_runner.run(test, exe)
                         print(test)
                         assert not get_test_result(result, test.expected_out).did_pass
+

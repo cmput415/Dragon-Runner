@@ -151,12 +151,9 @@ class ToolChainRunner():
 
             tc_result: Optional[ToolChainResult] = None
             if command_result.timed_out:
-                log(Fore.YELLOW + f"Timed out at step: {step.name} after {self.timeout} seconds", indent=2)
                 return ToolChainResult(success=False, result=None, last_step=step, time=0)
 
             elif command_result.subprocess.returncode != 0:
-                if not step.allow_error:
-                    log("Aborting toolchain early", level=1, indent=2)
                 return ToolChainResult(success=step.allow_error, result=command_result.subprocess,
                                                     last_step=step, time=0)
 

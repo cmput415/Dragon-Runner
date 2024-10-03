@@ -18,7 +18,7 @@ class TestHarness:
         for test in self.failures:
             log(Fore.RED + "[FAILED] " + Fore.RESET + test.file, indent=2)
 
-    def run_all(self, timeout: float) -> bool:
+    def run_regular(self) -> bool:
         """
         Iterate over all tested executables, toolchains, subpackages and tests.
         Return True is all pass, false otherwise.
@@ -30,7 +30,7 @@ class TestHarness:
             exe_pass_count = 0
             exe_test_count = 0
             for toolchain in self.config.toolchains:
-                tc_runner = ToolChainRunner(toolchain, timeout)
+                tc_runner = ToolChainRunner(toolchain, self.cli_args.timeout)
                 log("Running Toolchain:\t", toolchain.name)
                 tc_pass_count = 0
                 tc_test_count = 0
@@ -66,15 +66,53 @@ class TestHarness:
             if exe_pass_count != exe_test_count:
                 sucecss = False
         return sucecss
-    
-    def grade_all(self, timeout: float):
+
+    def run(self) -> bool:
         """
-        Iterate over all tested executables, toolchains, subpackages and tests.
-        Return True is all pass, false otherwise.
+        decide wether to run in regular mode or grade mode based on the CLI args 
         """ 
-        sucecss = True
-        for exe in self.config.executables:
-            log("Calculating grade for :\t", exe.id)
+        if self.cli_args.grade_file:
+            assert self.cli_args.failure_log is not None, "Need to supply failure log!"
+            log("Run grader") 
+            return self.run_grader_json()
+        else:
+            log("Run regular") 
+            return self.run_regular()
+
+    def run_grader_json(self):
+        """
+        Run the tester in grade mode. Run all test packages for each tested executable.
+        For now emit JSON to work with the existing grader script.
+        TODO: Make the entire grading process self-contained here.
+        """ 
+        log("Running in grade mode")
+
+        attacking_pkgs = [pkg for pkg in self.config.packages]
+        defending_exes = [exe for exe in self.config.executables]
+        
+        for toolchain in self.config.toolchains:
+            tc_runner = ToolChainRunner(toolchain, self.cli_args.timeout)
+
+            print(f"toolchain: {toolchain.name}")
+            for d_exe in defending_exes:
+                
+                print(f"  defender: {d_exe.id}") 
+                with open(f"{d_exe.id}-feedback.txt", 'w+') as def_f:
+                    
+                    for a_pkg in attacking_pkgs: 
+                        print(f"    ({a_pkg.name}) -> ({d_exe.id}) ", end='')
+                        for a_spkg in a_pkg.subpackages:
+                            for test in a_spkg.tests:
+                                d_result : ToolChainResult = tc_runner.run(test, d_exe)
+                                if not d_result.success:
+                                    print('x', end='')
+                                else:
+                                    test_result: TestResult = get_test_result(d_result, test.expected_out)
+                                    if test_result.did_pass:
+                                        print('.', end='')
+                                    else:
+                                        print('x', end='')
+                        print("")
 
     def log_result(self, test: TestFile, result: TestResult):
         if result.did_pass:

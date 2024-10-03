@@ -12,9 +12,9 @@ class SubPackage():
     """
     Represents a set of tests in a directory
     """
-    def __init__(self, parent_path: str, package_name: str): 
-        self.dir_path: str          = os.path.join(parent_path, package_name)
-        self.name: str              = package_name
+    def __init__(self, path: str): 
+        self.path: str              = path
+        self.name: str              = os.path.basename(path)
         self.tests: List[TestFile]  = self.gather_tests()
 
     @staticmethod
@@ -31,8 +31,8 @@ class SubPackage():
         Find all tests in the directory of the subpackage.
         """
         tests = []
-        for file in os.listdir(self.dir_path):
-            test_path = os.path.join(self.dir_path, file)
+        for file in os.listdir(self.path):
+            test_path = os.path.join(self.path, file)
             if self.is_test(test_path):
                 tests.append(TestFile(test_path))
         return tests 
@@ -41,9 +41,9 @@ class Package():
     """
     Represents a single test package. Shoud have a corresponding CCID if submitted. 
     """
-    def __init__(self, name: str, path: str):
-        self.name: str      = name
+    def __init__(self, path: str):
         self.path: str      = path
+        self.name: str      = os.path.basename(path)
         self.subpackages    = self.gather_subpackages()
 
     def gather_subpackages(self) -> List[SubPackage]:
@@ -51,9 +51,12 @@ class Package():
         Collect any directory within a package and create a subpackage.
         """
         subpackages = []
-        for parent_path, dirs, _ in os.walk(self.path):
+        for parent_path, dirs, files in os.walk(self.path):
+            top_level_spkg = SubPackage(parent_path) 
+            if len(top_level_spkg.tests) > 0:
+                subpackages.append(top_level_spkg)
             for dirname in dirs:
-                spkg = SubPackage(parent_path, dirname)
+                spkg = SubPackage(os.path.join(parent_path, dirname))
                 if len(spkg.tests) > 0:
                     subpackages.append(spkg) 
         return subpackages
@@ -105,6 +108,7 @@ class Config:
                                                         os.path.dirname(config_path))
         self.executables        = self.parse_executables(config_data['testedExecutablePaths'],
                                                          config_data.get('runtimes', ""))
+        self.solution_exe       = config_data.get('solutionExecutable', None)
         self.toolchains         = self.parse_toolchains(config_data['toolchains'])
         self.error_collection   = self.verify()
         self.packages           = self.gather_packages()
@@ -136,7 +140,8 @@ class Config:
         packages = []
         for parent_path, dirs, _ in os.walk(self.test_dir):
             for dirname in dirs:
-                packages.append(Package(dirname, parent_path))
+                pkg_path = os.path.join(parent_path, dirname)
+                packages.append(Package(pkg_path))
             break
         return packages
 
@@ -144,8 +149,13 @@ class Config:
         """
         Prints a simple formatted table of test information.
         """
-        log("Test file"+ ' '*22 + "Expected bytes  Stdin bytes")
-        log("-" * 60)
+        for pkg in self.packages:
+            print(f"-- ({pkg.name})")
+            for spkg in pkg.subpackages:
+                print(f"  -- ({spkg.name})")
+                for test in spkg.tests:
+                    print(f"    -- ({test.file})")
+
         for pkg in self.packages:
             log(f"Package: {pkg.name} ({len(pkg.subpackages)} subpackages)")
 

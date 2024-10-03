@@ -35,3 +35,7 @@ def sample_invalid_dir_config(config_factory):
 @pytest.fixture(scope="session")
 def sample_invalid_exe_config(config_factory):
     return config_factory("invalidExeConfig.json")
+
+@pytest.fixture(scope="session")
+def sample_cat_config(config_factory):
+    return config_factory("catConfig.json")

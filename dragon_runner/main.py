@@ -40,14 +40,10 @@ def main():
 
     # display the config info before running tests
     config.log_test_info()
-
-    # run the tester in grade mode
-    if args.grade_file is not None:
-        return grade()
     
     # create a regular test harness
     harness = TestHarness(config, args)
-    success = harness.run_all(args.timeout)
+    success = harness.run()
     if success:
         return 0
 
