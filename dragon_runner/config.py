@@ -147,8 +147,7 @@ class Config:
         log("Test file"+ ' '*22 + "Expected bytes  Stdin bytes")
         log("-" * 60)
         for pkg in self.packages:
-            for spkg in pkg.subpackages: 
-                log(f"Sub Package: {spkg.name} ({len(spkg.tests)} tests)")
+            log(f"Package: {pkg.name} ({len(pkg.subpackages)} subpackages)")
 
     def verify(self) -> ErrorCollection:
         """

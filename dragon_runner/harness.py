@@ -1,5 +1,6 @@
 from colorama               import Fore
 from typing                 import List
+from dragon_runner.cli      import CLIArgs
 from dragon_runner.config   import Config
 from dragon_runner.log      import log, log_delimiter
 from dragon_runner.testfile import TestFile
@@ -7,9 +8,10 @@ from dragon_runner.runner   import ToolChainResult, TestResult, ToolChain, ToolC
 from dragon_runner.runner   import get_test_result
 
 class TestHarness:
-    def __init__(self, config: Config):
-        self.config = config
-        self.failures: List[TestFile]= []
+    def __init__(self, config: Config, cli_args: CLIArgs):
+        self.config                     = config
+        self.cli_args                   = cli_args
+        self.failures: List[TestFile]   = []
 
     def log_failures(self) -> str:
         log(f"Failure Summary: ({len(self.failures)} tests)")
@@ -47,12 +49,12 @@ class TestHarness:
                             else:
                                 test_result: TestResult = get_test_result(tc_result, test.expected_out)
                                 if test_result.did_pass:
-                                    log_result(test, test_result)
+                                    self.log_result(test, test_result)
                                     sp_pass_count += 1
                                 else:
                                     self.failures.append(test)
                                     log(test_result.diff, level=1)
-                                    log_result(test, test_result)
+                                    self.log_result(test, test_result)
                                 sp_test_count +=1 
                         log("Subpackage Passed: ", sp_pass_count, "/", sp_test_count)
                         tc_pass_count += sp_pass_count
@@ -74,14 +76,14 @@ class TestHarness:
         for exe in self.config.executables:
             log("Calculating grade for :\t", exe.id)
 
-def log_result(test: TestFile, result: TestResult):
-    if result.did_pass:
-        status = "[ERROR PASS]" if result.error_test else "[PASS]"
-        time_str = f"{result.time:.5f}s" if result.time else ""
-        log(f"{Fore.GREEN}{status:<20}{Fore.RESET}{test.file:<48}{time_str}", indent=2)
-    else:
-        status = "[FAIL]" if result.error_test else "[ERROR FAIL]"
-        log(f"{Fore.RED}{status:<20}{Fore.RESET}{test.file}", indent=2)
+    def log_result(self, test: TestFile, result: TestResult):
+        if result.did_pass:
+            status = "[E-PASS]" if result.error_test else "[PASS]"
+            time_str = f"{result.time:.5f}s" if result.time and self.cli_args.time else ""
+            log(f"{Fore.GREEN}{status:<10}{Fore.RESET}{test.file:<48}{time_str}", indent=2)
+        else:
+            status = "[FAIL]" if result.error_test else "[E-FAIL]"
+            log(f"{Fore.RED}{status:<20}{Fore.RESET}{test.file}", indent=2)
 
 def log_toolchain_failure(test: TestFile, result: ToolChainResult, tc: ToolChain):
     """

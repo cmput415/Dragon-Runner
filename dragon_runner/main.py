@@ -18,6 +18,7 @@ def main():
     if not config:
         log(f"Could not open config file: {args.config_file}")
         return 1
+
     if config.error_collection:
         log(f"Found Config {len(config.error_collection)} error(s):")
         log(f"Parsed {args.config_file} below:")
@@ -29,7 +30,7 @@ def main():
         ccid = input("Enter your CCID: ")
         assert config and not config.error_collection
         found = False
-        for pkg in config.pkgs:
+        for pkg in config.packages:
             log("Searching.. ", pkg.name, indent=2)
             if pkg.name == ccid:
                 found = True
@@ -45,7 +46,7 @@ def main():
         return grade()
     
     # create a regular test harness
-    harness = TestHarness(config)
+    harness = TestHarness(config, args)
     success = harness.run_all(args.timeout)
     if success:
         return 0

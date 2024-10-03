@@ -11,7 +11,7 @@ from difflib                    import Differ
 from colorama                   import Fore, init
 from dragon_runner.testfile     import TestFile 
 from dragon_runner.config       import Executable, ToolChain
-from dragon_runner.log          import log, log_multiline, log_delimiter
+from dragon_runner.log          import log
 from dragon_runner.utils        import make_tmp_file, bytes_to_str, file_to_bytes
 from dragon_runner.toolchain    import Step
 
