@@ -1,5 +1,5 @@
 import os
-from dragon_runner.runner   import ToolChainResult, ToolChainRunner, get_test_result
+from dragon_runner.runner   import ToolChainRunner, TestResult
 from dragon_runner.config   import Config
 
 def test_valid_toolchain_success(sample_valid_config): 
@@ -15,8 +15,8 @@ def test_valid_toolchain_success(sample_valid_config):
             for pkg in gcc_config.packages:
                 for sp in pkg.subpackages:
                     for test in sp.tests:
-                        result: ToolChainResult = tc_runner.run(test, exe)
-                        assert get_test_result(result, test.expected_out).did_pass
+                        result: TestResult = tc_runner.run(test, exe)
+                        assert result.did_pass
 
 def test_valid_toolchain_failures(sample_valid_fail_config):
     """
@@ -31,7 +31,6 @@ def test_valid_toolchain_failures(sample_valid_fail_config):
             for pkg in gcc_config.packages:
                 for sp in pkg.subpackages:
                     for test in sp.tests:
-                        result: ToolChainResult = tc_runner.run(test, exe)
-                        print(test)
-                        assert not get_test_result(result, test.expected_out).did_pass
+                        result: TestResult = tc_runner.run(test, exe)
+                        assert not result.did_pass
 
