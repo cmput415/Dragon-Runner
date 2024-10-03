@@ -5,8 +5,7 @@ from dragon_runner.cli      import CLIArgs
 from dragon_runner.config   import Config
 from dragon_runner.log      import log, log_delimiter
 from dragon_runner.testfile import TestFile
-from dragon_runner.runner   import ToolChainResult, TestResult, ToolChain, ToolChainRunner
-from dragon_runner.runner   import get_test_result
+from dragon_runner.runner   import TestResult, ToolChainRunner
 
 class TestHarness:
     def __init__(self, config: Config, cli_args: CLIArgs):
@@ -42,21 +41,13 @@ class TestHarness:
                         sp_pass_count = 0
                         sp_test_count = 0
                         for test in spkg.tests:
-                            tc_result : ToolChainResult = tc_runner.run(test, exe)
-                            if not tc_result.success:
-                                self.failures.append(test)
-                                log_toolchain_failure(test, tc_result, toolchain, )
-                                sp_test_count +=1 
+                            test_result: TestResult = tc_runner.run(test, exe)
+                            test_result.log() 
+                            if test_result.did_pass:
+                                sp_pass_count += 1     
                             else:
-                                test_result: TestResult = get_test_result(tc_result, test.expected_out)
-                                if test_result.did_pass:
-                                    self.log_result(test, test_result)
-                                    sp_pass_count += 1
-                                else:
-                                    self.failures.append(test)
-                                    log(test_result.diff, level=1)
-                                    self.log_result(test, test_result)
-                                sp_test_count +=1 
+                                self.failures.append(test) 
+                            sp_test_count +=1 
                         log("Subpackage Passed: ", sp_pass_count, "/", sp_test_count)
                         tc_pass_count += sp_pass_count
                         tc_test_count += sp_test_count
@@ -108,22 +99,15 @@ class TestHarness:
                             result_string = ""
                             for a_spkg in a_pkg.subpackages:
                                 for test in a_spkg.tests:
-                                    d_result : ToolChainResult = tc_runner.run(test, def_exe)
                                     result_json = {"test": test.file}
-                                    if not d_result.success:
-                                        result_string += Fore.RED + 'x' + Fore.RESET
-                                        result_json.update({"pass": False, "time": 0 })
-                                        def_f.write(f"Toolchain Failed: {test.file}\n")
-                                    else:
-                                        test_result: TestResult = get_test_result(d_result, test.expected_out)
-                                        if test_result.did_pass:
-                                            result_string += Fore.GREEN + '.' + Fore.RESET
-                                            result_json.update({"pass": True})
-                                        else:
-                                            result_string += Fore.RED + '.' + Fore.RESET
-                                            result_json.update({"pass": False})
-                                            def_f.write(f"Test Failed: {test.file}\n")                                    
-                                        result_json.update({"time": test_result.time}) 
+                                    test_result: TestResult = tc_runner.run(test, def_exe)
+                                    if test_result.did_pass:
+                                        result_string += Fore.GREEN + '.' + Fore.RESET
+                                        result_json.update({"pass": False, "time": test_result.time})
+                                    if not test_result.did_pass:      
+                                        result_string += Fore.RED + '.' + Fore.RESET
+                                        result_json.update({"pass": False})
+                                        def_f.write(f"Test Failed: {test.file}\n")                                    
                                     a_json["timings"].append(result_json) 
                             print(f"  {a_pkg.name:<12} --> {def_exe.id:<12} {result_string}")
                             def_json["defenderResults"].append(a_json)
@@ -143,23 +127,3 @@ class TestHarness:
         grade_json = json.dumps(grade_dict, indent=2)
         with open(self.cli_args.grade_file, 'w') as grade_f:
             grade_f.write(grade_json)
-
-    def log_result(self, test: TestFile, result: TestResult):
-        if result.did_pass:
-            status = "[E-PASS]" if result.error_test else "[PASS]"
-            time_str = f"{result.time:.5f}s" if result.time and self.cli_args.time else ""
-            log(f"{Fore.GREEN}{status:<10}{Fore.RESET}{test.file:<48}{time_str}", indent=2)
-        else:
-            status = "[FAIL]" if result.error_test else "[E-FAIL]"
-            log(f"{Fore.RED}{status:<20}{Fore.RESET}{test.file}", indent=2)
-
-def log_toolchain_failure(test: TestFile, result: ToolChainResult, tc: ToolChain):
-    """
-    log relevant info when the toolchain panics at some intermediate step
-    """
-    status = "[TOOLCHAIN ERROR]"
-    log(f"{Fore.RED}{status:<20}{Fore.RESET}{test.file}", indent=2)
-    log_delimiter(title=f"Failed on toolchain: {tc.name}", indent=2, level=1)
-    log(f"Failed on step: {result.last_step.name}", indent=4, level=1) 
-    log(f"Exited with status: {result.exit_code}", indent=4, level=1)
-    log(f"Stderr: {result.stderr.getvalue()}", indent=4, level=1)
