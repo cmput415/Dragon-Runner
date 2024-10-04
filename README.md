@@ -25,7 +25,7 @@ To get `dragon-runner` on your CLI build the package and install it locally with
 ```
 git clone https://github.com/cmput415/Dragon-Runner.git
 cd Dragon-Runner
-pip install -e .
+pip install .
 dragon-runner --help
 ```
 If `dragon-runner` is not found on `$PATH` try adding `~/.local/bin`
