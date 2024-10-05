@@ -100,6 +100,9 @@ class TestHarness:
         attacking_pkgs = sorted(self.config.packages, key=lambda pkg: pkg.name.lower())
         defending_exes = sorted(self.config.executables, key=lambda exe: exe.id.lower())
 
+        solution_exe =  self.config.solution_exe 
+        print(f"SOLTUION EXE: {solution_exe}")
+        print(f"FAIL LOG: {self.cli_args.failure_log}")
         with open(self.cli_args.failure_log, 'w') as fail_log:
             
             results_json = [] 
@@ -120,6 +123,7 @@ class TestHarness:
                         pass_count = 0
                         for a_spkg in a_pkg.subpackages:
                             for test in a_spkg.tests:
+                                test: TestFile = test 
                                 result_json = {"test": test.file}
                                 test_result: TestResult = tc_runner.run(test, def_exe)
                                 if test_result.did_pass:
@@ -130,6 +134,8 @@ class TestHarness:
                                     result_string += Fore.RED + '.' + Fore.RESET
                                     result_json.update({"pass": False})
                                     self.log_failure_to_file(def_feedback_file, test_result)
+                                    if solution_exe == def_exe.id:
+                                        fail_log.write(f"{toolchain.name} {a_pkg.name} {test.path}\n")
                                 a_json["timings"].append(result_json)
                         a_json.update({"passCount": pass_count})
                         print(f"  {a_pkg.name:<12} --> {def_exe.id:<12} {result_string}")
@@ -152,4 +158,3 @@ class TestHarness:
             grade_f.write(grade_json)
 
         return True
-
