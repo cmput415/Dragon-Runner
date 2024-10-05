@@ -52,7 +52,24 @@ def file_to_bytes(file: str) -> Optional[BytesIO]:
     except Exception as e:
         print(f"Reading bytes from file failed with: {e}")
         return None
+
+def file_to_str(file: str, max_bytes=1024) -> str:
+    """
+    return file in string form, with middle contents trucated if
+    size exceeds max_bytes
+    """ 
+    bytes_io = file_to_bytes(file)
+    if bytes_io is None:
+        return ""
     
+    bytes_data = bytes_io.getvalue()
+    if len(bytes_data) <= max_bytes:
+        return bytes_to_str(bytes_data)
+    
+    half = (max_bytes - 3) // 2 
+    truncated_bytes = bytes_data[:half] + b'...' + bytes_data[-half:]
+    return bytes_to_str(truncated_bytes)
+
 def bytes_to_file(file: str, bytes: BytesIO) -> Optional[str]:
     try:
         with open(file, 'w') as f:

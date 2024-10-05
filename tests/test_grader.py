@@ -8,7 +8,8 @@ def test_grader_config(config_factory, cli_factory):
     config : Config = config_factory("ConfigGrade.json")
     args : CLIArgs = cli_factory(**{
         "grade_file": "Grades.json",
-        "failure_file": "Failures.txt"
+        "failure_file": "Failures.txt",
+        "timeout": 1
     })
     
     harness = TestHarness(config=config, cli_args=args) 

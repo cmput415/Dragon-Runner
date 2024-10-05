@@ -8,12 +8,12 @@ class Logger:
         self.debug_level = self._get_debug_level()
 
     def _get_debug_level(self):
-        return int(os.environ.get('DEBUG', '0'))
+        return int(os.environ.get('DEBUG', '0')) 
 
     def log(self, level, indent, *args, **kwargs):
         prefix = ' '*indent
         if self.debug_level >= level:
-            print(prefix, *args, file=sys.stderr, **kwargs)
+            print(prefix, *args, **kwargs) 
 
 _logger_instance = None
 
@@ -26,18 +26,18 @@ def get_logger():
         _logger_instance = Logger()
     return _logger_instance
 
-def log_multiline(content: str, level=0, indent=0):
+def log_multiline(content: str, level=0, indent=0, **kwargs):
     """
     Log multiline content with proper indentation
     """
     for line in str(content).splitlines():
-        log(line.rstrip(), level=level, indent=indent)
+        log(line.rstrip(), level=level, indent=indent, **kwargs)
 
 def log(*args, level=0, indent=0, **kwargs):
     get_logger().log(level, indent, *args, **kwargs)
 
 def log_delimiter(title: str, level=0, indent=0):
-    delimiter = '=' * 20
+    delimiter = '-' * 20
     log(delimiter + ' ' + title + ' ' + delimiter, level=level, indent=indent)
 
 def log_bytes(bytes: BytesIO, level=0, indent=0):

@@ -3,6 +3,7 @@ import os
 import re
 import json
 import time
+import sys
 from subprocess                 import TimeoutExpired, CompletedProcess
 from io                         import BytesIO
 from typing                     import List, Dict, Optional, Union
@@ -11,7 +12,7 @@ from difflib                    import Differ
 from colorama                   import Fore, init
 from dragon_runner.testfile     import TestFile 
 from dragon_runner.config       import Executable, ToolChain
-from dragon_runner.log          import log
+from dragon_runner.log          import log, log_delimiter, log_multiline
 from dragon_runner.utils        import make_tmp_file, bytes_to_str, file_to_bytes
 from dragon_runner.toolchain    import Step
 
@@ -29,7 +30,7 @@ class MagicParams:
 class Command:
     args: List[str] 
     def log(self, level:int=0):
-        log("Command: ", ' '.join(self.args), indent=2, level=level)
+        log("Command: ", ' '.join(self.args), indent=4, level=level)
 
 @dataclass
 class CommandResult:
@@ -56,12 +57,23 @@ class TestResult:
     time: Optional[float]=None      # time test took on the final step
     diff: Optional[str]=None        # diff if the test failed gracefully
     error_msg: Optional[str]=None   # error message if test did not fail gracefully
+    gen_output: Optional[BytesIO]=BytesIO()
 
-    def log(self):
+    def log(self, file=sys.stderr):
         if self.did_pass:
-            log(Fore.GREEN + "[PASS] " + Fore.RESET + f"{self.test.file}", indent=4)
+            log(Fore.GREEN + "[PASS] " + Fore.RESET + f"{self.test.file}", indent=2, file=file)
         else:
-            log(Fore.RED + "[FAIL] " + Fore.RESET + f"{self.test.file}", indent=4)
+            log(Fore.RED + "[FAIL] " + Fore.RESET + f"{self.test.file}", indent=2, file=file)
+
+        if not self.did_pass and self.diff:
+            log("==> Diff:", indent=4, level=1)
+            log_multiline(self.diff, indent=6, level=1)
+
+        level = 3 if self.did_pass else 2
+        log(f"==> Expected Out ({self.test.expected_out_bytes} bytes):", indent=4, level=level)
+        log_multiline(bytes_to_str(self.test.expected_out), level=level, indent=6)
+        log(f"==> Expected Out ({self.test.expected_out_bytes} bytes):", indent=4, level=level)
+        log_multiline(bytes_to_str(b'hello\nworld'), level=level, indent=6)
 
 class ToolChainRunner():
     def __init__(self, tc: ToolChain, timeout: float, env: Dict[str, str]={}):
@@ -120,18 +132,23 @@ class ToolChainRunner():
             command         = self.resolve_command(step, MagicParams(exe.exe_path, input_file, output_file))
             command_result  = self.run_command(command, input_stream)
 
-            command.log(level=2)
-            command_result.log(level=2)
+            command.log(level=3)
+            command_result.log(level=3)
 
             if command_result.timed_out:
                 timeout_msg = f"Toolchain timed out for test: {test.file}"
-                return TestResult(test=test, did_pass=False, did_panic=True, error_test=False,
-                                                                  error_msg=timeout_msg)
+                return TestResult(test=test, did_pass=False, did_panic=True, error_test=False, 
+                                                                 error_msg=timeout_msg)
+            
+            child_process : CompletedProcess = command_result.subprocess
+            if not child_process:
+                raise RuntimeError(f"Command {exe.exe_path} could not spawn child process")
 
-            elif command_result.subprocess.returncode != 0:
+            elif child_process.returncode != 0:
                 if step.allow_error:
                     return self.get_test_result(test, command_result.subprocess, test.expected_out)
-                return TestResult(test=test, did_pass=False, error_test=False, diff="TODO: get diff")
+                return TestResult(test=test, did_pass=False, error_test=False,
+                                    gen_output=BytesIO(child_process.stderr))
 
             elif last_step:
                 if output_file and not os.path.exists(output_file):
@@ -139,13 +156,13 @@ class ToolChainRunner():
 
                 if output_file is not None:
                     output_file_contents = file_to_bytes(output_file)
-                    command_result.subprocess.stdout = output_file_contents
+                    child_process.stdout = output_file_contents
 
-                return self.get_test_result(test, command_result.subprocess, test.expected_out)
+                return self.get_test_result(test, child_process, test.expected_out)
             
             else: 
                 # set up the next steps input file
-                input_file = output_file or make_tmp_file(BytesIO(command_result.subprocess.stdout))
+                input_file = output_file or make_tmp_file(BytesIO(child_process.stdout))
 
     @staticmethod 
     def get_test_result(test: TestFile, subps_result: CompletedProcess, expected_out: BytesIO, time=0) -> TestResult:
@@ -165,19 +182,24 @@ class ToolChainRunner():
             # Regular test: Take precise diff from only stdout
             diff = precise_diff(subps_result.stdout, expected_out)
             if not diff: 
-                return TestResult(test=test, did_pass=True, error_test=False, time=time)
+                return TestResult(test=test, did_pass=True, error_test=False, time=time,
+                                gen_output=BytesIO(subps_result.stdout))
             else:
-                return TestResult(test=test, did_pass=False, error_test=False)
+                return TestResult(test=test, did_pass=False, error_test=False,
+                                  gen_output=BytesIO(subps_result.stdout))
         else:
             # Error Test: Take lenient diff from only stderr 
             ct_diff = lenient_diff(subps_result.stderr, expected_out, compile_time_pattern)
             rt_diff = lenient_diff(subps_result.stderr, expected_out, runtime_pattern)
             if not ct_diff:
-                return TestResult(test=test, did_pass=True, error_test=True)
+                return TestResult(test=test, did_pass=True, error_test=True,
+                                  gen_output=BytesIO(subps_result.stderr))
             elif not rt_diff:
-                return TestResult(test=test, did_pass=True, error_test=True)
+                return TestResult(test=test, did_pass=True, error_test=True,
+                                  gen_output=BytesIO(subps_result.stderr))
             else:
-                return TestResult(test=test, did_pass=False, error_test=True, diff=ct_diff)
+                return TestResult(test=test, did_pass=False, error_test=True, diff=ct_diff,
+                                  gen_output=BytesIO(subps_result.stderr))
 
 
     @staticmethod

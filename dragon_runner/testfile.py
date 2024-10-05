@@ -18,7 +18,9 @@ class TestFile:
         self.comment_syntax         = comment_syntax            # default C99 //
         self.expected_out           = self.get_expected_out()   # fill expected output
         self.input_stream           = self.get_input_stream()   # fill std input stream
- 
+        self.expected_out_bytes     = len(self.expected_out.getvalue())
+        self.input_stream_bytes     = len(self.input_stream.getvalue())
+    
     def get_file_bytes(self, file_path: str) -> BytesIO:
         with open(file_path, "rb") as f:
             return BytesIO(f.read())

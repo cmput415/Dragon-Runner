@@ -26,7 +26,7 @@ def main():
         return 1
 
     if args.verify:
-        ccid = input("Enter your CCID: ")
+        ccid = input("Enter your CCID/Github Team Name: ")
         assert config and not config.error_collection
         found = False
         for pkg in config.packages:
