@@ -81,7 +81,7 @@ class TestHarness:
                     f"Test: {result.test.file}\n"\
                     + "Test contents:\n" + '-'*40 + '\n' + file_to_str(result.test.path, max_bytes=512) + '\n' + '-'*40 + '\n'\
                     + "Expected Output: " + str(result.test.expected_out.getvalue()) + '\n'\
-                    + "Generated Output: " + str(result.gen_output.getvalue()) + '\n'
+                    + "Generated Output: " + str(result.gen_output) + '\n'
                 )
                 if result.error_msg:
                     feedback_file.write(f"Error Message: {result.error_msg}\n\n")

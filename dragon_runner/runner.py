@@ -57,13 +57,15 @@ class TestResult:
     time: Optional[float]=None      # time test took on the final step
     diff: Optional[str]=None        # diff if the test failed gracefully
     error_msg: Optional[str]=None   # error message if test did not fail gracefully
-    gen_output: Optional[BytesIO]=BytesIO()
+    gen_output: Optional[bytes]=b''
 
     def log(self, file=sys.stderr):
         if self.did_pass:
-            log(Fore.GREEN + "[PASS] " + Fore.RESET + f"{self.test.file}", indent=2, file=file)
+            pass_msg = "[E-PASS] " if self.error_test else "[PASS] "
+            log(Fore.GREEN + pass_msg + Fore.RESET + f"{self.test.file}", indent=2, file=file)
         else:
-            log(Fore.RED + "[FAIL] " + Fore.RESET + f"{self.test.file}", indent=2, file=file)
+            fail_msg = "[E-FAIL] " if self.error_test else "[FAIL] "
+            log(Fore.RED + fail_msg + Fore.RESET + f"{self.test.file}", indent=2, file=file)
 
         if not self.did_pass and self.diff:
             log("==> Diff:", indent=4, level=1)
@@ -148,7 +150,7 @@ class ToolChainRunner():
                 if step.allow_error:
                     return self.get_test_result(test, command_result.subprocess, test.expected_out)
                 return TestResult(test=test, did_pass=False, error_test=False,
-                                    gen_output=BytesIO(child_process.stderr))
+                                    gen_output=child_process.stderr)
 
             elif last_step:
                 if output_file and not os.path.exists(output_file):
@@ -183,24 +185,23 @@ class ToolChainRunner():
             diff = precise_diff(subps_result.stdout, expected_out)
             if not diff: 
                 return TestResult(test=test, did_pass=True, error_test=False, time=time,
-                                gen_output=BytesIO(subps_result.stdout))
+                                gen_output=subps_result.stdout)
             else:
                 return TestResult(test=test, did_pass=False, error_test=False,
-                                  gen_output=BytesIO(subps_result.stdout))
+                                  gen_output=subps_result.stdout)
         else:
             # Error Test: Take lenient diff from only stderr 
             ct_diff = lenient_diff(subps_result.stderr, expected_out, compile_time_pattern)
             rt_diff = lenient_diff(subps_result.stderr, expected_out, runtime_pattern)
             if not ct_diff:
                 return TestResult(test=test, did_pass=True, error_test=True,
-                                  gen_output=BytesIO(subps_result.stderr))
+                                  gen_output=subps_result.stderr)
             elif not rt_diff:
                 return TestResult(test=test, did_pass=True, error_test=True,
-                                  gen_output=BytesIO(subps_result.stderr))
+                                  gen_output=subps_result.stderr)
             else:
                 return TestResult(test=test, did_pass=False, error_test=True, diff=ct_diff,
-                                  gen_output=BytesIO(subps_result.stderr))
-
+                                  gen_output=subps_result.stderr)
 
     @staticmethod
     def replace_env_vars(cmd: Command) -> Command:

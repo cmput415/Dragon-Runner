@@ -60,10 +60,10 @@ class Package():
         Collect any directory within a package and create a subpackage.
         """
         subpackages = []
-        for parent_path, dirs, files in os.walk(self.path):
-            top_level_spkg = SubPackage(parent_path) 
-            if len(top_level_spkg.tests) > 0:
-                self.add_subpackage(top_level_spkg)
+        top_level_spkg = SubPackage(self.path) 
+        if len(top_level_spkg.tests) > 0:
+            self.add_subpackage(top_level_spkg)
+        for parent_path, dirs, _ in os.walk(self.path):
             for dirname in dirs:
                 spkg = SubPackage(os.path.join(parent_path, dirname))
                 if len(spkg.tests) > 0:
