@@ -116,6 +116,13 @@ class TestHarness:
 
             # Run the toolchains
             for i, toolchain in enumerate(self.config.toolchains):
+                # Check if we have done this toolchain
+                if self.cli_args.restore and (toolchain.name == results_json[i]['toolchain']):
+                    try:
+                        results_json[i + 1]
+                        continue
+                    except IndexError:
+                        pass
                 tc_runner = ToolChainRunner(toolchain, self.cli_args.timeout)
                 tc_json = {"toolchain": toolchain.name, "toolchainResults": []}
                 print(f"Toolchain: {toolchain.name}")
