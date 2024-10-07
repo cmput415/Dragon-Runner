@@ -102,8 +102,18 @@ class TestHarness:
         solution_exe =  self.config.solution_exe 
         
         with open(self.cli_args.failure_log, 'w') as sol_fail_log:     
-            results_json = [] 
-            for toolchain in self.config.toolchains:
+            results_json = []
+
+            # If we are restoring from a checkpoint, load it
+            if (self.cli_args.restore):
+                with open(".checkpoint.json", 'r') as checkpoint:
+                    checkpoint_restore_raw = checkpoint.read()
+                    checkpoint_restore_parsed = json.loads(checkpoint_restore_raw)
+
+                results_json = checkpoint_restore_parsed
+
+            # Run the toolchains
+            for i, toolchain in enumerate(self.config.toolchains):
                 tc_runner = ToolChainRunner(toolchain, self.cli_args.timeout)
                 tc_json = {"toolchain": toolchain.name, "toolchainResults": []}
                 print(f"Toolchain: {toolchain.name}")

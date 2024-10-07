@@ -11,6 +11,7 @@ class CLIArgs(NamedTuple):
     time: bool
     verbosity: int
     verify: bool
+    restore: bool
 
     def __repr__(self) -> str:
         return (
@@ -23,6 +24,7 @@ class CLIArgs(NamedTuple):
             f"  Time: {self.time}\n"
             f"  Verbosity: {self.verbosity}"
             f"  Verify: {self.verify}"
+            f"  Restore: {self.restore}"
         )
 
 def parse_cli_args() -> CLIArgs:
@@ -36,6 +38,7 @@ def parse_cli_args() -> CLIArgs:
     parser.add_argument("--debug-package", help="Provide a sub-path to run the tester on.") 
     parser.add_argument("-t", "--time", action="store_true", help="Include the timings (seconds) of each test in the output.")
     parser.add_argument("-v", "--verbosity", action="count", default=0, help="Increase verbosity level")
+    parser.add_argument("--restore-checkpoint", dest="restore", default=False, action="store_true", help="Restore a checkpoint from .checkpoint.json for a partially failed testing run")
 
     args: CLIArgs = parser.parse_args()
     if not os.path.isfile(args.config_file):
@@ -53,6 +56,7 @@ def parse_cli_args() -> CLIArgs:
         debug_package   = args.debug_package,
         time            = args.time,
         verbosity       = args.verbosity,
-        verify          = args.verify
+        verify          = args.verify,
+        restore         = args.restore
     )
 
