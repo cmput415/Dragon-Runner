@@ -19,7 +19,8 @@ def create_cli_args(**kwargs) -> CLIArgs:
         kwargs.get('debug-package', None),
         kwargs.get('time', None),
         kwargs.get('verbosity', None),
-        kwargs.get('verify', None)
+        kwargs.get('verify', None),
+        kwargs.get('restore', None)
     )
 
 @pytest.fixture(scope="session")
