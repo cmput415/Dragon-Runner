@@ -252,9 +252,13 @@ def precise_diff(produced: BytesIO, expected: BytesIO) -> str:
     if produced_str == expected_str:
         return ""
 
-    differ = Differ()
-    diff = list(differ.compare(produced_str.splitlines(), expected_str.splitlines()))
-    return color_diff(diff)
+    try:
+        differ = Differ()
+        diff = list(differ.compare(produced_str.splitlines(), expected_str.splitlines()))
+        return color_diff(diff)
+    except RecursionError as e:
+        log(f"Encountered difflib error: {e}")
+        return "Diff to long to display. Likely because of an infinite print loop."
 
 def lenient_diff(produced: BytesIO, expected: BytesIO, pattern: str) -> str:
     """
