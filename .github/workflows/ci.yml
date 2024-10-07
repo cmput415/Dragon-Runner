@@ -25,3 +25,6 @@ jobs:
 
       - name: run grade tests
         run: pytest tests/test_grader.py
+
+      - name: run checkpoint tests
+        run: cp tests/checkpoint.json.test tests/checkpoint.json.test.tmp && pytest tests/test_grader_restore.py

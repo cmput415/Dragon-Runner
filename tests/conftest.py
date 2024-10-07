@@ -20,7 +20,8 @@ def create_cli_args(**kwargs) -> CLIArgs:
         kwargs.get('time', None),
         kwargs.get('verbosity', None),
         kwargs.get('verify', None),
-        kwargs.get('restore', None)
+        kwargs.get('restore', None),
+        kwargs.get('restore_file', ".checkpoint.json")
     )
 
 @pytest.fixture(scope="session")
