@@ -77,9 +77,14 @@ class TestHarness:
         """
         Give full feedback to a defender for all the tests they failed
         """
+        def trim_bytes(data: bytes, max_bytes: int = 512) -> bytes:
+            trimmed = data[:max_bytes]
+            if len(data) > max_bytes:
+                trimmed += b"\n... (output trimmed to %d bytes)" % max_bytes
+            return trimmed
+
         with open(file, 'a+') as feedback_file:
             if not result.did_pass:
-
                 if isinstance(result.gen_output, BytesIO):
                     #TODO: Figure out why some results get passed in as BytesIO not bytes 
                     result.gen_output = result.gen_output.getvalue()
@@ -89,14 +94,13 @@ class TestHarness:
                     + "Test contents:\n" + '-'*40 + '\n' + file_to_str(
                                     result.test.path, max_bytes=512) + '\n' + '-'*40 + '\n'\
                     + "Expected Output: " + str(result.test.expected_out.getvalue()) + '\n'\
-                    + "Generated Output: " + str(result.gen_output) + '\n'
+                    + "Generated Output: " + str(trim_bytes(result.gen_output)) + '\n'
                 )
                 if result.error_msg:
                     feedback_file.write(f"Error Message: {result.error_msg}\n")
                 if result.failing_step:
                     feedback_file.write(f"Failing Step: {result.failing_step}\n")
                 feedback_file.write("\n")
-
 
     @staticmethod
     def create_tc_dataframe(tc_name: str, defenders: List[Executable],
