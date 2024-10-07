@@ -147,6 +147,18 @@ class TestHarness:
                         a_json.update({"passCount": pass_count})
                         print(f"  {a_pkg.name:<12} --> {def_exe.id:<12} {result_string}")
                         def_json["defenderResults"].append(a_json)
+
+                        # Set the tmp toolchain json
+                        checkpoint_tc = tc_json
+                        checkpoint_tc["toolchainResults"].append(def_json)
+
+                        # Set up a checkpoint
+                        checkpoint = results_json
+                        checkpoint.append(checkpoint_tc)
+                        tmp_json = json.dumps(checkpoint)
+                        with open('.checkpoint.json', 'w') as tmp:
+                            tmp.write(tmp_json)
+
                     tc_json["toolchainResults"].append(def_json)
                 results_json.append(tc_json)
                 print("")
