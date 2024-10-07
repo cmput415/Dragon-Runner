@@ -109,7 +109,7 @@ class TestHarness:
         attacking_pkgs = sorted(self.config.packages, key=lambda pkg: pkg.name.lower())
         defending_exes = sorted(self.config.executables, key=lambda exe: exe.id.lower())
         solution_exe =  self.config.solution_exe
-        checkpoint_path = Path('.checkpoint.json')
+        checkpoint_path = Path(self.cli_args.restore_file)
         
         with open(self.cli_args.failure_log, 'w') as sol_fail_log:     
             results_json = []
