@@ -126,7 +126,14 @@ class TestHarness:
                 tc_runner = ToolChainRunner(toolchain, self.cli_args.timeout)
                 tc_json = {"toolchain": toolchain.name, "toolchainResults": []}
                 print(f"Toolchain: {toolchain.name}")
-                for def_exe in defending_exes: 
+                for j, def_exe in enumerate(defending_exes):
+                    # Check if we have done this defender
+                    if self.cli_args.restore and (def_exe.id == results_json[i]['toolchainResults'][j]['defender']):
+                        try:
+                            results_json[i]['toolchainResults'][j+1]
+                            continue
+                        except IndexError:
+                            pass
                     def_json = {"defender": def_exe.id, "defenderResults": []}
                     def_feedback_file = f"{def_exe.id}-{toolchain.name}feedback.txt"
                     for a_pkg in attacking_pkgs:
