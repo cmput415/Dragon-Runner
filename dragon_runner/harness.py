@@ -1,6 +1,7 @@
 import json
 from colorama               import Fore
 from typing                 import List
+from pathlib                import Path
 from dragon_runner.cli      import CLIArgs
 from dragon_runner.config   import Config
 from dragon_runner.log      import log
@@ -99,14 +100,15 @@ class TestHarness:
 
         attacking_pkgs = sorted(self.config.packages, key=lambda pkg: pkg.name.lower())
         defending_exes = sorted(self.config.executables, key=lambda exe: exe.id.lower())
-        solution_exe =  self.config.solution_exe 
+        solution_exe =  self.config.solution_exe
+        checkpoint_path = Path('.checkpoint.json')
         
         with open(self.cli_args.failure_log, 'w') as sol_fail_log:     
             results_json = []
 
             # If we are restoring from a checkpoint, load it
             if (self.cli_args.restore):
-                with open(".checkpoint.json", 'r') as checkpoint:
+                with open(checkpoint_path, 'r') as checkpoint:
                     checkpoint_restore_raw = checkpoint.read()
                     checkpoint_restore_parsed = json.loads(checkpoint_restore_raw)
 
@@ -156,13 +158,13 @@ class TestHarness:
                         checkpoint = results_json
                         checkpoint.append(checkpoint_tc)
                         tmp_json = json.dumps(checkpoint)
-                        with open('.checkpoint.json', 'w') as tmp:
+                        with open(checkpoint_path, 'w') as tmp:
                             tmp.write(tmp_json)
 
                     tc_json["toolchainResults"].append(def_json)
                 results_json.append(tc_json)
                 print("")
-            
+
         grade_dict = {
             "title": "415 Grades",
             "testSummary": {
@@ -175,5 +177,7 @@ class TestHarness:
         grade_json = json.dumps(grade_dict, indent=2)
         with open(self.cli_args.grade_file, 'w') as grade_f:
             grade_f.write(grade_json)
+
+        checkpoint_path.unlink(missing_ok=True)
 
         return True
