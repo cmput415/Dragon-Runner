@@ -90,6 +90,14 @@ class TestHarness:
                     feedback_file.write(f"Failing Step: {result.failing_step}\n")
                 feedback_file.write("\n")
 
+    def checkpointed(self, check, checkpoint_data, index, key):
+        if self.cli_args.restore and (check == checkpoint_data[index][key]):
+            try:
+                checkpoint_data[index + 1]
+                return True
+            except IndexError:
+                return False
+
     def run_grader_json(self) -> bool:
         """
         Run the tester in grade mode. Run all test packages for each tested executable.
@@ -116,24 +124,18 @@ class TestHarness:
 
             # Run the toolchains
             for i, toolchain in enumerate(self.config.toolchains):
-                # Check if we have done this toolchain
-                if self.cli_args.restore and (toolchain.name == results_json[i]['toolchain']):
-                    try:
-                        results_json[i + 1]
-                        continue
-                    except IndexError:
-                        pass
+                # Check if we have this toolchain checkpointed
+                if self.checkpointed(toolchain.name, results_json, i, 'toolchain'):
+                    continue
+
                 tc_runner = ToolChainRunner(toolchain, self.cli_args.timeout)
                 tc_json = {"toolchain": toolchain.name, "toolchainResults": []}
                 print(f"Toolchain: {toolchain.name}")
                 for j, def_exe in enumerate(defending_exes):
-                    # Check if we have done this defender
-                    if self.cli_args.restore and (def_exe.id == results_json[i]['toolchainResults'][j]['defender']):
-                        try:
-                            results_json[i]['toolchainResults'][j+1]
-                            continue
-                        except IndexError:
-                            pass
+                    # Check if we have this defender checkpointed
+                    if self.checkpointed(def_exe.id, results_json[i]['toolchainResults'], j, 'defender'):
+                        continue
+
                     def_json = {"defender": def_exe.id, "defenderResults": []}
                     def_feedback_file = f"{def_exe.id}-{toolchain.name}feedback.txt"
                     for a_pkg in attacking_pkgs:
