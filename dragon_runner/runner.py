@@ -271,10 +271,14 @@ def lenient_diff(produced: BytesIO, expected: BytesIO, pattern: str) -> str:
     if produced_masked == expected_masked:
         return ""
 
-    # If the masked strings are different, generate a diff
-    differ = Differ()
-    diff = list(differ.compare(produced_masked.splitlines(), expected_masked.splitlines()))
-    return color_diff(diff)
+    try:
+        # If the masked strings are different, generate a diff
+        differ = Differ()
+        diff = list(differ.compare(produced_masked.splitlines(), expected_masked.splitlines()))
+        return color_diff(diff)
+    except RecursionError as e:
+        log(f"Encountered difflib error: {e}")
+        return "Diff to long to display. Likely because of an infinite print loop."
 
 def color_diff(diff_lines: list) -> str:
     """
