@@ -1,6 +1,6 @@
 import json
 from colorama               import Fore
-from typing                 import List, Tuple
+from typing                 import List
 from dragon_runner.cli      import CLIArgs
 from dragon_runner.config   import Config
 from dragon_runner.log      import log
@@ -79,15 +79,15 @@ class TestHarness:
             if not result.did_pass:
                 feedback_file.write(
                     f"Test: {result.test.file}\n"\
-                    + "Test contents:\n" + '-'*40 + '\n' + file_to_str(result.test.path, max_bytes=512) + '\n' + '-'*40 + '\n'\
+                    + "Test contents:\n" + '-'*40 + '\n' + file_to_str(result.test.path, max_bytes=256) + '\n' + '-'*40 + '\n'\
                     + "Expected Output: " + str(result.test.expected_out.getvalue()) + '\n'\
                     + "Generated Output: " + str(result.gen_output) + '\n'
                 )
                 if result.error_msg:
-                    feedback_file.write(f"Error Message: {result.error_msg}\n\n")
-                else:
-                    feedback_file.write("\n")
-
+                    feedback_file.write(f"Error Message: {result.error_msg}\n")
+                if result.failing_step:
+                    feedback_file.write(f"Failing Step: {result.failing_step}\n")
+                feedback_file.write("\n")
 
     def run_grader_json(self) -> bool:
         """
@@ -99,12 +99,9 @@ class TestHarness:
 
         attacking_pkgs = sorted(self.config.packages, key=lambda pkg: pkg.name.lower())
         defending_exes = sorted(self.config.executables, key=lambda exe: exe.id.lower())
-
         solution_exe =  self.config.solution_exe 
-        print(f"SOLTUION EXE: {solution_exe}")
-        print(f"FAIL LOG: {self.cli_args.failure_log}")
-        with open(self.cli_args.failure_log, 'w') as fail_log:
-            
+        
+        with open(self.cli_args.failure_log, 'w') as sol_fail_log:     
             results_json = [] 
             for toolchain in self.config.toolchains:
                 tc_runner = ToolChainRunner(toolchain, self.cli_args.timeout)
@@ -135,7 +132,7 @@ class TestHarness:
                                     result_json.update({"pass": False})
                                     self.log_failure_to_file(def_feedback_file, test_result)
                                     if solution_exe == def_exe.id:
-                                        fail_log.write(f"{toolchain.name} {a_pkg.name} {test.path}\n")
+                                        sol_fail_log.write(f"{toolchain.name} {a_pkg.name} {test.path}\n")
                                 a_json["timings"].append(result_json)
                         a_json.update({"passCount": pass_count})
                         print(f"  {a_pkg.name:<12} --> {def_exe.id:<12} {result_string}")

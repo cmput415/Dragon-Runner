@@ -49,15 +49,16 @@ class CommandResult:
 
 @dataclass
 class TestResult: 
-    __test__ = False                # pytest gets confused when classes start with 'Test'
-    test: TestFile                  # test result is derived from 
-    did_pass: bool                  # did expected out match generated
-    error_test: bool=False          # did test return with non-zero exit
-    did_panic: bool=False           # did test cause the toolchain to panic
-    time: Optional[float]=None      # time test took on the final step
-    diff: Optional[str]=None        # diff if the test failed gracefully
-    error_msg: Optional[str]=None   # error message if test did not fail gracefully
-    gen_output: Optional[bytes]=b''
+    __test__ = False                    # pytest gets confused when classes start with 'Test'
+    test: TestFile                      # test result is derived from 
+    did_pass: bool                      # did expected out match generated
+    error_test: bool=False              # did test return with non-zero exit
+    did_panic: bool=False               # did test cause the toolchain to panic
+    time: Optional[float]=None          # time test took on the final step
+    diff: Optional[str]=None            # diff if the test failed gracefully
+    error_msg: Optional[str]=None       # error message if test did not fail gracefully
+    failing_step: Optional[str]=None    # step the TC failed on
+    gen_output: Optional[bytes]=None    # output of the test
 
     def log(self, file=sys.stderr):
         if self.did_pass:
@@ -139,8 +140,8 @@ class ToolChainRunner():
 
             if command_result.timed_out:
                 timeout_msg = f"Toolchain timed out for test: {test.file}"
-                return TestResult(test=test, did_pass=False, did_panic=True, error_test=False, 
-                                                                 error_msg=timeout_msg)
+                return TestResult(test=test, did_pass=False, did_panic=True, error_test=False,
+                                  gen_output=b'', failing_step=step.name, error_msg=timeout_msg)
             
             child_process : CompletedProcess = command_result.subprocess
             if not child_process:
@@ -150,7 +151,7 @@ class ToolChainRunner():
                 if step.allow_error:
                     return self.get_test_result(test, command_result.subprocess, test.expected_out)
                 return TestResult(test=test, did_pass=False, error_test=False,
-                                    gen_output=child_process.stderr)
+                                  failing_step=step.name, gen_output=child_process.stderr)
 
             elif last_step:
                 if output_file and not os.path.exists(output_file):
@@ -185,10 +186,10 @@ class ToolChainRunner():
             diff = precise_diff(subps_result.stdout, expected_out)
             if not diff: 
                 return TestResult(test=test, did_pass=True, error_test=False, time=time,
-                                gen_output=subps_result.stdout)
+                                  gen_output=subps_result.stdout)
             else:
                 return TestResult(test=test, did_pass=False, error_test=False,
-                                  gen_output=subps_result.stdout)
+                                  failing_step="stdout diff", gen_output=subps_result.stdout)
         else:
             # Error Test: Take lenient diff from only stderr 
             ct_diff = lenient_diff(subps_result.stderr, expected_out, compile_time_pattern)
@@ -201,7 +202,7 @@ class ToolChainRunner():
                                   gen_output=subps_result.stderr)
             else:
                 return TestResult(test=test, did_pass=False, error_test=True, diff=ct_diff,
-                                  gen_output=subps_result.stderr)
+                                  failing_step="stderr diff", gen_output=subps_result.stderr)
 
     @staticmethod
     def replace_env_vars(cmd: Command) -> Command:
