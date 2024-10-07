@@ -91,7 +91,7 @@ class TestHarness:
                 feedback_file.write("\n")
 
     def checkpointed(self, check, checkpoint_data, index, key):
-        if self.cli_args.restore and (check == checkpoint_data[index][key]):
+        if check == checkpoint_data[index][key]:
             try:
                 checkpoint_data[index + 1]
                 return True
@@ -125,7 +125,7 @@ class TestHarness:
             # Run the toolchains
             for i, toolchain in enumerate(self.config.toolchains):
                 # Check if we have this toolchain checkpointed
-                if self.checkpointed(toolchain.name, results_json, i, 'toolchain'):
+                if self.cli_args.restore and self.checkpointed(toolchain.name, results_json, i, 'toolchain'):
                     continue
 
                 tc_runner = ToolChainRunner(toolchain, self.cli_args.timeout)
@@ -133,7 +133,7 @@ class TestHarness:
                 print(f"Toolchain: {toolchain.name}")
                 for j, def_exe in enumerate(defending_exes):
                     # Check if we have this defender checkpointed
-                    if self.checkpointed(def_exe.id, results_json[i]['toolchainResults'], j, 'defender'):
+                    if self.cli_args.restore and self.checkpointed(def_exe.id, results_json[i]['toolchainResults'], j, 'defender'):
                         continue
 
                     def_json = {"defender": def_exe.id, "defenderResults": []}
