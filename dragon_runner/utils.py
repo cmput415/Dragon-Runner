@@ -68,7 +68,7 @@ def file_to_str(file: str, max_bytes=1024) -> str:
     
     half = (max_bytes - 3) // 2 
     truncated_bytes = bytes_data[:half] + \
-        b'\n<Dragon-Runner has omitted the middle of this test for brevity>\n' + \
+        b'\n<Omitted the middle of this test for brevity>\n' + \
         bytes_data[-half:]
     
     return bytes_to_str(truncated_bytes)
