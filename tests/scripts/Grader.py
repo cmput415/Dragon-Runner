@@ -8,20 +8,29 @@ COMPETITIVE_WEIGHT  = 0.2
 TA_WEIGHT           = 0.5
 SOLUTION            = "solution"
 
+def to_float(to_convert) -> float:
+    """Helper function to convert fraction strings to floating point."""
+    try:
+        return float(Fraction(to_convert))
+    except ValueError:
+        return float(to_convert)
+
 def normalize_competetive_scores(tc_table):
     """
     Normalize the competative scores of a table relative to the max score.
     By convention the last row contains the total score for the toolchain  
     """
     n_rows = len(tc_table)
-    competitive_scores = tc_table[n_rows-1][1:]
-    max_score = max(competitive_scores) 
+    n_cols = len(tc_table[0])
+
+    raw_competitive_scores = tc_table[n_rows-1][1:]
+    max_score = max(raw_competitive_scores) 
     norm_competitive_scores = [
         round(COMPETITIVE_WEIGHT * (score / max_score), 3)
-        for score in competitive_scores
+        for score in raw_competitive_scores
     ]
-    tc_table[-1] = norm_competitive_scores
-    # print(tc_table[-1])
+    norm_scores_row = ["Normalized Points (20% Weight)"] + norm_competitive_scores
+    tc_table.append(norm_scores_row)
 
 def average_toolchain_tables(tables):
     """
@@ -33,8 +42,9 @@ def average_toolchain_tables(tables):
     for table in tables:
         assert len(table) == n_rows, "num rows differ"
         assert len(table[0]) == n_cols, "num cols differ"
-
-    avg_table = tables[0]
+    
+    avg_table = [row[:] for row in tables[0]]
+    avg_table[0][0] = "toolchain summary" 
     for i in range(1, n_rows):
         for j in range(1, n_cols):
             avg = 0 
@@ -53,7 +63,7 @@ def add_competitive_rows(table):
     n_cols = len(table[0])
 
     # Declare new rows
-    ta_points_row = ["TA Testing Score"] + [0] * (n_cols - 1)
+    ta_points_row = ["TA Testing Score (50% Weight)"] + [0] * (n_cols - 1)
     defensive_row = ["Defensive Points"] + [0] * (n_cols - 1)
     offensive_row = ["Offensive Points"] + [0] * (n_cols - 1)
     coherence_row = ["Coherence Points"] + [0] * (n_cols - 1)
@@ -79,24 +89,24 @@ def add_competitive_rows(table):
         # print(f"attacker: {attacker}\n oscore: {o_score} \ndscore: {d_score}\n cscore: {c_score}")
 
         # Populate the new rows
-        ta_points_row[j] = round(ta_score, 3)
+        ta_points_row[j] = round(ta_score * TA_WEIGHT, 3)
         defensive_row[j] = round(d_score * DEFENSIVE_PTS, 2)
         offensive_row[j] = round(o_score * OFFENSIVE_PTS, 2)
         coherence_row[j] = round(c_score, 3)
         total_row[j] = defensive_row[j] + offensive_row[j] + coherence_row[j]
 
     # Append new rows to the table
-    table.append(ta_points_row)
     table.append(defensive_row)
     table.append(offensive_row)
     table.append(coherence_row)
     table.append(total_row)
+    table.append(ta_points_row)
 
     return table
 
 if __name__ == "__main__":
 
-    input_files = ['riscv.csv', 'x86.csv', 'arm.csv', 'interpreter.csv'] 
+    input_files = ['interpreter.csv', 'riscv.csv', 'x86.csv', 'arm.csv'] 
     tc_tables = [] 
     for file in input_files:
         with open(file, 'r') as f:
@@ -106,14 +116,12 @@ if __name__ == "__main__":
 
     tc_avg = average_toolchain_tables(tc_tables)
     normalize_competetive_scores(tc_avg)
+    print(tc_avg)
 
-# --------------------------------------------------------------------------- #
-def to_float(to_convert) -> float:
-    """
-    Helper function to convert fraction strings to floating point
-    """
-    try:
-        return float(Fraction(to_convert))
-    except ValueError:
-        return float(to_convert)
-
+    output_file = './scalc-grades.csv'
+    with open(output_file, 'w') as f:
+        writer = csv.writer(f)
+        for table in tc_tables:
+            writer.writerows(table)
+            writer.writerow([]) # newline
+        writer.writerows(tc_avg)
