@@ -1,6 +1,7 @@
 import json
 import os
 import pathlib
+import sys
 from typing                     import Dict, List, Optional
 from dragon_runner.testfile     import TestFile
 from dragon_runner.errors       import ConfigError, Verifiable, ErrorCollection
@@ -90,16 +91,21 @@ class Executable(Verifiable):
     def source_env(self):
         """
         Source all env variables defined in this executables map
-        TODO: update the JSON config to make env variables first class 
+        TODO: Eventually, this should be replaced with a more generic JSON config format that
+        allows env variables to be first class.
         """
         if self.runtime:
             runtime_path = pathlib.Path(self.runtime) 
-            os.environ["LD_PRELOAD"] = str(runtime_path) 
-            os.environ["RT_PATH"] = str(runtime_path.parent)
-            if runtime_path.suffix.endswith(".so"):
-                os.environ["RT_LIB"] = runtime_path.stem.removeprefix('lib').removesuffix(".so") 
+            if sys.platform == "darwin":
+                preload_env = "DYLD_INSERT_LIBRARIES"
             else:
+                preload_env = "LD_PRELOAD"
+            os.environ[preload_env] = str(runtime_path)
+            os.environ["RT_PATH"] = str(runtime_path.parent)
+            if sys.platform == "darwin":
                 os.environ["RT_LIB"] = runtime_path.stem.removeprefix('lib').removesuffix(".dynlib") 
+            else:
+                os.environ["RT_LIB"] = runtime_path.stem.removeprefix('lib').removesuffix(".so") 
 
     def to_dict(self) -> Dict:
         return {

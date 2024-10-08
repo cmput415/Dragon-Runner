@@ -270,7 +270,6 @@ def precise_diff(produced: bytes, expected: bytes) -> str:
         return ""
     return diff_bytes(produced, expected)
 
-
 def lenient_diff(produced: bytes, expected: bytes, pattern: str) -> str:
     """
     Perform a lenient diff on error messages, using the pattern as a mask/filter.
