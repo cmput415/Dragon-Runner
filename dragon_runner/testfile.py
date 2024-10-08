@@ -94,7 +94,6 @@ class TestFile:
             return self.get_file_bytes(check_file_path)
         
         # default expect empty output
-        print("NO EXPECTED OUTPUPT FOUND", self.file)
         return b''
         
     def get_input_stream(self) -> bytes:

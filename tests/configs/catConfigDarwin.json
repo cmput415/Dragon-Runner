@@ -1,0 +1,29 @@
+{
+  "testDir": "../packages/CPackage",
+  "testedExecutablePaths": {
+    "gcc": "/usr/bin/gcc"
+  },
+  "toolchains": {
+    "GCC-toolchain": [
+      {
+        "stepName": "compile",
+        "executablePath": "$EXE",
+        "arguments": ["$INPUT", "-o", "$OUTPUT"],
+        "output": "/tmp/test.o",
+        "allowError": true
+      },
+      {
+        "stepName": "cat-object",
+        "executablePath": "/bin/cat",
+        "arguments": ["$INPUT"]
+      },
+      {
+        "stepName": "run",
+        "executablePath": "$INPUT",
+        "arguments": [],
+        "usesInStr": true,
+        "allowError": true
+      }
+    ]
+  }
+}
