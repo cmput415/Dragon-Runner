@@ -6,9 +6,8 @@ import time
 import sys
 from subprocess                 import TimeoutExpired, CompletedProcess
 from io                         import BytesIO
-from typing                     import List, Dict, Optional, Union
+from typing                     import List, Dict, Optional
 from dataclasses                import dataclass, asdict
-from difflib                    import Differ
 from colorama                   import Fore, init
 from dragon_runner.testfile     import TestFile 
 from dragon_runner.config       import Executable, ToolChain
@@ -241,6 +240,29 @@ class ToolChainRunner():
                 resolved.append(arg)
         return Command(resolved)
 
+def diff_strings(s1, s2):
+    """
+    The difflib library appears to have an infinite recursion bug.
+    It is simple to write our own.
+    """
+    result = []
+    i, j = 0, 0
+    while i < len(s1) and j < len(s2):
+        if s1[i] != s2[j]:
+            result.append(f"-{s1[i]}")
+            result.append(f"+{s2[j]}")
+        else:
+            result.append(f" {s1[i]}")
+        i += 1
+        j += 1
+    while i < len(s1):
+        result.append(f"-{s1[i]}")
+        i += 1
+    while j < len(s2):
+        result.append(f"+{s2[j]}")
+        j += 1 
+    return ''.join(result)
+
 def precise_diff(produced: BytesIO, expected: BytesIO) -> str:
     """
     Return the difference of two byte strings, otherwise empty string 
@@ -251,14 +273,7 @@ def precise_diff(produced: BytesIO, expected: BytesIO) -> str:
     # identical strings implies no diff 
     if produced_str == expected_str:
         return ""
-
-    try:
-        differ = Differ()
-        diff = list(differ.compare(produced_str.splitlines(), expected_str.splitlines()))
-        return color_diff(diff)
-    except RecursionError as e:
-        log(f"Encountered difflib error: {e}")
-        return "Diff to long to display. Likely because of an infinite print loop."
+    return diff_strings(produced_str, expected_str)
 
 def lenient_diff(produced: BytesIO, expected: BytesIO, pattern: str) -> str:
     """
@@ -274,15 +289,7 @@ def lenient_diff(produced: BytesIO, expected: BytesIO, pattern: str) -> str:
     # If the masked strings are identical, return an empty string (no diff)
     if produced_masked == expected_masked:
         return ""
-
-    try:
-        # If the masked strings are different, generate a diff
-        differ = Differ()
-        diff = list(differ.compare(produced_masked.splitlines(), expected_masked.splitlines()))
-        return color_diff(diff)
-    except RecursionError as e:
-        log(f"Encountered difflib error: {e}")
-        return "Diff to long to display. Likely because of an infinite print loop."
+    return diff_strings(produced_str, expected_str)
 
 def color_diff(diff_lines: list) -> str:
     """
