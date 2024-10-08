@@ -1,5 +1,5 @@
+import sys
 
-# test_toolchain.py
 from dragon_runner.runner import ToolChainRunner, TestResult
 from dragon_runner.config import Config
 
@@ -20,7 +20,10 @@ def test_gcc_toolchain_success(config_factory):
     run_tests_for_config(config, expected_result=True)
 
 def test_cat_toolchain_success(config_factory):
-    config = config_factory("catConfig.json")
+    if sys.platform == "darwin":
+        config = config_factory("catConfigDarwin.json")
+    else:
+        config = config_factory("catConfig.json")
     run_tests_for_config(config, expected_result=True)
 
 def test_gcc_toolchain_failures(config_factory):
