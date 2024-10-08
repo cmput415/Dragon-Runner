@@ -195,10 +195,7 @@ def load_config(config_path: str) -> Optional[Config]:
     """
     if not os.path.exists(config_path):
         return None
-    try:
-        with open(config_path, 'r') as config_file:
-            config_data = json.load(config_file)
-        return Config(config_path, config_data)
-    except Exception as e:
-        log(f"Failed to create the JSON configuration with error: {e}")
-        return None
+    
+    with open(config_path, 'r') as config_file:
+        config_data = json.load(config_file)
+    return Config(config_path, config_data)

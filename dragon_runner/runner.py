@@ -69,7 +69,7 @@ class TestResult:
 
         level = 3 if self.did_pass else 2
         log(f"==> Expected Out ({self.test.expected_out_bytes} bytes):", indent=4, level=level)
-        log_multiline(self.test.expected_out.getvalue(), level=level, indent=6)
+        log_multiline(self.test.expected_out, level=level, indent=6)
         log(f"==> Generated Out ({len(self.gen_output)} bytes):", indent=4, level=level)
         log_multiline(self.gen_output, level=level, indent=6)
 
@@ -79,18 +79,18 @@ class ToolChainRunner():
         self.timeout    = timeout
         self.env        = env
 
-    def run_command(self, command: Command, stdin: BytesIO) -> CommandResult:
+    def run_command(self, command: Command, stdin: bytes) -> CommandResult:
         """
         execute a resolved command
-        """        
+        """
+        assert isinstance(stdin, bytes), "parameter type check"
         env = os.environ.copy()
         stdout = subprocess.PIPE
         stderr = subprocess.PIPE
-        input_bytes = stdin.getvalue()
 
         start_time = time.time()
         try:
-            result = subprocess.run(command.args, env=env, input=input_bytes, stdout=stdout,
+            result = subprocess.run(command.args, env=env, input=stdin, stdout=stdout,
                                     stderr=stderr, check=False, timeout=self.timeout)
             wall_time = time.time() - start_time
             return CommandResult(subprocess=result, exit_status=result.returncode, time=wall_time, timed_out=False)
@@ -125,7 +125,7 @@ class ToolChainRunner():
 
         for index, step in enumerate(self.tc):
             last_step       = index == len(self.tc) - 1
-            input_stream    = test.get_input_stream() if step.uses_ins else BytesIO(b'')
+            input_stream    = test.get_input_stream() if step.uses_ins else b'' 
             output_file     = self.resolve_output_file(step) 
             command         = self.resolve_command(step, MagicParams(exe.exe_path, input_file, output_file))
             command_result  = self.run_command(command, input_stream)

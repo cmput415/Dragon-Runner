@@ -18,14 +18,16 @@ class TestFile:
         self.comment_syntax         = comment_syntax            # default C99 //
         self.expected_out           = self.get_expected_out()   # fill expected output
         self.input_stream           = self.get_input_stream()   # fill std input stream
-        self.expected_out_bytes     = len(self.expected_out.getvalue())
-        self.input_stream_bytes     = len(self.input_stream.getvalue())
+        self.expected_out_bytes     = len(self.expected_out)
+        self.input_stream_bytes     = len(self.input_stream)
     
-    def get_file_bytes(self, file_path: str) -> BytesIO:
+    def get_file_bytes(self, file_path: str) -> bytes:
         with open(file_path, "rb") as f:
-            return BytesIO(f.read())
+            file_bytes = f.read()
+            assert isinstance(file_bytes, bytes), "expected bytes"
+            return file_bytes 
 
-    def get_directive_contents(self, directive_prefix: str) -> Optional[BytesIO]:
+    def get_directive_contents(self, directive_prefix: str) -> Optional[bytes]:
         """
         Look into the testfile itself for contents defined in directives.
         Directives can appear anywhere in a line, as long as they're preceded by a comment syntax.
@@ -48,10 +50,14 @@ class TestFile:
                 contents.write(rhs_bytes)                
                 first_match = False
         
-        contents.seek(0)    
-        return contents if contents.getvalue() else None
+        contents.seek(0)
+        if contents:
+            content_bytes = contents.getvalue()
+            assert isinstance(content_bytes, bytes), "directive content not of type bytes"
+            return content_bytes     
+        return None
 
-    def get_file_contents(self, file_suffix, symmetric_dir) -> Optional[BytesIO]:
+    def get_file_contents(self, file_suffix, symmetric_dir) -> Optional[bytes]:
         """
         Look into a symetric directory and current directory for a file with an
         identical file path but differnt suffix.
@@ -67,7 +73,7 @@ class TestFile:
         
         return None
 
-    def get_expected_out(self) -> BytesIO:
+    def get_expected_out(self) -> bytes:
         """
         Load the expected output for a test into a byte stream
         """
@@ -86,9 +92,9 @@ class TestFile:
             return self.get_file_bytes(check_file_path)
         
         # default expect empty output
-        return BytesIO()
+        return b''
         
-    def get_input_stream(self) -> BytesIO:
+    def get_input_stream(self) -> bytes:
         """
         Load the input stream for a test into a byte stream
         """
@@ -107,7 +113,7 @@ class TestFile:
             return self.get_file_bytes(check_file_path)
         
         # default expect empty output
-        return BytesIO()
+        return b''
     
     def __repr__(self):
         max_test_name_length = 30
