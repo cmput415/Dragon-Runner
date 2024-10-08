@@ -5,14 +5,14 @@ import json
 import time
 import sys
 from subprocess                 import TimeoutExpired, CompletedProcess
-from io                         import BytesIO
 from typing                     import List, Dict, Optional
 from dataclasses                import dataclass, asdict
 from colorama                   import Fore, init
 from dragon_runner.testfile     import TestFile 
 from dragon_runner.config       import Executable, ToolChain
 from dragon_runner.log          import log, log_delimiter, log_multiline
-from dragon_runner.utils        import make_tmp_file, bytes_to_str, file_to_bytes
+from dragon_runner.utils        import make_tmp_file, bytes_to_str,\
+                                       file_to_bytes, str_to_bytes
 from dragon_runner.toolchain    import Step
 
 init(autoreset=True)
@@ -83,7 +83,6 @@ class ToolChainRunner():
         """
         execute a resolved command
         """
-        assert isinstance(stdin, bytes), "parameter type check"
         env = os.environ.copy()
         stdout = subprocess.PIPE
         stderr = subprocess.PIPE
@@ -172,8 +171,6 @@ class ToolChainRunner():
             (F,T) If tc successful, exit non zero and all lenient diffs on stderr fail
             (F,F) If tc not successful
         """
-        assert isinstance(subps_result.stdout, bytes) and isinstance(expected_out, bytes), "test result received non-bytes"
-
         # define capture patterns for lenient diff
         compile_time_pattern = r'.*?(Error on line \d+):?.*' 
         runtime_pattern = r'\s*(\w+Error):?.*'
@@ -273,13 +270,15 @@ def precise_diff(produced: bytes, expected: bytes) -> str:
         return ""
     return diff_bytes(produced, expected)
 
-def lenient_diff(produced: BytesIO, expected: BytesIO, pattern: str) -> str:
+
+def lenient_diff(produced: bytes, expected: bytes, pattern: str) -> str:
     """
     Perform a lenient diff on error messages, using the pattern as a mask/filter.
+    Unfortunately we have to convert from and back to bytes in order to apply regex.
     """
     produced_str = bytes_to_str(produced).strip()
     expected_str = bytes_to_str(expected).strip()
-    
+
     # Apply the mask/filter to both strings
     produced_masked = re.sub(pattern, r'\1', produced_str, flags=re.IGNORECASE | re.DOTALL)
     expected_masked = re.sub(pattern, r'\1', expected_str, flags=re.IGNORECASE | re.DOTALL)
@@ -287,7 +286,7 @@ def lenient_diff(produced: BytesIO, expected: BytesIO, pattern: str) -> str:
     # If the masked strings are identical, return an empty string (no diff)
     if produced_masked == expected_masked:
         return ""
-    return diff_bytes(produced_str, expected_str)
+    return diff_bytes(str_to_bytes(produced_str), str_to_bytes(expected_str))
 
 def color_diff(diff_lines: list) -> str:
     """

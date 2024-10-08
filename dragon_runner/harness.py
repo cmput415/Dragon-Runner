@@ -1,6 +1,5 @@
 import json
 import pandas as pd
-from io                     import BytesIO
 from colorama               import Fore
 from typing                 import List
 from dragon_runner.cli      import CLIArgs
@@ -78,8 +77,6 @@ class TestHarness:
         Give full feedback to a defender for all the tests they failed
         """
         def trim_bytes(data: bytes, max_bytes: int = 512) -> bytes:
-            if isinstance(data, BytesIO):
-                data = data.getvalue()
             trimmed = data[:max_bytes]
             if len(data) > max_bytes:
                 trimmed += b"\n... (output trimmed to %d bytes)" % max_bytes
@@ -87,10 +84,6 @@ class TestHarness:
 
         with open(file, 'a+') as feedback_file:
             if not result.did_pass:
-                if isinstance(result.gen_output, BytesIO):
-                    #TODO: Figure out why some results get passed in as BytesIO not bytes 
-                    result.gen_output = result.gen_output.getvalue()
-
                 feedback_file.write(
                     f"Test: {result.test.file}\n"\
                     + "Test contents:\n" + '-'*40 + '\n' + file_to_str(

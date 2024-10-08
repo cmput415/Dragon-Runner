@@ -1,6 +1,5 @@
 import os
 import sys
-from io import BytesIO
 from dragon_runner.utils import bytes_to_str
 
 class Logger:
@@ -39,7 +38,3 @@ def log(*args, level=0, indent=0, **kwargs):
 def log_delimiter(title: str, level=0, indent=0):
     delimiter = '-' * 20
     log(delimiter + ' ' + title + ' ' + delimiter, level=level, indent=indent)
-
-def log_bytes(bytes: BytesIO, level=0, indent=0):
-    bytes_str = bytes_to_str(bytes)
-    log_multiline(str(bytes_str), level=level, indent=indent)

@@ -43,7 +43,7 @@ def bytes_to_str(data: bytes, encoding: str='utf-8') -> Optional[str]:
     """
     Convert bytes into a string.  
     """
-    assert isinstance(data, bytes)
+    assert isinstance(data, bytes), "Supplied bytes that are not of type bytes."
     try:
         return data.decode(encoding)
     except UnicodeDecodeError:
@@ -86,7 +86,7 @@ def bytes_to_file(file: str, data: bytes) -> Optional[str]:
     """
     Write bytes directly into a file 
     """
-    assert isinstance(data, bytes)
+    assert isinstance(data, bytes), "Supplied bytes that are not of type bytes."
     try:
         with open(file, 'w') as f:
             f.write(bytes_to_str(data))
