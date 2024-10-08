@@ -78,6 +78,8 @@ class TestHarness:
         Give full feedback to a defender for all the tests they failed
         """
         def trim_bytes(data: bytes, max_bytes: int = 512) -> bytes:
+            if isinstance(data, BytesIO):
+                data = data.getvalue()
             trimmed = data[:max_bytes]
             if len(data) > max_bytes:
                 trimmed += b"\n... (output trimmed to %d bytes)" % max_bytes
@@ -93,7 +95,7 @@ class TestHarness:
                     f"Test: {result.test.file}\n"\
                     + "Test contents:\n" + '-'*40 + '\n' + file_to_str(
                                     result.test.path, max_bytes=512) + '\n' + '-'*40 + '\n'\
-                    + "Expected Output: " + str(result.test.expected_out.getvalue()) + '\n'\
+                    + "Expected Output: " + str(trim_bytes(result.test.expected_out)) + '\n'\
                     + "Generated Output: " + str(trim_bytes(result.gen_output)) + '\n'
                 )
                 if result.error_msg:

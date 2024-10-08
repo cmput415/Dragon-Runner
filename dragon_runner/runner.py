@@ -67,15 +67,11 @@ class TestResult:
             fail_msg = "[E-FAIL] " if self.error_test else "[FAIL] "
             log(Fore.RED + fail_msg + Fore.RESET + f"{self.test.file}", indent=2, file=file)
 
-        if not self.did_pass and self.diff:
-            log("==> Diff:", indent=4, level=1)
-            log_multiline(self.diff, indent=6, level=1)
-
         level = 3 if self.did_pass else 2
         log(f"==> Expected Out ({self.test.expected_out_bytes} bytes):", indent=4, level=level)
-        log_multiline(bytes_to_str(self.test.expected_out), level=level, indent=6)
-        log(f"==> Expected Out ({self.test.expected_out_bytes} bytes):", indent=4, level=level)
-        log_multiline(bytes_to_str(b'hello\nworld'), level=level, indent=6)
+        log_multiline(self.test.expected_out.getvalue(), level=level, indent=6)
+        log(f"==> Generated Out ({len(self.gen_output)} bytes):", indent=4, level=level)
+        log_multiline(self.gen_output, level=level, indent=6)
 
 class ToolChainRunner():
     def __init__(self, tc: ToolChain, timeout: float, env: Dict[str, str]={}):
