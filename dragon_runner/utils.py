@@ -1,54 +1,64 @@
 import os
-import io
-import re
+import sys
 import tempfile
-from typing     import Optional, Tuple
-from io         import BytesIO
-from difflib    import Differ
-from colorama   import Fore, init
+from typing     import Optional
+from colorama   import init
 
 # Initialize colorama
 init(autoreset=True)
 
 def resolve_relative_path(rel_path: str, dir: str) -> str:
     """
-    Resolve relative path into an absolute path w.r.t dir
+    Resolve relative path into an absolute path w.r.t dir.
     """
     if not os.path.isdir(dir):
         return ""
     return os.path.abspath(os.path.join(dir, rel_path))
 
-def make_tmp_file(content: BytesIO) -> str:
+def make_tmp_file(content: bytes) -> str:
     """
-    Create a file in tmp with the bytes from content
-    """ 
-    with tempfile.NamedTemporaryFile(delete=False) as tmp:
-        tmp.write(content.getvalue())
-        os.chmod(tmp.name, 0o700)
-        return tmp.name
+    Create a file in tmp with the bytes from content.
+    """
+    try: 
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            tmp.write(content)
+            os.chmod(tmp.name, 0o700)
+            return tmp.name
+    except Exception as e:
+        print(f"Failed to make temporary file with error: {e}", file=sys.stderr)
 
-def str_to_bytes(string: str, chop_newline: bool=False) -> bytes:
- 
+def str_to_bytes(string: str, chop_newline: bool=False) -> Optional[bytes]:
+    """
+    Convert a string to bytes. Optionally chop off the newline. Used for
+    directive parsing.
+    """
     if chop_newline and string.endswith('\n'):
         string = string[:-1]
+    try:
+        return string.encode('utf-8')
+    except UnicodeEncodeError:
+        return None
 
-    bytes_io = BytesIO(string.encode('utf-8'))
-    bytes_io.seek(0)
-    return bytes_io.getvalue()
-
-def bytes_to_str(data, encoding: str='utf-8') -> str:
-    if isinstance(data, BytesIO):
-        data.seek(0)
-        data = data.getvalue()
+def bytes_to_str(data: bytes, encoding: str='utf-8') -> Optional[str]:
+    """
+    Convert bytes into a string.  
+    """
+    assert isinstance(data, bytes)
     try:
         return data.decode(encoding)
-    except:
+    except UnicodeDecodeError:
         return str(data)
+    except:
+        return None
 
-def file_to_bytes(file: str) -> Optional[BytesIO]:
+def file_to_bytes(file: str) -> Optional[bytes]:
+    """
+    Read a file in binary mode and return the bytes inside.
+    Return None if an exception is thrown.
+    """
     try:
         with open(file, 'rb') as f:
-            return BytesIO(f.read())
+            return f.read()
     except Exception as e:
         print(f"Reading bytes from file failed with: {e}")
         return None
@@ -58,25 +68,28 @@ def file_to_str(file: str, max_bytes=1024) -> str:
     return file in string form, with middle contents trucated if
     size exceeds max_bytes
     """ 
-    bytes_io = file_to_bytes(file)
-    if bytes_io is None:
+    file_bytes = file_to_bytes(file)
+    if file_bytes is None:
         return ""
     
-    bytes_data = bytes_io.getvalue()
-    if len(bytes_data) <= max_bytes:
-        return bytes_to_str(bytes_data)
+    if len(file_bytes) <= max_bytes:
+        return bytes_to_str(file_bytes)
     
     half = (max_bytes - 3) // 2 
-    truncated_bytes = bytes_data[:half] + \
-        b'\n<Omitted the middle of this test for brevity>\n' + \
-        bytes_data[-half:]
+    truncated_bytes = file_bytes[:half] + \
+        b'\n{{ Omitted middle bytes for brevity }}\n' + \
+        file_bytes[-half:]
     
     return bytes_to_str(truncated_bytes)
 
-def bytes_to_file(file: str, bytes: BytesIO) -> Optional[str]:
+def bytes_to_file(file: str, data: bytes) -> Optional[str]:
+    """
+    Write bytes directly into a file 
+    """
+    assert isinstance(data, bytes)
     try:
         with open(file, 'w') as f:
-            f.write(bytes_to_str(bytes))
+            f.write(bytes_to_str(data))
             return file
     except Exception as e:
         print(f"Writting bytes to file failed with: {e}")

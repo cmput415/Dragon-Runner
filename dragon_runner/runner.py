@@ -144,7 +144,7 @@ class ToolChainRunner():
 
             elif child_process.returncode != 0:
                 if step.allow_error:
-                    return self.get_test_result(test, command_result.subprocess, test.expected_out)
+                    return self.get_test_result(test, child_process, test.expected_out)
                 return TestResult(test=test, did_pass=False, error_test=False,
                                   failing_step=step.name, gen_output=child_process.stderr)
 
@@ -160,10 +160,10 @@ class ToolChainRunner():
             
             else: 
                 # set up the next steps input file
-                input_file = output_file or make_tmp_file(BytesIO(child_process.stdout))
+                input_file = output_file or make_tmp_file(child_process.stdout)
 
     @staticmethod 
-    def get_test_result(test: TestFile, subps_result: CompletedProcess, expected_out: BytesIO, time=0) -> TestResult:
+    def get_test_result(test: TestFile, subps_result: CompletedProcess, expected_out: bytes, time=0) -> TestResult:
         """
         Determine the test result based on ToolChainResult and expected output.
         Result Rules:
@@ -172,32 +172,37 @@ class ToolChainRunner():
             (F,T) If tc successful, exit non zero and all lenient diffs on stderr fail
             (F,F) If tc not successful
         """
+        assert isinstance(subps_result.stdout, bytes) and isinstance(expected_out, bytes), "test result received non-bytes"
+
         # define capture patterns for lenient diff
         compile_time_pattern = r'.*?(Error on line \d+):?.*' 
         runtime_pattern = r'\s*(\w+Error):?.*'
+        
+        generated_stdout = subps_result.stdout
+        generated_stderr = subps_result.stderr
 
         if subps_result.returncode == 0:
             # Regular test: Take precise diff from only stdout
-            diff = precise_diff(subps_result.stdout, expected_out)
+            diff = precise_diff(generated_stdout, expected_out)
             if not diff: 
                 return TestResult(test=test, did_pass=True, error_test=False, time=time,
-                                  gen_output=subps_result.stdout)
+                                  gen_output=generated_stdout)
             else:
                 return TestResult(test=test, did_pass=False, error_test=False,
-                                  failing_step="stdout diff", gen_output=subps_result.stdout)
+                                  failing_step="stdout diff", gen_output=generated_stdout)
         else:
             # Error Test: Take lenient diff from only stderr 
-            ct_diff = lenient_diff(subps_result.stderr, expected_out, compile_time_pattern)
-            rt_diff = lenient_diff(subps_result.stderr, expected_out, runtime_pattern)
+            ct_diff = lenient_diff(generated_stderr, expected_out, compile_time_pattern)
+            rt_diff = lenient_diff(generated_stderr, expected_out, runtime_pattern)
             if not ct_diff:
                 return TestResult(test=test, did_pass=True, error_test=True,
-                                  gen_output=subps_result.stderr)
+                                  gen_output=generated_stderr)
             elif not rt_diff:
                 return TestResult(test=test, did_pass=True, error_test=True,
-                                  gen_output=subps_result.stderr)
+                                  gen_output=generated_stderr)
             else:
                 return TestResult(test=test, did_pass=False, error_test=True, diff=ct_diff,
-                                  failing_step="stderr diff", gen_output=subps_result.stderr)
+                                  failing_step="stderr diff", gen_output=generated_stderr)
 
     @staticmethod
     def replace_env_vars(cmd: Command) -> Command:
@@ -236,7 +241,7 @@ class ToolChainRunner():
                 resolved.append(arg)
         return Command(resolved)
 
-def diff_strings(s1, s2):
+def diff_bytes(s1: bytes, s2: bytes):
     """
     The difflib library appears to have an infinite recursion bug.
     It is simple to write our own.
@@ -259,17 +264,14 @@ def diff_strings(s1, s2):
         j += 1 
     return ''.join(result)
 
-def precise_diff(produced: BytesIO, expected: BytesIO) -> str:
+def precise_diff(produced: bytes, expected: bytes) -> str:
     """
     Return the difference of two byte strings, otherwise empty string 
     """
-    produced_str = bytes_to_str(produced)
-    expected_str = bytes_to_str(expected)
-
     # identical strings implies no diff 
-    if produced_str == expected_str:
+    if produced == expected:
         return ""
-    return diff_strings(produced_str, expected_str)
+    return diff_bytes(produced, expected)
 
 def lenient_diff(produced: BytesIO, expected: BytesIO, pattern: str) -> str:
     """
@@ -285,7 +287,7 @@ def lenient_diff(produced: BytesIO, expected: BytesIO, pattern: str) -> str:
     # If the masked strings are identical, return an empty string (no diff)
     if produced_masked == expected_masked:
         return ""
-    return diff_strings(produced_str, expected_str)
+    return diff_bytes(produced_str, expected_str)
 
 def color_diff(diff_lines: list) -> str:
     """

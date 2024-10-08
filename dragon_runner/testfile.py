@@ -44,6 +44,8 @@ class TestFile:
                  
                 rhs_line = line.split(directive_prefix, 1)[1]
                 rhs_bytes = str_to_bytes(rhs_line, chop_newline=True)
+                if rhs_bytes is None:
+                    return None
                 if not first_match:
                     contents.write(b'\n')
 
@@ -92,6 +94,7 @@ class TestFile:
             return self.get_file_bytes(check_file_path)
         
         # default expect empty output
+        print("NO EXPECTED OUTPUPT FOUND", self.file)
         return b''
         
     def get_input_stream(self) -> bytes:
