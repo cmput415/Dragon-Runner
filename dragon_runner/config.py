@@ -8,6 +8,7 @@ from dragon_runner.errors       import ConfigError, Verifiable, ErrorCollection
 from dragon_runner.toolchain    import ToolChain
 from dragon_runner.utils        import resolve_relative_path
 from dragon_runner.log          import log
+from dragon_runner.cli          import CLIArgs
 
 class SubPackage():
     """
@@ -16,7 +17,11 @@ class SubPackage():
     def __init__(self, path: str): 
         self.path: str              = path
         self.name: str              = os.path.basename(path)
-        self.tests: List[TestFile]  = self.gather_tests()
+
+        if os.path.isdir(path):
+            self.tests: List[TestFile] = self.gather_tests()
+        else:
+            self.tests: List[TestFile] = [TestFile(path)]
 
     @staticmethod
     def is_test(test_path: str):
@@ -47,7 +52,11 @@ class Package():
         self.name: str      = os.path.basename(path)
         self.n_tests        = 0
         self.subpackages    = [] 
-        self.gather_subpackages()
+        
+        if os.path.isdir(path):
+            self.gather_subpackages()
+        else:
+            self.subpackages.append(SubPackage(path))
 
     def add_subpackage(self, spkg: SubPackage):
         """
@@ -117,8 +126,9 @@ class Config:
     """
     An in memory representation of the JSON configuration file which directs the tester. 
     """
-    def __init__(self, config_path: str, config_data: Dict):
+    def __init__(self, config_path: str, config_data: Dict, debug_package: Optional[str]):
         self.config_path        = config_path
+        self.debug_package      = debug_package
         self.test_dir           = resolve_relative_path(config_data['testDir'], 
                                                         os.path.dirname(config_path))
         self.executables        = self.parse_executables(config_data['testedExecutablePaths'],
@@ -151,8 +161,12 @@ class Config:
     def gather_packages(self) -> List[Package]:
         """
         Collect all top-level directories in testdir and create a package
-        """ 
+        """
         packages = []
+        if self.debug_package:
+            packages.append(Package(self.debug_package))
+            return packages
+
         for parent_path, dirs, _ in os.walk(self.test_dir):
             for dirname in dirs:
                 pkg_path = os.path.join(parent_path, dirname)
@@ -195,7 +209,7 @@ class Config:
     def __repr__(self) -> str:
         return json.dumps(self.to_dict(), indent=2)
 
-def load_config(config_path: str) -> Optional[Config]:
+def load_config(config_path: str, args: CLIArgs=None) -> Optional[Config]:
     """
     Load and parse the JSON configuration file.
     """
@@ -204,4 +218,5 @@ def load_config(config_path: str) -> Optional[Config]:
     
     with open(config_path, 'r') as config_file:
         config_data = json.load(config_file)
-    return Config(config_path, config_data)
+
+    return Config(config_path, config_data, args.debug_package if args else None)

@@ -13,7 +13,7 @@ def main():
     args: CLIArgs = parse_cli_args()
 
     # parse and verify the config
-    config = load_config(args.config_file)
+    config = load_config(args.config_file, args)
     if not config:
         log(f"Could not open config file: {args.config_file}")
         return 1
