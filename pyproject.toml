@@ -15,7 +15,7 @@ classifiers = ["Tester"]
 dependencies = [
     "colorama==0.4.6",
     "pytest==8.3.3",
-    "pandas==2.2.3"
+    "pandas"
 ]
 
 [project.scripts]

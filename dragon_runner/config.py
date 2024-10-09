@@ -96,7 +96,7 @@ class Executable(Verifiable):
             errors.add(ConfigError(f"Cannot find binary file: {self.exe_path}\
                                      in Executable: {self.id}"))
         return errors
-    
+
     def source_env(self):
         """
         Source all env variables defined in this executables map
@@ -111,11 +111,14 @@ class Executable(Verifiable):
                 preload_env = "LD_PRELOAD"
             os.environ[preload_env] = str(runtime_path)
             os.environ["RT_PATH"] = str(runtime_path.parent)
+            stem = runtime_path.stem
+            if stem.startswith('lib'):
+                stem = stem[3:]
             if sys.platform == "darwin":
-                os.environ["RT_LIB"] = runtime_path.stem.removeprefix('lib').removesuffix(".dynlib") 
+                os.environ["RT_LIB"] = stem.rsplit('.', 1)[0]  # Remove '.dynlib' suffix
             else:
-                os.environ["RT_LIB"] = runtime_path.stem.removeprefix('lib').removesuffix(".so") 
-
+                os.environ["RT_LIB"] = stem.rsplit('.', 1)[0]  # Remove '.so' suffix 
+    
     def to_dict(self) -> Dict:
         return {
             'id': self.id,

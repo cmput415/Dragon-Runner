@@ -20,6 +20,7 @@ Dragon-Runner inherits much of the previous testers design but with greater emph
 
 ## Building 
 
+Requires: `python >= 3.8`
 To get `dragon-runner` on your CLI build the package and install it locally with pip.
 
 ```
