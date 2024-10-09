@@ -12,8 +12,9 @@ from dragon_runner.testfile     import TestFile
 from dragon_runner.config       import Executable, ToolChain
 from dragon_runner.log          import log, log_delimiter, log_multiline
 from dragon_runner.utils        import make_tmp_file, bytes_to_str,\
-                                       file_to_bytes, str_to_bytes
+                                       file_to_bytes, str_to_bytes, truncated_bytes
 from dragon_runner.toolchain    import Step
+from dragon_runner.cli          import CLIArgs
 
 init(autoreset=True)
 
@@ -42,8 +43,8 @@ class CommandResult:
         if self.subprocess:
             stdout = self.subprocess.stdout
             stderr = self.subprocess.stderr
-            log(f"stdout ({len(stdout)} bytes):", stdout, indent=4, level=level)
-            log(f"stderr ({len(stderr)} bytes):", stderr, indent=4, level=level)
+            log(f"stdout ({len(stdout)} bytes):", truncated_bytes(stdout, max_bytes=512), indent=4, level=level)
+            log(f"stderr ({len(stderr)} bytes):", truncated_bytes(stderr, max_bytes=512), indent=4, level=level)
             log(f"exit code: {self.exit_status}", indent=4, level=level)
 
 @dataclass
@@ -59,10 +60,17 @@ class TestResult:
     failing_step: Optional[str]=None    # step the TC failed on
     gen_output: Optional[bytes]=None    # output of the test
 
-    def log(self, file=sys.stderr):
+    def log(self, file=sys.stderr, args: CLIArgs=None):
         if self.did_pass:
             pass_msg = "[E-PASS] " if self.error_test else "[PASS] "
-            log(Fore.GREEN + pass_msg + Fore.RESET + f"{self.test.file}", indent=2, file=file)
+            test_name = f"{self.test.file:<50}"     
+            if args and args.time and self.time is not None:
+                time_str = f"{self.time:.4f}"
+                time_with_unit = f"{time_str:>10} (s)" 
+            else:
+                time_with_unit = "" 
+            log_msg = f"{Fore.GREEN}{pass_msg}{Fore.RESET}{test_name}{time_with_unit}"
+            log(log_msg, indent=2, file=file)
         else:
             fail_msg = "[E-FAIL] " if self.error_test else "[FAIL] "
             log(Fore.RED + fail_msg + Fore.RESET + f"{self.test.file}", indent=2, file=file)
@@ -155,7 +163,7 @@ class ToolChainRunner():
                     output_file_contents = file_to_bytes(output_file)
                     child_process.stdout = output_file_contents
 
-                return self.get_test_result(test, child_process, test.expected_out)
+                return self.get_test_result(test, child_process, test.expected_out, time=round(command_result.time, 4))
             
             else: 
                 # set up the next steps input file

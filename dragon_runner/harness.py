@@ -45,7 +45,7 @@ class TestHarness:
                         sp_test_count = 0
                         for test in spkg.tests:
                             test_result: TestResult = tc_runner.run(test, exe)
-                            test_result.log() 
+                            test_result.log(args=self.cli_args) 
                             if test_result.did_pass:
                                 sp_pass_count += 1     
                             else:

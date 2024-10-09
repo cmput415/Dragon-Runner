@@ -63,6 +63,21 @@ def file_to_bytes(file: str) -> Optional[bytes]:
         print(f"Reading bytes from file failed with: {e}")
         return None
 
+def truncated_bytes(data: bytes, max_bytes: int = 1024) -> bytes:
+    """
+    Return a truncated version of the input bytes, with middle contents omitted if
+    size exceeds max_bytes. 
+    """
+    if len(data) <= max_bytes:
+        return data
+
+    omission_message = b'\n{{ omitted for brevity }}\n'
+    available_bytes = max_bytes - len(omission_message)
+    half = available_bytes // 2 
+    truncated = data[:half] + omission_message + data[-half:]
+    
+    return truncated
+
 def file_to_str(file: str, max_bytes=1024) -> str:
     """
     return file in string form, with middle contents trucated if
