@@ -19,6 +19,7 @@ def run_tests_for_config(config: Config, expected_result: bool):
                     for test in sp.tests:
                         result: TestResult = tc_runner.run(test, exe)
                         result.log()
+                        assert result.did_pass == expected_result
 
 TEST_DIR            = os.path.dirname(os.path.abspath(__file__))
 COMPILE_LIB_SCRIPT  = f"{TEST_DIR}/scripts/test-scripts/compile_lib.py"
