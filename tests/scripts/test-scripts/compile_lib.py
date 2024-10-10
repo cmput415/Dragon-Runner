@@ -6,6 +6,12 @@ import argparse
 def compile_shared_library(compiler, input_file, output_file, is_macos):
     flags = ["-fPIC"]
     if is_macos:
+        flags.extend([
+            "-dynamiclib",
+            "-arch", "arm64e",
+            "-install_name", "@rpath/" + os.path.basename(output_file),
+            "-mmacosx-version-min=11.0"
+        ])
         flags.extend(["-dynamiclib"])
     else:
         flags.extend(["-shared"])
