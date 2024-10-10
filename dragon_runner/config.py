@@ -2,6 +2,7 @@ import json
 import os
 import pathlib
 import sys
+from pathlib                    import Path
 from typing                     import Dict, List, Optional
 from dragon_runner.testfile     import TestFile
 from dragon_runner.errors       import ConfigError, Verifiable, ErrorCollection
@@ -104,20 +105,28 @@ class Executable(Verifiable):
         allows env variables to be first class.
         """
         if self.runtime:
-            runtime_path = pathlib.Path(self.runtime) 
+            runtime_path = Path(self.runtime)
+            runtime_dir = runtime_path.parent
+            rt_filename = runtime_path.stem
+            
             if sys.platform == "darwin":
-                preload_env = "DYLD_INSERT_LIBRARIES"
+                preload_env = {
+                    "DYLD_LIBRARY_PATH": str(runtime_dir),
+                    "DYLD_INSERT_LIBRARIES": str(runtime_path)
+                }
             else:
-                preload_env = "LD_PRELOAD"
-            os.environ[preload_env] = str(runtime_path)
-            os.environ["RT_PATH"] = str(runtime_path.parent)
-            stem = runtime_path.stem
-            if stem.startswith('lib'):
-                stem = stem[3:]
-            if sys.platform == "darwin":
-                os.environ["RT_LIB"] = stem.rsplit('.', 1)[0]  # Remove '.dynlib' suffix
-            else:
-                os.environ["RT_LIB"] = stem.rsplit('.', 1)[0]  # Remove '.so' suffix 
+                preload_env = {
+                    "LD_LIBRARY_PATH": str(runtime_dir),
+                    "LD_PRELOAD": str(runtime_path)
+                }
+
+            preload_env.update({
+                "RT_PATH": str(runtime_dir),
+                "RT_LIB": rt_filename[3:]
+            })
+
+            for key, value in preload_env.items():
+                os.environ[key] = value 
     
     def to_dict(self) -> Dict:
         return {
@@ -136,7 +145,7 @@ class Config:
         self.test_dir           = resolve_relative(config_data['testDir'],
                                                    os.path.abspath(config_path))
         self.executables        = self.parse_executables(config_data['testedExecutablePaths'],
-                                                         config_data.get('runtimes', ""))
+                                                   config_data.get('runtimes', ""))
         self.solution_exe       = config_data.get('solutionExecutable', None)
         self.toolchains         = self.parse_toolchains(config_data['toolchains'])
         self.error_collection   = self.verify()
@@ -150,9 +159,9 @@ class Config:
         def find_runtime(id) -> str:
             if not runtimes_data:
                 return ""
-            for key, value in runtimes_data.items():
-                if key == id :
-                    return value
+            for rt_id, rt_path in runtimes_data.items():
+                if rt_id == id :
+                    return os.path.abspath(resolve_relative(rt_path, self.config_path))
             return ""
         return [Executable(id, path, find_runtime(id)) for id, path in executables_data.items()]
     

@@ -1,0 +1,34 @@
+{
+  "testDir": "../packages/RuntimeCPackage",
+  "testedExecutablePaths": {
+    "gcc": "/usr/bin/gcc"
+  },
+  "runtimes": {
+    "gcc": "../lib/libfib.dylib"
+  },
+  "toolchains": {
+    "clang-runtime": [
+      {
+        "stepName": "clang",
+        "executablePath": "$EXE",
+        "arguments": ["-c", "$INPUT", "-o", "$OUTPUT"],
+        "output": "/tmp/prog.o"
+      },
+      {
+        "stepName": "compile",
+        "executablePath": "$EXE",
+        "arguments": ["$INPUT", "-o", "$OUTPUT", "-L$RT_PATH", "-l$RT_LIB"],
+        "output": "/tmp/prog"
+      },
+      {
+        "stepName": "run",
+        "executablePath": "$INPUT",
+        "arguments": [],
+        "usesInStr": true,
+        "allowError": true,
+        "usesRuntime": true
+      }
+    ]
+  } 
+}
+  

@@ -7,6 +7,7 @@ def run_tests_for_config(config: Config, expected_result: bool):
     assert config.packages is not None
     
     for exe in config.executables:
+        exe.source_env()
         for tc in config.toolchains:
             tc_runner = ToolChainRunner(tc, timeout=3.0)
             for pkg in config.packages:

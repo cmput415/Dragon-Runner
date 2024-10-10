@@ -1,4 +1,5 @@
 {
+  "testDir": "../packages/CPackage",
   "testedExecutablePaths": {
     "gcc": "/usr/bin/gcc"
   },
@@ -19,6 +20,5 @@
         "allowError": true
       }
     ]
-  },
-  "testDir": "../packages/CPackage"
+  }
 }

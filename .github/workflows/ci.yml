@@ -28,3 +28,6 @@ jobs:
 
       - name: run grade tests
         run: pytest tests/test_grader.py
+      
+      - name: run runtime tests
+        run: pytest tests/test_runtime.py

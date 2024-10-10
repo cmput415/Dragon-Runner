@@ -60,7 +60,7 @@ class TestResult:
     failing_step: Optional[str]=None    # step the TC failed on
     gen_output: Optional[bytes]=None    # output of the test
 
-    def log(self, file=sys.stderr, args: CLIArgs=None):
+    def log(self, file=sys.stdout, args: CLIArgs=None):
         if self.did_pass:
             pass_msg = "[E-PASS] " if self.error_test else "[PASS] "
             test_name = f"{self.test.file:<50}"     
@@ -80,6 +80,9 @@ class TestResult:
         log_multiline(self.test.expected_out, level=level, indent=6)
         log(f"==> Generated Out ({len(self.gen_output)} bytes):", indent=5, level=level)
         log_multiline(self.gen_output, level=level, indent=6)
+
+    def __repr__(self):
+        return "PASS" if self.did_pass else "FAIL"
 
 class ToolChainRunner():
     def __init__(self, tc: ToolChain, timeout: float, env: Dict[str, str]={}):
