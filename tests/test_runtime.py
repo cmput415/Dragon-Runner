@@ -36,7 +36,7 @@ def test_gcc_toolchain_success(config_factory, cli_factory):
         config = config_factory("runtimeConfigLinux.json")
 
     expected_lib=os.path.join(TEST_DIR, f"lib/{lib}")
-    
+
     if not os.path.exists(expected_lib):
         result = subprocess.run([sys.executable,
                                 COMPILE_LIB_SCRIPT,
