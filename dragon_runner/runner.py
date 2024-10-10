@@ -70,15 +70,15 @@ class TestResult:
             else:
                 time_with_unit = "" 
             log_msg = f"{Fore.GREEN}{pass_msg}{Fore.RESET}{test_name}{time_with_unit}"
-            log(log_msg, indent=2, file=file)
+            log(log_msg, indent=3, file=file)
         else:
             fail_msg = "[E-FAIL] " if self.error_test else "[FAIL] "
-            log(Fore.RED + fail_msg + Fore.RESET + f"{self.test.file}", indent=2, file=file)
+            log(Fore.RED + fail_msg + Fore.RESET + f"{self.test.file}", indent=3, file=file)
 
         level = 3 if self.did_pass else 2
-        log(f"==> Expected Out ({self.test.expected_out_bytes} bytes):", indent=4, level=level)
+        log(f"==> Expected Out ({self.test.expected_out_bytes} bytes):", indent=5, level=level)
         log_multiline(self.test.expected_out, level=level, indent=6)
-        log(f"==> Generated Out ({len(self.gen_output)} bytes):", indent=4, level=level)
+        log(f"==> Generated Out ({len(self.gen_output)} bytes):", indent=5, level=level)
         log_multiline(self.gen_output, level=level, indent=6)
 
 class ToolChainRunner():
@@ -213,7 +213,7 @@ class ToolChainRunner():
     def replace_env_vars(cmd: Command) -> Command:
         """
         Expand environment variables with the values from current shell
-        """   
+        """
         resolved = []
         for arg in cmd.args:
             matches = re.findall(r'\$(\w+)|\$\{(\w+)\}', arg)

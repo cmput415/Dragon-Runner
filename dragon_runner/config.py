@@ -93,8 +93,8 @@ class Executable(Verifiable):
     def verify(self) -> ErrorCollection:
         errors = ErrorCollection()
         if not os.path.exists(self.exe_path):
-            errors.add(ConfigError(f"Cannot find binary file: {self.exe_path}\
-                                     in Executable: {self.id}"))
+            errors.add(ConfigError(
+                f"Cannot find binary file: {self.exe_path} in Executable: {self.id}"))
         return errors
 
     def source_env(self):
@@ -218,8 +218,13 @@ def load_config(config_path: str, args: CLIArgs=None) -> Optional[Config]:
     """
     if not os.path.exists(config_path):
         return None
-    
-    with open(config_path, 'r') as config_file:
-        config_data = json.load(config_file)
+
+    try: 
+        with open(config_path, 'r') as config_file:
+            config_data = json.load(config_file)
+    except json.decoder.JSONDecodeError:
+        log("Config Error: Failed to parse config json")
+        return None
+    # except 
 
     return Config(config_path, config_data, args.debug_package if args else None)

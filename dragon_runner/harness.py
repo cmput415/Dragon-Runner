@@ -37,9 +37,11 @@ class TestHarness:
                 tc_pass_count = 0
                 tc_test_count = 0
                 for pkg in self.config.packages:
-                    log(f"Entering package {pkg.name}")
+                    pkg_pass_count = 0
+                    pkg_test_count = 0
+                    log(f"Entering package {pkg.name}", indent=1)
                     for spkg in pkg.subpackages:
-                        log(f"Entering subpackage {spkg.name}", indent=1)
+                        log(f"Entering subpackage {spkg.name}", indent=2)
                         sp_pass_count = 0
                         sp_test_count = 0
                         for test in spkg.tests:
@@ -50,9 +52,12 @@ class TestHarness:
                             else:
                                 self.failures.append(test_result) 
                             sp_test_count +=1 
-                        log("Subpackage Passed: ", sp_pass_count, "/", sp_test_count)
-                        tc_pass_count += sp_pass_count
-                        tc_test_count += sp_test_count
+                        log("Subpackage Passed: ", sp_pass_count, "/", sp_test_count, indent=2)
+                        pkg_pass_count += sp_pass_count
+                        pkg_test_count += sp_test_count
+                    log("Packaged Passed: ", pkg_pass_count, "/", pkg_test_count, indent=1)
+                    tc_pass_count += pkg_pass_count
+                    tc_test_count += pkg_test_count 
                 log("Toolchain Passed: ", tc_pass_count, "/", tc_test_count)
                 exe_pass_count += tc_pass_count
                 exe_test_count += tc_test_count

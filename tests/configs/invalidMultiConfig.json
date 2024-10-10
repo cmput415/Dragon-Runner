@@ -1,6 +1,7 @@
 {
+  "testDir": "../../DNE/packages/CPackage",
   "testedExecutablePaths": {
-    "gcc": "/usr/bin/gcc"
+    "gcc": "/usr/bin/gcc2"
   },
   "toolchains": {
     "GCC-toolchain": [
@@ -13,12 +14,11 @@
       },
       {
         "stepName": "run",
-        "executablePath": "$INPUT",
+        "executablePath": "/this/dne/bin",
         "arguments": [],
         "usesInStr": true,
         "allowError": true
       }
     ]
-  },
-  "testDir": "../packages/CPackage"
+  }
 }
