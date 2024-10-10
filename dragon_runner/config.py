@@ -110,12 +110,17 @@ class Executable(Verifiable):
             rt_filename = runtime_path.stem
             
             if sys.platform == "darwin":
-                preload_env = { "DYLD_INSERT_LIBRARIES": str(runtime_dir) }
+                preload_env = {
+                    "DYLD_LIBRARY_PATH": str(runtime_dir),
+                    "DYLD_INSERT_LIBRARIES": str(runtime_path)
+                }
             else:
-                preload_env = { "LD_LIBRARY_PATH": str(runtime_dir) }
+                preload_env = {
+                    "LD_LIBRARY_PATH": str(runtime_dir),
+                    "LD_PRELOAD": str(runtime_path)
+                }
 
             preload_env.update({
-                "LD_PRELOAD": str(runtime_path),
                 "RT_PATH": str(runtime_dir),
                 "RT_LIB": rt_filename[3:]
             })
