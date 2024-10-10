@@ -6,6 +6,8 @@ import argparse
 def compile_shared_library(compiler, input_file, output_file, is_macos):
     flags = ["-fPIC"]
     if is_macos:
+        # NOTE: These are the flags required to compile a dynamic library
+        # on the macos-latest github action runner as of 10/10/2024
         flags.extend([
             "-dynamiclib",
             "-arch", "arm64e",
