@@ -11,3 +11,5 @@ scratch/
 gazpreaConfig.json
 GeneratorConfig.json
 vcalcConfig.json
+
+tests/lib/*.so
