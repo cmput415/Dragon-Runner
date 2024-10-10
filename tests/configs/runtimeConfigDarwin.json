@@ -4,7 +4,7 @@
     "gcc": "/usr/bin/gcc"
   },
   "runtimes": {
-    "gcc": "../lib/libfib.dynlib"
+    "gcc": "../lib/libfib.dylib"
   },
   "toolchains": {
     "clang-runtime": [

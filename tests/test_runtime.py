@@ -29,7 +29,7 @@ def test_gcc_toolchain_success(config_factory, cli_factory):
     assert os.path.exists(COMPILE_LIB_SCRIPT), "missing library compiler script" 
 
     if sys.platform == "darwin":
-        lib = "libfib.dynlib"
+        lib = "libfib.dylib"
         config = config_factory("runtimeConfigDarwin.json")
     else:
         lib = "libfib.so"
