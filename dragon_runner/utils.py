@@ -7,13 +7,14 @@ from colorama   import init
 # Initialize colorama
 init(autoreset=True)
 
-def resolve_relative_path(rel_path: str, dir: str) -> str:
+def resolve_relative(relative_dir: str, abs_path: str) -> str:
     """
     Resolve relative path into an absolute path w.r.t dir.
     """
-    if not os.path.isdir(dir):
-        return ""
-    return os.path.abspath(os.path.join(dir, rel_path))
+    if os.path.isfile(abs_path):
+        abs_path = os.path.dirname(abs_path)
+    
+    return os.path.join(abs_path, relative_dir)
 
 def make_tmp_file(content: bytes) -> str:
     """

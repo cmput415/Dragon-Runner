@@ -6,7 +6,7 @@ from typing                     import Dict, List, Optional
 from dragon_runner.testfile     import TestFile
 from dragon_runner.errors       import ConfigError, Verifiable, ErrorCollection
 from dragon_runner.toolchain    import ToolChain
-from dragon_runner.utils        import resolve_relative_path
+from dragon_runner.utils        import resolve_relative
 from dragon_runner.log          import log
 from dragon_runner.cli          import CLIArgs
 
@@ -131,9 +131,10 @@ class Config:
     """
     def __init__(self, config_path: str, config_data: Dict, debug_package: Optional[str]):
         self.config_path        = config_path
+        self.config_data        = config_data
         self.debug_package      = debug_package
-        self.test_dir           = resolve_relative_path(config_data['testDir'], 
-                                                        os.path.dirname(config_path))
+        self.test_dir           = resolve_relative(config_data['testDir'],
+                                                   os.path.abspath(config_path))
         self.executables        = self.parse_executables(config_data['testedExecutablePaths'],
                                                          config_data.get('runtimes', ""))
         self.solution_exe       = config_data.get('solutionExecutable', None)
@@ -194,7 +195,7 @@ class Config:
         """
         ec = ErrorCollection()
         if not os.path.exists(self.test_dir):
-            ec.add(ConfigError(f"Cannot find test directory: {self.test_dir}"))  
+            ec.add(ConfigError(f"Cannot find test directory: {self.config_data['testDir']}"))  
         for exe in self.executables:
             ec.extend(exe.verify().errors)       
         for tc in self.toolchains:
