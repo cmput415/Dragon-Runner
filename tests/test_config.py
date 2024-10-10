@@ -1,5 +1,4 @@
 import os
-from dragon_runner.config import Config
 
 def test_valid_config(config_factory): 
     config = config_factory("gccPassConfig.json")

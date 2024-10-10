@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
-from dragon_runner.config import load_config, Config
 from dragon_runner.cli import CLIArgs
+from dragon_runner.config import load_config, Config
 
 def get_config_path(config_name: str) -> Path:
     return Path(__file__).parent / "configs" / config_name

@@ -1,7 +1,6 @@
-import json
-import pandas as pd
+import csv
 from colorama               import Fore
-from typing                 import List
+from typing                 import List, Dict
 from dragon_runner.cli      import CLIArgs
 from dragon_runner.config   import Config, Executable, Package
 from dragon_runner.log      import log
@@ -99,22 +98,19 @@ class TestHarness:
 
     @staticmethod
     def create_tc_dataframe(tc_name: str, defenders: List[Executable],
-                                          attackers: List[Package]) -> pd.DataFrame:
+                            attackers: List[Package]) -> Dict[str, Dict[str, str]]:
         """
         Create an empty toolchain table with labels for defenders and attackers 
         """ 
-        row_labels = [exe.id for exe in defenders]
-        col_labels = [pkg.name for pkg in attackers]
-        df = pd.DataFrame(index=row_labels, columns=col_labels) 
-        df.index.name = tc_name
+        df = {exe.id: {pkg.name: '' for pkg in attackers} for exe in defenders}
         return df
-    
+
     @staticmethod
-    def create_timing_dataframe() -> pd.DataFrame:
+    def create_timing_dataframe() -> Dict[str, Dict[str, float]]:
         """
-        TODO: Creating timing DF for Gazprea II
+        TODO: Creating timing DF for Gazprea II (Only applicable for grading)
         """
-        return pd.DataFrame()
+        return {}
 
     def run_grader_json(self) -> bool:
         """
@@ -126,8 +122,10 @@ class TestHarness:
         solution_exe = self.config.solution_exe 
 
         with open(self.cli_args.failure_log, 'w') as sol_fail_log, \
-            open(self.cli_args.grade_file, 'w') as grade_csv:
+            open(self.cli_args.grade_file, 'w', newline='') as grade_csv:
             
+            csv_writer = csv.writer(grade_csv)
+
             for toolchain in self.config.toolchains:
                 tc_runner = ToolChainRunner(toolchain, self.cli_args.timeout)
                 tc_table = self.create_tc_dataframe(toolchain.name, defending_exes, attacking_pkgs) 
@@ -153,11 +151,10 @@ class TestHarness:
                                     self.log_failure_to_file(def_feedback_file, test_result)
                                     if solution_exe == def_exe.id:
                                         sol_fail_log.write(f"{toolchain.name} {a_pkg.name} {test.path}\n")
-                        tc_table.at[def_exe.id, a_pkg.name] = f"{pass_count}/{test_count}"
-                
-                # write the completed toolchain table to the CSV file
-                grade_csv.write('\n') 
-                tc_table.to_csv(grade_csv)
-                grade_csv.flush()
+                        tc_table[def_exe.id][a_pkg.name] = f"{pass_count}/{test_count}"
 
+                csv_writer.writerow([toolchain.name] + [pkg.name for pkg in attacking_pkgs]) 
+                for exe in defending_exes:
+                    csv_writer.writerow([exe.id] + [tc_table[exe.id][pkg.name] for pkg in attacking_pkgs])
+                csv_writer.writerow([])  # empty row for separation
         return True 
