@@ -139,7 +139,7 @@ class Config:
     An in memory representation of the JSON configuration file which directs the tester. 
     """
     def __init__(self, config_path: str, config_data: Dict, debug_package: Optional[str]):
-        self.config_path        = config_path
+        self.config_path        = os.path.abspath(config_path)
         self.config_data        = config_data
         self.debug_package      = debug_package
         self.test_dir           = resolve_relative(config_data['testDir'],
@@ -163,7 +163,7 @@ class Config:
                 if rt_id == id :
                     return os.path.abspath(resolve_relative(rt_path, self.config_path))
             return ""
-        return [Executable(id, path, find_runtime(id)) for id, path in executables_data.items()]
+        return [Executable(id, resolve_relative(path, self.config_path), find_runtime(id)) for id, path in executables_data.items()]
     
     def parse_toolchains(self, toolchains_data: Dict[str, List[Dict]]) -> List[ToolChain]:
         """
@@ -228,13 +228,11 @@ def load_config(config_path: str, args: CLIArgs=None) -> Optional[Config]:
     """
     if not os.path.exists(config_path):
         return None
-
     try: 
         with open(config_path, 'r') as config_file:
             config_data = json.load(config_file)
     except json.decoder.JSONDecodeError:
         log("Config Error: Failed to parse config json")
         return None
-    # except 
 
     return Config(config_path, config_data, args.debug_package if args else None)
