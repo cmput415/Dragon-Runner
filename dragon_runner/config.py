@@ -48,7 +48,7 @@ class SubPackage(Verifiable):
             test_path = os.path.join(self.path, file)
             if self.is_test(test_path):
                 tests.append(TestFile(test_path))
-        return tests 
+        return sorted(tests, key=lambda x: x.file) 
 
 class Package(Verifiable):
     """
