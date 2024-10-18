@@ -1,6 +1,12 @@
 name: '415 Tester CI'
 run-name: ${{ github.actor }}
-on: [push]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 jobs:
   build-and-test:
     strategy:
