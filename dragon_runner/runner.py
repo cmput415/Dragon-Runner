@@ -34,6 +34,7 @@ class Command:
 
 @dataclass
 class CommandResult:
+    step: str
     subprocess: Optional[CompletedProcess]
     exit_status: int 
     time: float=0
@@ -47,39 +48,68 @@ class CommandResult:
             log(f"stderr ({len(stderr)} bytes):", truncated_bytes(stderr, max_bytes=512), indent=4, level=level)
             log(f"exit code: {self.exit_status}", indent=4, level=level)
 
-@dataclass
 class TestResult: 
-    __test__ = False                    # pytest gets confused when classes start with 'Test'
-    test: TestFile                      # test result is derived from 
-    did_pass: bool                      # did expected out match generated
-    error_test: bool=False              # did test return with non-zero exit
-    did_panic: bool=False               # did test cause the toolchain to panic
-    time: Optional[float]=None          # time test took on the final step
-    diff: Optional[str]=None            # diff if the test failed gracefully
-    error_msg: Optional[str]=None       # error message if test did not fail gracefully
-    failing_step: Optional[str]=None    # step the TC failed on
-    gen_output: Optional[bytes]=None    # output of the test
+    __test__ = False # pytest                       
+    def __init__(self, test: TestFile): 
+        self.test: TestFile=test
+        self.did_pass: bool=False
+        self.gen_output: Optional[bytes]=None
+        self.command_results: List[CommandResult]=[] 
 
     def log(self, file=sys.stdout, args: CLIArgs=None):
+
         if self.did_pass:
-            pass_msg = "[E-PASS] " if self.error_test else "[PASS] "
-            test_name = f"{self.test.file:<50}"     
-            if args and args.time and self.time is not None:
-                time_str = f"{self.time:.4f}"
-                time_with_unit = f"{time_str:>10} (s)" 
-            else:
-                time_with_unit = "" 
-            log_msg = f"{Fore.GREEN}{pass_msg}{Fore.RESET}{test_name}{time_with_unit}"
-            log(log_msg, indent=3, file=file)
-        else:
-            fail_msg = "[E-FAIL] " if self.error_test else "[FAIL] "
-            log(Fore.RED + fail_msg + Fore.RESET + f"{self.test.file}", indent=3, file=file)
+            log_msg = f"{Fore.GREEN}[PASS] {Fore.RESET}{self.test.file}"
+        else: 
+            log_msg = f"{Fore.RED}[FAIL] {Fore.RESET}{self.test.file}"
+        log(log_msg, indent=3, file=file) 
+
+        #     pass_msg = "[E-PASS] " if self.error_test else "[PASS] "
+        #     test_name = f"{self.test.file:<50}"     
+        #     if args and args.time and self.time is not None:
+        #         time_str = f"{self.time:.4f}"
+        #         time_with_unit = f"{time_str:>10} (s)" 
+        #     else:
+        #         time_with_unit = "" 
+        #     log_msg = f"{Fore.GREEN}{pass_msg}{Fore.RESET}{test_name}{time_with_unit}"
+        #     log(log_msg, indent=3, file=file)
+        # else:
+        #     fail_msg = "[E-FAIL] " if self.error_test else "[FAIL] "
+        #     log(Fore.RED + fail_msg + Fore.RESET + f"{self.test.file}", indent=3, file=file)
 
         level = 3 if self.did_pass else 2
         log(f"==> Expected Out ({len(self.test.expected_out)} bytes):", indent=5, level=level)
         log_multiline(self.test.expected_out, level=level, indent=6)
         log(f"==> Generated Out ({len(self.gen_output)} bytes):", indent=5, level=level)
         log_multiline(self.gen_output, level=level, indent=6)
+
+    def resolve(self):
+        """
+        determine the setting of did_pass based on the command results 
+        """
+        last_command = self.command_results[-1]
+        compile_time_pattern = r'.*?(Error on line \d+):?.*' 
+        runtime_pattern = r'\s*(\w+Error):?.*'
+        
+        generated_stdout = last_command.subprocess.stdout
+        generated_stderr = last_command.subprocess.stderr
+        expected_out = self.test.expected_out
+
+        if last_command.subprocess.returncode == 0:
+            diff = precise_diff(generated_stdout, self.test.expected_out)
+            self.gen_output = generated_stdout  
+            if not diff:
+                self.did_pass = True
+            else:
+                self.did_pass = False
+        else:
+            ct_diff = lenient_diff(generated_stderr, expected_out, compile_time_pattern)
+            rt_diff = lenient_diff(generated_stderr, expected_out, runtime_pattern)
+            self.gen_output = generated_stderr
+            if not ct_diff or not rt_diff:
+                self.did_pass = True
+            else:
+                self.did_pass = False
 
     def __repr__(self):
         return "PASS" if self.did_pass else "FAIL"
@@ -132,45 +162,53 @@ class ToolChainRunner():
         run each step of the toolchain for a given test and executable
         """
         input_file = test.path
-
-        for index, step in enumerate(self.tc):
-            last_step       = index == len(self.tc) - 1
+        test_result = TestResult(test)
+        
+        # run commands until we hit a non-zero exit or the end of tc  
+        for step in self.tc:
             input_stream    = test.input_stream if step.uses_ins else b'' 
             output_file     = self.resolve_output_file(step) 
             command         = self.resolve_command(step, MagicParams(exe.exe_path, input_file, output_file))
             command_result  = self.run_command(command, input_stream)
-
-            command.log(level=3)
-            command_result.log(level=3)
-
-            if command_result.timed_out:
-                timeout_msg = f"Toolchain timed out for test: {test.file}"
-                return TestResult(test=test, did_pass=False, did_panic=True, error_test=False,
-                                  gen_output=b'', failing_step=step.name, error_msg=timeout_msg)
             
-            child_process : CompletedProcess = command_result.subprocess
-            if not child_process:
-                raise RuntimeError(f"Command {exe.exe_path} could not spawn child process")
-
-            elif child_process.returncode != 0:
-                if step.allow_error:
-                    return self.get_test_result(test, child_process, test.expected_out)
-                return TestResult(test=test, did_pass=False, error_test=False,
-                                  failing_step=step.name, gen_output=child_process.stderr)
-
-            elif last_step:
-                if output_file and not os.path.exists(output_file):
-                    raise RuntimeError(f"Command did not create specified output file {output_file}")
-
-                if output_file is not None:
-                    output_file_contents = file_to_bytes(output_file)
-                    child_process.stdout = output_file_contents
-
-                return self.get_test_result(test, child_process, test.expected_out, time=round(command_result.time, 4))
+            test_result.command_results.append(command_result)
             
-            else: 
-                # set up the next steps input file
-                input_file = output_file or make_tmp_file(child_process.stdout)
+            if command_result.subprocess.returncode != 0:
+                break
+
+        test_result.resolve()
+        return test_result
+            # command.log(level=3)
+            # command_result.log(level=3)
+
+            # if command_result.timed_out:
+            #     timeout_msg = f"Toolchain timed out for test: {test.file}"
+            #     return TestResult(test=test, did_pass=False, error_test=False,
+            #                       gen_output=b'', failing_step=step.name, error_msg=timeout_msg)
+            
+            # child_process : CompletedProcess = command_result.subprocess
+            # if not child_process:
+            #     raise RuntimeError(f"Command {exe.exe_path} could not spawn child process")
+
+            # elif child_process.returncode != 0:
+            #     if step.allow_error:
+            #         return self.get_test_result(test, child_process, test.expected_out)
+            #     return TestResult(test=test, did_pass=False, error_test=False,
+            #                       failing_step=step.name, gen_output=child_process.stderr)
+
+            # elif last_step:
+            #     if output_file and not os.path.exists(output_file):
+            #         raise RuntimeError(f"Command did not create specified output file {output_file}")
+
+            #     if output_file is not None:
+            #         output_file_contents = file_to_bytes(output_file)
+            #         child_process.stdout = output_file_contents
+
+            #     return self.get_test_result(test, child_process, test.expected_out, time=round(command_result.time, 4))
+            
+            # else: 
+            #     # set up the next steps input file
+            #     input_file = output_file or make_tmp_file(child_process.stdout)
 
     @staticmethod 
     def get_test_result(test: TestFile, subps_result: CompletedProcess, expected_out: bytes, time=0) -> TestResult:
@@ -180,7 +218,7 @@ class ToolChainRunner():
             (T,F) If tc successful, exit is zero and precise diff on stdout
             (T,T) If tc successful, exit non zero and a lenient diff on stderr succeeds
             (F,T) If tc successful, exit non zero and all lenient diffs on stderr fail
-            (F,F) If tc not successful
+            (F,F) If tc not successful, exit is zero and stdout diff fails
         """
         # define capture patterns for lenient diff
         compile_time_pattern = r'.*?(Error on line \d+):?.*' 
