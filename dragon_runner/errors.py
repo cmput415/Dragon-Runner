@@ -1,21 +1,46 @@
-from typing import List
+from typing import List, Union, Iterable
 
-class ConfigError:
+class Error:
+    def __str__(self): raise NotImplementedError("Must implement __str__")
+
+class ConfigError(Error):
     def __init__(self, message: str):
         self.message = message
 
     def __str__(self):
-        return f"CONFIG_ERROR: {self.message}"
+        return f"Config Error: {self.message}"
+
+class TestFileError(Error):
+    def __init__(self, message: str):
+        self.message = message
+
+    def __str__(self):
+        return f"Testfile Error: {self.message}"
 
 class ErrorCollection:
-    def __init__(self):
-        self.errors: List[ConfigError] = []
+    def __init__(self, errors: Union[None, 'ErrorCollection', Iterable[Error]] = None):
+        self.errors: List[Error] = []
+        if errors is not None:
+            if isinstance(errors, ErrorCollection):
+                self.errors = errors.errors.copy()
+            elif isinstance(errors, Iterable):
+                self.errors = list(errors)
+            else:
+                raise TypeError("Must construct ErrorCollection with self or List of Error")
 
-    def add(self, error: ConfigError):
+    def has_errors(self) -> bool:
+        return self.__bool__()
+
+    def add(self, error: Error):
         self.errors.append(error)
 
-    def extend(self, errors: List[ConfigError]):
-        self.errors.extend(errors)
+    def extend(self, errors: Union['ErrorCollection', Iterable[Error]]):
+        if isinstance(errors, ErrorCollection):
+            self.errors.extend(errors.errors)
+        elif isinstance(errors, Iterable):
+            self.errors.extend(errors)
+        else:
+            raise TypeError("Must extend ErrorCollection with self or List of Error")
 
     def __bool__(self):
         return len(self.errors) > 0

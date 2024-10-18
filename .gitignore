@@ -1,5 +1,6 @@
 **/__pycache__/**
 venv/
+build/
 dist/
 dragon_runner.egg-info/
 scratch/

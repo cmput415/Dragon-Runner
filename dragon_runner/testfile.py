@@ -1,31 +1,55 @@
 import os
 from io                     import BytesIO
-from typing                 import Optional
+from typing                 import Optional, Union
 from dragon_runner.utils    import str_to_bytes, bytes_to_str
+from dragon_runner.errors   import Verifiable, ErrorCollection, TestFileError
 
-class TestFile:
+class TestFile(Verifiable):
     __test__ = False 
-    def __init__(self, test_path, input_dir="input",
-                                  input_stream_dir="input-stream",
-                                  output_dir="output",
-                                  comment_syntax="//"):   
+    def __init__(self, test_path, input_dir="input", input_stream_dir="input-stream",
+                                                     output_dir="output",
+                                                     comment_syntax="//"):   
         self.path                   = test_path
         self.stem, self.extension   = os.path.splitext(os.path.basename(test_path))
         self.file                   = self.stem + self.extension  
         self.input_dir              = input_dir
         self.input_stream_dir       = input_stream_dir          
         self.output_dir             = output_dir                
-        self.comment_syntax         = comment_syntax            # default C99 //
-        self.expected_out           = self.get_expected_out()   # fill expected output
-        self.input_stream           = self.get_input_stream()   # fill std input stream
-        self.expected_out_bytes     = len(self.expected_out)
-        self.input_stream_bytes     = len(self.input_stream)
-    
-    def get_file_bytes(self, file_path: str) -> bytes:
-        with open(file_path, "rb") as f:
-            file_bytes = f.read()
-            assert isinstance(file_bytes, bytes), "expected bytes"
-            return file_bytes 
+        self.comment_syntax         = comment_syntax # default C99 //
+        self.verify()
+   
+    def verify(self) -> ErrorCollection:
+        """
+        Ensure the paths supplied in CHECK_FILE and INPUT_FILE exist
+        """
+        collection = ErrorCollection()
+        self.expected_out           = self.get_expected_out()
+        self.input_stream           = self.get_input_stream()
+
+        # If a parse and read of a tests input or output fails, propogate here 
+        if isinstance(self.expected_out, TestFileError):
+            collection.add(self.expected_out)
+        if isinstance(self.input_stream, TestFileError):
+            collection.add(self.input_stream) 
+        if collection.has_errors():
+            return collection
+
+        self.expected_out_bytes = len(self.expected_out)
+        self.input_stream_bytes = len(self.input_stream)
+
+    def get_file_bytes(self, file_path: str) -> Optional[bytes]:
+        """
+        Get file contents in bytes
+        """
+        try:
+            with open(file_path, "rb") as f:
+                file_bytes = f.read()
+                assert isinstance(file_bytes, bytes), "expected bytes"
+                return file_bytes 
+        except FileNotFoundError:
+            return None
+        except:
+            return None
 
     def get_directive_contents(self, directive_prefix: str) -> Optional[bytes]:
         """
@@ -55,7 +79,6 @@ class TestFile:
         contents.seek(0)
         if contents:
             content_bytes = contents.getvalue()
-            assert isinstance(content_bytes, bytes), "directive content not of type bytes"
             return content_bytes     
         return None
 
@@ -71,11 +94,10 @@ class TestFile:
              
         same_dir_path = self.path.replace(self.extension, file_suffix)
         if os.path.exists(same_dir_path):
-            return self.get_file_bytes(same_dir_path)
-        
+            return self.get_file_bytes(same_dir_path)     
         return None
 
-    def get_expected_out(self) -> bytes:
+    def get_expected_out(self) -> Union[bytes, TestFileError]:
         """
         Load the expected output for a test into a byte stream
         """
@@ -91,12 +113,13 @@ class TestFile:
         if check_file:
             test_dir = os.path.dirname(self.path)
             check_file_path = os.path.join(test_dir, bytes_to_str(check_file))
-            return self.get_file_bytes(check_file_path)
+            if not os.path.exists(check_file_path):
+                return TestFileError(
+                    f"Failed to locate path supplied to CHECK_FILE: {check_file_path}") 
+            return self.get_file_bytes(check_file_path) 
+        return b''# default expect empty output
         
-        # default expect empty output
-        return b''
-        
-    def get_input_stream(self) -> bytes:
+    def get_input_stream(self) -> Union[bytes, TestFileError]:
         """
         Load the input stream for a test into a byte stream
         """
@@ -111,11 +134,12 @@ class TestFile:
         input_file = self.get_directive_contents("INPUT_FILE:")
         if input_file:
             test_dir = os.path.dirname(self.path)
-            check_file_path = os.path.join(test_dir, bytes_to_str(input_file))
-            return self.get_file_bytes(check_file_path)
-        
-        # default expect empty output
-        return b''
+            input_file_path = os.path.join(test_dir, bytes_to_str(input_file))
+            if not os.path.exists(input_file_path):
+                return TestFileError(
+                    f"Failed to locate path supplied to INPUT_FILE: {input_file_path}") 
+            return self.get_file_bytes(input_file_path) 
+        return b''# default no input stream
     
     def __repr__(self):
         max_test_name_length = 30

@@ -62,4 +62,3 @@ class ToolChain(Verifiable):
 
     def __getitem__(self, index: int) -> Step:
         return self.steps[index]
-

@@ -11,9 +11,9 @@ from dragon_runner.utils        import resolve_relative
 from dragon_runner.log          import log
 from dragon_runner.cli          import CLIArgs
 
-class SubPackage():
+class SubPackage(Verifiable):
     """
-    Represents a set of tests in a directory
+    Represents a set of tests in a directory.
     """
     def __init__(self, path: str): 
         self.path: str              = path
@@ -23,6 +23,12 @@ class SubPackage():
             self.tests: List[TestFile] = self.gather_tests()
         else:
             self.tests: List[TestFile] = [TestFile(path)]
+    
+    def verify(self) -> ErrorCollection:
+        """
+        Verify the tests in our config have no errors.
+        """
+        return ErrorCollection(ec for test in self.tests if (ec := test.verify()))
 
     @staticmethod
     def is_test(test_path: str):
@@ -44,7 +50,7 @@ class SubPackage():
                 tests.append(TestFile(test_path))
         return tests 
 
-class Package():
+class Package(Verifiable):
     """
     Represents a single test package. Shoud have a corresponding CCID if submitted. 
     """
@@ -58,6 +64,12 @@ class Package():
             self.gather_subpackages()
         else:
             self.subpackages.append(SubPackage(path))
+
+    def verify(self) -> ErrorCollection:
+        """
+        Propogate up all errors in subpackages.
+        """ 
+        return ErrorCollection(ec for spkg in self.subpackages if (ec := spkg.verify()))
 
     def add_subpackage(self, spkg: SubPackage):
         """
@@ -90,13 +102,23 @@ class Executable(Verifiable):
         self.exe_path   = exe_path 
         self.runtime    = runtime 
         self.errors     = self.verify()
-
+    
     def verify(self) -> ErrorCollection:
-        errors = ErrorCollection()
+        """
+        Check if the binary path exists and runtime path exists (if present)
+        """
+        errors = []
         if not os.path.exists(self.exe_path):
-            errors.add(ConfigError(
-                f"Cannot find binary file: {self.exe_path} in Executable: {self.id}"))
-        return errors
+            errors.append(ConfigError(
+                f"Cannot find binary file: {self.exe_path} "
+                f"in Executable: {self.id}")
+            )
+        if self.runtime and not os.path.exists(self.runtime):
+            errors.append(ConfigError(
+                f"Cannot find runtime file: {self.runtime} "
+                f"in Executable: {self.id}")
+            )
+        return ErrorCollection(errors)
 
     def source_env(self):
         """
@@ -148,8 +170,8 @@ class Config:
                                                    config_data.get('runtimes', ""))
         self.solution_exe       = config_data.get('solutionExecutable', None)
         self.toolchains         = self.parse_toolchains(config_data['toolchains'])
-        self.error_collection   = self.verify()
         self.packages           = self.gather_packages()
+        self.error_collection   = self.verify()
     
     def parse_executables(self, executables_data: Dict[str, str],
                                 runtimes_data: Dict[str, str]) -> List[Executable]:
@@ -200,7 +222,7 @@ class Config:
 
     def verify(self) -> ErrorCollection:
         """
-        Assert valid paths and that all compositetoolchains and executables also verify.
+        Pass up all errrors by value in downstream objects like Toolchain, Testfile and Executable
         """
         ec = ErrorCollection()
         if not os.path.exists(self.test_dir):
@@ -209,6 +231,8 @@ class Config:
             ec.extend(exe.verify().errors)       
         for tc in self.toolchains:
             ec.extend(tc.verify().errors)
+        for pkg in self.packages:
+            ec.extend(pkg.verify().errors)
         return ec
 
     def to_dict(self) -> Dict: 
