@@ -76,7 +76,7 @@ class TestResult:
             log(Fore.RED + fail_msg + Fore.RESET + f"{self.test.file}", indent=3, file=file)
 
         level = 3 if self.did_pass else 2
-        log(f"==> Expected Out ({self.test.expected_out_bytes} bytes):", indent=5, level=level)
+        log(f"==> Expected Out ({len(self.test.expected_out)} bytes):", indent=5, level=level)
         log_multiline(self.test.expected_out, level=level, indent=6)
         log(f"==> Generated Out ({len(self.gen_output)} bytes):", indent=5, level=level)
         log_multiline(self.gen_output, level=level, indent=6)
@@ -135,7 +135,7 @@ class ToolChainRunner():
 
         for index, step in enumerate(self.tc):
             last_step       = index == len(self.tc) - 1
-            input_stream    = test.get_input_stream() if step.uses_ins else b'' 
+            input_stream    = test.input_stream if step.uses_ins else b'' 
             output_file     = self.resolve_output_file(step) 
             command         = self.resolve_command(step, MagicParams(exe.exe_path, input_file, output_file))
             command_result  = self.run_command(command, input_stream)
