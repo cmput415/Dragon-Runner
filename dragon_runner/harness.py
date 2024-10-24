@@ -4,7 +4,6 @@ from typing                 import List, Dict
 from dragon_runner.cli      import CLIArgs
 from dragon_runner.config   import Config, Executable, Package
 from dragon_runner.log      import log
-from dragon_runner.testfile import TestFile
 from dragon_runner.runner   import TestResult, ToolChainRunner
 from dragon_runner.utils    import file_to_str
 
@@ -72,6 +71,7 @@ class TestHarness:
         """ 
         if self.cli_args.grade_file:
             assert self.cli_args.failure_log is not None, "Need to supply failure log!"
+            print("Running Dragon Runner in grade mode")
             return self.run_grader_json()
         else:
             return self.run_regular()
@@ -137,6 +137,7 @@ class TestHarness:
                 print(f"\nToolchain: {toolchain.name}")
                 
                 for def_exe in defending_exes: 
+                    def_exe.source_env()
                     def_feedback_file = f"{def_exe.id}-{toolchain.name}feedback.txt"
                     
                     for a_pkg in attacking_pkgs:  
@@ -147,7 +148,6 @@ class TestHarness:
                         for a_spkg in a_pkg.subpackages:
                             for test in a_spkg.tests:
                                 test_result: TestResult = tc_runner.run(test, def_exe)
-
                                 if test_result.did_pass:
                                     print(Fore.GREEN + '.' + Fore.RESET, end='')
                                     pass_count += 1 
