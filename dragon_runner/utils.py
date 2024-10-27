@@ -15,7 +15,7 @@ def resolve_relative(relative_dir: str, abs_path: str) -> str:
         abs_path = os.path.dirname(abs_path) 
     return os.path.join(abs_path, relative_dir)
 
-def make_tmp_file(content: bytes) -> str:
+def make_tmp_file(content: bytes) -> Optional[str]:
     """
     Create a file in tmp with the bytes from content.
     """
@@ -26,6 +26,7 @@ def make_tmp_file(content: bytes) -> str:
             return tmp.name
     except Exception as e:
         print(f"Failed to make temporary file with error: {e}", file=sys.stderr)
+        return None
 
 def str_to_bytes(string: str, chop_newline: bool=False) -> Optional[bytes]:
     """
@@ -78,7 +79,7 @@ def truncated_bytes(data: bytes, max_bytes: int = 1024) -> bytes:
     
     return truncated
 
-def file_to_str(file: str, max_bytes=1024) -> str:
+def file_to_str(file: str, max_bytes=1024) -> Optional[str]:
     """
     return file in string form, with middle contents trucated if
     size exceeds max_bytes
@@ -103,9 +104,10 @@ def bytes_to_file(file: str, data: bytes) -> Optional[str]:
     """
     assert isinstance(data, bytes), "Supplied bytes that are not of type bytes."
     try:
-        with open(file, 'w') as f:
-            f.write(bytes_to_str(data))
+        with open(file, 'wb') as f:
+            f.write(data)
             return file
     except Exception as e:
         print(f"Writting bytes to file failed with: {e}")
         return None
+

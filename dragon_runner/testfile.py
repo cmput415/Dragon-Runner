@@ -1,7 +1,7 @@
 import os
 from io                     import BytesIO
 from typing                 import Optional, Union
-from dragon_runner.utils    import str_to_bytes, bytes_to_str
+from dragon_runner.utils    import str_to_bytes, bytes_to_str, file_to_bytes
 from dragon_runner.errors   import Verifiable, ErrorCollection, TestFileError
 
 class TestFile(Verifiable):
@@ -15,42 +15,55 @@ class TestFile(Verifiable):
         self.input_stream_dir = input_stream_dir          
         self.output_dir = output_dir                
         self.comment_syntax = comment_syntax # default C99 //
-        self.verify()
-   
+        self.expected_out = self.get_content("CHECK:", "CHECK_FILE:")
+        self.input_stream = self.get_content("INPUT:", "INPUT_FILE:")
+
     def verify(self) -> ErrorCollection:
         """
         Ensure the paths supplied in CHECK_FILE and INPUT_FILE exist
         """
         collection = ErrorCollection()
-        self.expected_out = self._get_content("CHECK:", "CHECK_FILE:")
-        self.input_stream = self._get_content("INPUT:", "INPUT_FILE:")
-
         # If a parse and read of a tests input or output fails, propagate here 
         if isinstance(self.expected_out, TestFileError):
             collection.add(self.expected_out)
         if isinstance(self.input_stream, TestFileError):
             collection.add(self.input_stream) 
-        if collection.has_errors():
-            return collection
+        return collection
 
-    def _get_content(self, inline_directive: str, file_directive: str) -> Union[bytes, TestFileError]:
+    def get_content(self, inline_directive: str, file_directive: str) -> Union[bytes, TestFileError]:
         """
         Generic method to get content based on directives
         """
-        content = self._get_directive_contents(inline_directive)
-        if content:
-            return content
-
-        file_path = self._get_directive_contents(file_directive)
-        if file_path:
-            test_dir = os.path.dirname(self.path)
-            full_path = os.path.join(test_dir, bytes_to_str(file_path))
-            if not os.path.exists(full_path):
-                return TestFileError(f"Failed to locate path supplied to {file_directive}: {full_path}")
-            return self._get_file_bytes(full_path)
+        inline_contents = self._get_directive_contents(inline_directive)
+        file_contents = self._get_directive_contents(file_directive)
         
-        return file_path  # default to empty content
+        if inline_contents and file_contents:
+            return TestFileError(f"Directive Conflict: Supplied both\
+                                 {inline_directive} and {file_directive}")
+        
+        elif inline_contents:
+            return inline_contents
 
+        elif file_contents: 
+            if isinstance(file_contents, TestFileError):
+                return file_contents
+
+            file_str = file_contents.decode()
+            
+            full_path = os.path.join(os.path.dirname(self.path), file_str)
+            if not os.path.exists(full_path):
+                return TestFileError(f"Failed to locate path supplied to\
+                                        {file_directive}: {full_path}")
+            
+            file_bytes = file_to_bytes(full_path)
+            if file_bytes is None:
+                return TestFileError(f"Failed to convert file {full_path} to bytes")
+ 
+            return file_bytes
+        
+        else:
+            return b''
+    
     def _get_file_bytes(self, file_path: str) -> Optional[bytes]:
         """
         Get file contents in bytes
@@ -63,7 +76,7 @@ class TestFile(Verifiable):
         except FileNotFoundError:
             return None
 
-    def _get_directive_contents(self, directive_prefix: str) -> Union[bytes, TestFileError]:
+    def _get_directive_contents(self, directive_prefix: str) -> Optional[Union[bytes, TestFileError]]:
         """
         Look into the testfile itself for contents defined in directives.
         Directives can appear anywhere in a line, as long as they're preceded by a comment syntax.
@@ -75,7 +88,8 @@ class TestFile(Verifiable):
                 for line in test_file:
                     comment_index = line.find(self.comment_syntax)
                     directive_index = line.find(directive_prefix)
-                    if comment_index == -1 or directive_index == -1 or comment_index > directive_index:
+                    if comment_index == -1 or directive_index == -1 or\
+                       comment_index > directive_index:
                         continue
                     
                     rhs_line = line.split(directive_prefix, 1)[1]
@@ -100,6 +114,14 @@ class TestFile(Verifiable):
         if len(test_name) > max_test_name_length:
             test_name = test_name[:max_test_name_length - 3] + "..."
         
+        expected_out = b''
+        if isinstance(self.expected_out, bytes):
+            expected_out = self.expected_out
+
+        input_stream = b''
+        if isinstance(self.input_stream, bytes):
+            input_stream = self.input_stream
+
         return (f"{test_name:<{max_test_name_length}}"
-                f"{len(self.expected_out.getvalue()):>4}\t"
-                f"{len(self.input_stream.getvalue()):>4}")
+                f"{len(expected_out):>4}\t"
+                f"{len(input_stream):>4}")

@@ -246,7 +246,7 @@ class Config:
     def __repr__(self) -> str:
         return json.dumps(self.to_dict(), indent=2)
 
-def load_config(config_path: str, args: CLIArgs=None) -> Optional[Config]:
+def load_config(config_path: str, args: Optional[CLIArgs]=None) -> Optional[Config]:
     """
     Load and parse the JSON configuration file.
     """

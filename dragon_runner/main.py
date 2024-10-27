@@ -1,4 +1,3 @@
-import os
 from colorama               import init, Fore
 from dragon_runner.cli      import parse_cli_args, CLIArgs
 from dragon_runner.config   import load_config
