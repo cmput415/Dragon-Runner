@@ -11,8 +11,8 @@
 int main() { 
     int a = 4; 
 #if TYPE_ERROR
-    fprintf(stderr, "RandomTypeOfError on line 9: This should be called a TypeError, but\
-                     the tester is lenient on the type of error. See TestRunning.cpp");
+    fprintf(stderr, "TypeError on line 9: This should be called a TypeError, but\
+                     the tester is lenient on the type of error.");
     exit(1);
 #else
     a = "this is a string";

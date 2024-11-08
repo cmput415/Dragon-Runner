@@ -5,12 +5,12 @@ import json
 import time
 import sys
 from subprocess                 import TimeoutExpired, CompletedProcess
-from typing                     import List, Dict, Optional
+from typing                     import List, Dict, Optional, Union
 from dataclasses                import dataclass, asdict
 from colorama                   import Fore, init
 from dragon_runner.testfile     import TestFile 
 from dragon_runner.config       import Executable, ToolChain
-from dragon_runner.log          import log, log_delimiter, log_multiline
+from dragon_runner.log          import log, log_multiline
 from dragon_runner.utils        import make_tmp_file, bytes_to_str,\
                                        file_to_bytes, str_to_bytes, truncated_bytes
 from dragon_runner.toolchain    import Step
@@ -20,9 +20,9 @@ init(autoreset=True)
 
 @dataclass
 class MagicParams:
-    exe_path: str       # $EXE
-    input_file: str     # $INPUT
-    output_file: str    # $OUTPUT 
+    exe_path: str                       # $EXE
+    input_file: Optional[str] = ""      # $INPUT
+    output_file: Optional[str] = ""     # $OUTPUT 
     def __repr__(self):
         return json.dumps(asdict(self), indent=2)
 
@@ -51,16 +51,16 @@ class CommandResult:
 class TestResult: 
     __test__ = False                    # pytest gets confused when classes start with 'Test'
     test: TestFile                      # test result is derived from 
-    did_pass: bool                      # did expected out match generated
+    did_pass: bool=False                # did expected out match generated
     error_test: bool=False              # did test return with non-zero exit
     did_panic: bool=False               # did test cause the toolchain to panic
     time: Optional[float]=None          # time test took on the final step
     diff: Optional[str]=None            # diff if the test failed gracefully
     error_msg: Optional[str]=None       # error message if test did not fail gracefully
     failing_step: Optional[str]=None    # step the TC failed on
-    gen_output: Optional[bytes]=None    # output of the test
+    gen_output: Optional[bytes]=b''     # output of the test
 
-    def log(self, file=sys.stdout, args: CLIArgs=None):
+    def log(self, file=sys.stdout, args: Union[CLIArgs, None]=None):
         if self.did_pass:
             pass_msg = "[E-PASS] " if self.error_test else "[PASS] "
             test_name = f"{self.test.file:<50}"     
@@ -76,6 +76,8 @@ class TestResult:
             log(Fore.RED + fail_msg + Fore.RESET + f"{self.test.file}", indent=3, file=file)
 
         level = 3 if self.did_pass else 2
+        # if not self.test.expected_out:
+            # return
         log(f"==> Expected Out ({len(self.test.expected_out)} bytes):", indent=5, level=level)
         log_multiline(self.test.expected_out, level=level, indent=6)
         log(f"==> Generated Out ({len(self.gen_output)} bytes):", indent=5, level=level)
@@ -107,7 +109,7 @@ class ToolChainRunner():
         except TimeoutExpired:
             return CommandResult(subprocess=None, exit_status=255, time=0, timed_out=True)
         
-    def resolve_output_file(self, step: Step) -> str:
+    def resolve_output_file(self, step: Step) -> Optional[str]:
         """
         make absolute path from output file in step
         """
@@ -127,91 +129,105 @@ class ToolChainRunner():
             command.args[0] = os.path.abspath(exe)
         return command
     
-    def run(self, test: TestFile, exe: Executable) -> TestResult: 
+    def run(self, test: TestFile, exe: Executable) -> Optional[TestResult]: 
         """
         run each step of the toolchain for a given test and executable
         """
         input_file = test.path
+        expected = test.expected_out if isinstance(test.expected_out, bytes) else b'' 
+        tr = TestResult(test=test)
 
         for index, step in enumerate(self.tc):
-            last_step       = index == len(self.tc) - 1
-            input_stream    = test.input_stream if step.uses_ins else b'' 
-            output_file     = self.resolve_output_file(step) 
-            command         = self.resolve_command(step, MagicParams(exe.exe_path, input_file, output_file))
-            command_result  = self.run_command(command, input_stream)
 
+            last_step       = index == len(self.tc) - 1
+            input_stream    = test.input_stream if step.uses_ins and isinstance(test.input_stream, bytes) else b'' 
+            output_file     = self.resolve_output_file(step) 
+            command : Command   = self.resolve_command(step, MagicParams(exe.exe_path, input_file, output_file))
+            command_result : CommandResult = self.run_command(command, input_stream) 
+            
+            # Log command results for -vvv
             command.log(level=3)
             command_result.log(level=3)
+             
+            child_process = command_result.subprocess
+            if not child_process:
+                """
+                OS failed to exec the command.
+                """
+                tr.did_pass = False; tr.did_panic = True;
+                return tr
+            
+            step_stdout = child_process.stdout 
+            step_stderr = child_process.stderr
+            step_time = round(command_result.time, 4)
 
+            # Check if the command timed out
             if command_result.timed_out:
+                """
+                A step timed out based on the max timeout specified by CLI arg.
+                """
                 timeout_msg = f"Toolchain timed out for test: {test.file}"
                 return TestResult(test=test, did_pass=False, did_panic=True, error_test=False,
                                   gen_output=b'', failing_step=step.name, error_msg=timeout_msg)
             
-            child_process : CompletedProcess = command_result.subprocess
-            if not child_process:
-                raise RuntimeError(f"Command {exe.exe_path} could not spawn child process")
-
             elif child_process.returncode != 0:
-                if step.allow_error:
-                    return self.get_test_result(test, child_process, test.expected_out)
-                return TestResult(test=test, did_pass=False, error_test=False,
-                                  failing_step=step.name, gen_output=child_process.stderr)
+                """
+                A step in the toolchain has returned a non-zero exit status. If "allowError"
+                is specified in the config, we can perform a lenient diff based on CompileTime
+                or RuntimeError message rules. Otherwise, we abort the toolchain.
+                """
+                tr = TestResult(test=test, gen_output=step_stderr, failing_step=step.name,
+                                                                   error_test=True)
+                
+                # fail by default if errors are not explicitly allowed in config
+                if not step.allow_error:
+                    tr.did_pass = False
+
+                # get compile time error result is not last step
+                elif step.allow_error:
+ 
+                    # Choose the compile time or runtime error pattern
+                    if not last_step:
+                        error_pattern = r'.*?(Error on line \d+):?.*' 
+                    else:
+                        error_pattern = r'\s*(\w+Error):?.*'
+
+                    if lenient_diff(step_stderr, expected, error_pattern) == "":
+                        tr.did_pass = True
+                    else:
+                        tr.did_pass = False
+
+                return tr;
 
             elif last_step:
+                """
+                The last step terminated gracefully at this point. We write to the output file and
+                make a precise diff to determine if the test has passed.
+                """
                 if output_file and not os.path.exists(output_file):
                     raise RuntimeError(f"Command did not create specified output file {output_file}")
-
+                
                 if output_file is not None:
                     output_file_contents = file_to_bytes(output_file)
-                    child_process.stdout = output_file_contents
-
-                return self.get_test_result(test, child_process, test.expected_out, time=round(command_result.time, 4))
-            
-            else: 
-                # set up the next steps input file
+                    step_stdout = output_file_contents 
+                
+                tr = TestResult(test=test, time=step_time, gen_output=step_stdout)
+                
+                # Diff the produced and expected outputs
+                diff = precise_diff(child_process.stdout, expected)
+                if not diff:
+                    tr.did_pass = True
+                else:
+                    tr.did_pass = False
+                return tr
+ 
+            else:
+                """
+                Set up the next steps input file which is the $OUTPUT of the previous step.
+                If $OUTPUT is not supplied, we create a temporary pipe.
+                """
                 input_file = output_file or make_tmp_file(child_process.stdout)
-
-    @staticmethod 
-    def get_test_result(test: TestFile, subps_result: CompletedProcess, expected_out: bytes, time=0) -> TestResult:
-        """
-        Determine the test result based on ToolChainResult and expected output.
-        Result Rules:
-            (T,F) If tc successful, exit is zero and precise diff on stdout
-            (T,T) If tc successful, exit non zero and a lenient diff on stderr succeeds
-            (F,T) If tc successful, exit non zero and all lenient diffs on stderr fail
-            (F,F) If tc not successful
-        """
-        # define capture patterns for lenient diff
-        compile_time_pattern = r'.*?(Error on line \d+):?.*' 
-        runtime_pattern = r'\s*(\w+Error):?.*'
-        
-        generated_stdout = subps_result.stdout
-        generated_stderr = subps_result.stderr
-
-        if subps_result.returncode == 0:
-            # Regular test: Take precise diff from only stdout
-            diff = precise_diff(generated_stdout, expected_out)
-            if not diff: 
-                return TestResult(test=test, did_pass=True, error_test=False, time=time,
-                                  gen_output=generated_stdout)
-            else:
-                return TestResult(test=test, did_pass=False, error_test=False,
-                                  failing_step="stdout diff", gen_output=generated_stdout)
-        else:
-            # Error Test: Take lenient diff from only stderr 
-            ct_diff = lenient_diff(generated_stderr, expected_out, compile_time_pattern)
-            rt_diff = lenient_diff(generated_stderr, expected_out, runtime_pattern)
-            if not ct_diff:
-                return TestResult(test=test, did_pass=True, error_test=True,
-                                  gen_output=generated_stderr)
-            elif not rt_diff:
-                return TestResult(test=test, did_pass=True, error_test=True,
-                                  gen_output=generated_stderr)
-            else:
-                return TestResult(test=test, did_pass=False, error_test=True, diff=ct_diff,
-                                  failing_step="stderr diff", gen_output=generated_stderr)
-
+   
     @staticmethod
     def replace_env_vars(cmd: Command) -> Command:
         """
@@ -288,11 +304,11 @@ def lenient_diff(produced: bytes, expected: bytes, pattern: str) -> str:
     """
     produced_str = bytes_to_str(produced).strip()
     expected_str = bytes_to_str(expected).strip()
-
+    
     # Apply the mask/filter to both strings
     produced_masked = re.sub(pattern, r'\1', produced_str, flags=re.IGNORECASE | re.DOTALL)
     expected_masked = re.sub(pattern, r'\1', expected_str, flags=re.IGNORECASE | re.DOTALL)
-
+    
     # If the masked strings are identical, return an empty string (no diff)
     if produced_masked == expected_masked:
         return ""

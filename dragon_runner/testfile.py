@@ -15,8 +15,8 @@ class TestFile(Verifiable):
         self.input_stream_dir = input_stream_dir          
         self.output_dir = output_dir                
         self.comment_syntax = comment_syntax # default C99 //
-        self.expected_out = self.get_content("CHECK:", "CHECK_FILE:")
-        self.input_stream = self.get_content("INPUT:", "INPUT_FILE:")
+        self.expected_out: Union[bytes, TestFileError] = self.get_content("CHECK:", "CHECK_FILE:")
+        self.input_stream: Union[bytes, TestFileError] = self.get_content("INPUT:", "INPUT_FILE:")
 
     def verify(self) -> ErrorCollection:
         """

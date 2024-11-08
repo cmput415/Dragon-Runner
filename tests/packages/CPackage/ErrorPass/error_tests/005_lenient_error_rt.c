@@ -10,11 +10,11 @@
 
 int main() {
 
-    fprintf(stderr, "RandomCTError on line 12: compile time error"); 
+    fprintf(stderr, "SpecificError on line 12: compile time error"); 
     
     exit(1);
     
     return 0;
 }
 
-//CHECK:OtherCTError on line 12
+//CHECK:SpecificError on line 12
