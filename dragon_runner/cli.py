@@ -23,7 +23,7 @@ class CLIArgs(NamedTuple):
             f"  Debug Package: {self.debug_package}\n"
             f"  Time: {self.time}\n"
             f"  Output file: {self.output_file}\n"
-            f"  Verbosity: {self.verbosity}"
+            f"  Verbosity: {self.verbosity}\n"
             f"  Verify: {self.verify}"
         )
 
@@ -53,9 +53,9 @@ def parse_cli_args() -> CLIArgs:
     
     parser.add_argument("-v", "--verbosity", action="count", default=0,
         help="Increase verbosity level")
-
-    parser.add_argument("-o", "--output", action="store_true",
-        help="Direct the output of dragon-runner to a file")
+    
+    parser.add_argument("-o", "--output", metavar="FILE",
+        help="Direct the output of dragon-runner to FILE")
     
     args = parser.parse_args()
     if not os.path.isfile(args.config_file):
@@ -64,7 +64,7 @@ def parse_cli_args() -> CLIArgs:
         parser.error("Failure log must be supplied when using grade mode.") 
     if args.verbosity > 0:
         os.environ["DEBUG"] = str(args.verbosity)
-
+    
     return CLIArgs(
         config_file     = args.config_file,
         mode            = args.mode,
