@@ -21,7 +21,8 @@ def create_cli_args(**kwargs) -> CLIArgs:
         timeout         = kwargs.get('timeout', None),
         time            = kwargs.get('time', None),
         verbosity       = kwargs.get('verbosity', None),
-        verify          = kwargs.get('verify', None)
+        verify          = kwargs.get('verify', None),
+        script_args     = kwargs.get('script_args', None)
     )
 
 @pytest.fixture(scope="session")

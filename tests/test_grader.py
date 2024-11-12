@@ -8,7 +8,7 @@ def test_grader_config(config_factory, cli_factory):
     config : Config = config_factory("ConfigGrade.json")
     args : CLIArgs = cli_factory(**{
         "output_file": "Grades.csv",
-        "failure_file": "Failures.txt",
+        "failure_log": "Failures.txt",
         "timeout": 1
     })
     

@@ -3,6 +3,7 @@ from dragon_runner.cli      import parse_cli_args, CLIArgs
 from dragon_runner.config   import load_config
 from dragon_runner.log      import log, log_multiline
 from dragon_runner.harness  import TestHarness
+from dragon_runner.scripts.loader import Loader 
 
 # initialize terminal colors
 init(autoreset=True)
@@ -11,6 +12,13 @@ def main():
     # parse and verify the CLI arguments
     args: CLIArgs = parse_cli_args()
     log(args, level=1)
+    
+    # dragon-runner can also be used as a frontend for grading scripts
+    if args.mode not in ["regular", "grade"]:
+        print(f"Use dragon-runner as a loader for script: {args.mode}")
+        loader = Loader(args.mode, args.script_args)
+        loader.run() 
+        return 0
 
     # parse and verify the config
     config = load_config(args.config_file, args)
