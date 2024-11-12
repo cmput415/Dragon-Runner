@@ -10,7 +10,7 @@ class TestFile(Verifiable):
                                   output_dir="output", comment_syntax="//"):   
         self.path = test_path
         self.stem, self.extension = os.path.splitext(os.path.basename(test_path))
-        self.file = self.stem + self.extension  
+        self.file:str = self.stem + self.extension  
         self.input_dir = input_dir
         self.input_stream_dir = input_stream_dir          
         self.output_dir = output_dir                
@@ -38,7 +38,7 @@ class TestFile(Verifiable):
         file_contents = self._get_directive_contents(file_directive)
         
         if inline_contents and file_contents:
-            return TestFileError(f"Directive Conflict: Supplied both\
+            return TestFileError(f"Directive Conflict for test {self.file}: Supplied both\
                                  {inline_directive} and {file_directive}")
         
         elif inline_contents:

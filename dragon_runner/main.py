@@ -10,6 +10,7 @@ init(autoreset=True)
 def main(): 
     # parse and verify the CLI arguments
     args: CLIArgs = parse_cli_args()
+    log(args, level=1)
 
     # parse and verify the config
     config = load_config(args.config_file, args)

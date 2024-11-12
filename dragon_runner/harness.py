@@ -1,6 +1,6 @@
 import csv
 from colorama               import Fore
-from typing                 import List, Dict
+from typing                 import List, Dict, Optional
 from dragon_runner.cli      import CLIArgs
 from dragon_runner.config   import Config, Executable, Package
 from dragon_runner.log      import log
@@ -24,7 +24,7 @@ class TestHarness:
         Iterate over all tested executables, toolchains, subpackages and tests.
         Return True is all pass, false otherwise.
         """ 
-        sucecss = True
+        success = True
         for exe in self.config.executables:
             log("Running executable:\t", exe.id)
             exe.source_env()
@@ -44,12 +44,15 @@ class TestHarness:
                         sp_pass_count = 0
                         sp_test_count = 0
                         for test in spkg.tests:
-                            test_result: TestResult = tc_runner.run(test, exe)
-                            test_result.log(args=self.cli_args) 
-                            if test_result.did_pass:
+                            test_result: Optional[TestResult] = tc_runner.run(test, exe)
+                            if not test_result:
+                                success=False
+                                continue
+                            elif test_result.did_pass:
                                 sp_pass_count += 1     
                             else:
                                 self.failures.append(test_result) 
+                            test_result.log(args=self.cli_args) 
                             sp_test_count +=1 
                         log("Subpackage Passed: ", sp_pass_count, "/", sp_test_count, indent=2)
                         pkg_pass_count += sp_pass_count
@@ -62,14 +65,14 @@ class TestHarness:
                 exe_test_count += tc_test_count
             log("Executable Passed: ", exe_pass_count, "/", exe_test_count)
             if exe_pass_count != exe_test_count:
-                sucecss = False
-        return sucecss
+                success = False
+        return success
 
     def run(self) -> bool:
         """
         decide wether to run in regular mode or grade mode based on the CLI args 
         """ 
-        if self.cli_args.grade_file:
+        if self.cli_args.mode == "grade":
             assert self.cli_args.failure_log is not None, "Need to supply failure log!"
             print("Running Dragon Runner in grade mode")
             return self.run_grader_json()
@@ -85,15 +88,19 @@ class TestHarness:
             if len(data) > max_bytes:
                 trimmed += b"\n... (output trimmed to %d bytes)" % max_bytes
             return trimmed
-
+        
         with open(file, 'a+') as feedback_file:
             if not result.did_pass:
+                test_contents = file_to_str(result.test.path)
+                exp_out = trim_bytes(x) if isinstance(x := result.test.expected_out, bytes) else ""
+                gen_out = trim_bytes(x) if isinstance(x := result.gen_output, bytes) else ""
+
                 feedback_file.write(
-                    f"Test: {result.test.file}\n"\
-                    + "Test contents:\n" + '-'*40 + '\n' + file_to_str(
-                                    result.test.path, max_bytes=512) + '\n' + '-'*40 + '\n'\
-                    + "Expected Output: " + str(trim_bytes(result.test.expected_out)) + '\n'\
-                    + "Generated Output: " + str(trim_bytes(result.gen_output)) + '\n'
+                    f"""Test: {result.test.file}\n
+                        Test contents: {test_contents}\n
+                        Expected Output: {exp_out}\n
+                        Generated Output: {gen_out} 
+                    """
                 )
                 if result.error_msg:
                     feedback_file.write(f"Error Message: {result.error_msg}\n")
@@ -125,30 +132,32 @@ class TestHarness:
         attacking_pkgs = sorted(self.config.packages, key=lambda pkg: pkg.name.lower())
         defending_exes = sorted(self.config.executables, key=lambda exe: exe.id.lower())
         solution_exe = self.config.solution_exe 
-
+        
+        # track grader internal errors
+        exit_status = True
+        
         with open(self.cli_args.failure_log, 'w') as sol_fail_log, \
-            open(self.cli_args.grade_file, 'w', newline='') as grade_csv:
-            
+            open(self.cli_args.output_file, 'w', newline='') as grade_csv: 
             csv_writer = csv.writer(grade_csv)
 
             for toolchain in self.config.toolchains:
                 tc_runner = ToolChainRunner(toolchain, self.cli_args.timeout)
                 tc_table = self.create_tc_dataframe(toolchain.name, defending_exes, attacking_pkgs) 
-                print(f"\nToolchain: {toolchain.name}")
-                
+                print(f"\nToolchain: {toolchain.name}") 
                 for def_exe in defending_exes: 
                     def_exe.source_env()
-                    def_feedback_file = f"{def_exe.id}-{toolchain.name}feedback.txt"
-                    
+                    def_feedback_file = f"{def_exe.id}-{toolchain.name}feedback.txt" 
                     for a_pkg in attacking_pkgs:  
                         pass_count = 0
                         test_count = a_pkg.n_tests
-                        print(f"\n  {a_pkg.name:<12} --> {def_exe.id:<12}", end='')
-                        
+                        print(f"\n  {a_pkg.name:<12} --> {def_exe.id:<12}", end='') 
                         for a_spkg in a_pkg.subpackages:
                             for test in a_spkg.tests:
-                                test_result: TestResult = tc_runner.run(test, def_exe)
-                                if test_result.did_pass:
+                                test_result: Optional[TestResult] = tc_runner.run(test, def_exe)
+                                if not test_result:
+                                    log(f"Failed to run test {test.stem}")
+                                    exit_status=False
+                                elif test_result.did_pass:
                                     print(Fore.GREEN + '.' + Fore.RESET, end='')
                                     pass_count += 1 
                                 else:      
@@ -162,4 +171,5 @@ class TestHarness:
                 for exe in defending_exes:
                     csv_writer.writerow([exe.id] + [tc_table[exe.id][pkg.name] for pkg in attacking_pkgs])
                 csv_writer.writerow([])  # empty row for separation
-        return True 
+
+        return exit_status 

@@ -1,9 +1,10 @@
+
 import csv
 from fractions import Fraction
 
 DEFENSIVE_PTS       = 2
 OFFENSIVE_PTS       = 1
-COHERENCE_PTS       = 1
+COHERENCE_PTS       = 10
 COMPETITIVE_WEIGHT  = 0.2
 TA_WEIGHT           = 0.5
 SOLUTION            = "solution"
@@ -22,11 +23,15 @@ def normalize_competetive_scores(tc_table):
     """
     n_rows = len(tc_table)
     n_cols = len(tc_table[0])
+    
 
-    raw_competitive_scores = tc_table[n_rows-1][1:]
-    max_score = max(raw_competitive_scores) 
+    print("TC_TABLE", tc_table)
+    print("COMPETITIVE ROW:", tc_table[-2][1:])
+    raw_competitive_scores = tc_table[-2][1:]
+    max_score = max(raw_competitive_scores)
+    print("MAX SCORE: ", max_score)
     norm_competitive_scores = [
-        round(COMPETITIVE_WEIGHT * (score / max_score), 3)
+        round(COMPETITIVE_WEIGHT * (float(score) / float(max_score)), 3)
         for score in raw_competitive_scores
     ]
     norm_scores_row = ["Normalized Points (20% Weight)"] + norm_competitive_scores
@@ -45,7 +50,7 @@ def average_toolchain_tables(tables):
     
     avg_table = [row[:] for row in tables[0]]
     avg_table[0][0] = "toolchain summary" 
-    for i in range(1, n_rows):
+    for i in range(1, n_cols):
         for j in range(1, n_cols):
             avg = 0 
             for tc in tables:
@@ -61,7 +66,9 @@ def add_competitive_rows(table):
     and coherence points. Not yet normalized to highest score. 
     """
     n_cols = len(table[0])
-
+    print("N_COLS:", n_cols)
+    print("N_ROWS:", len(table))
+    
     # Declare new rows
     ta_points_row = ["TA Testing Score (50% Weight)"] + [0] * (n_cols - 1)
     defensive_row = ["Defensive Points"] + [0] * (n_cols - 1)
@@ -77,23 +84,25 @@ def add_competitive_rows(table):
         c_score = 0 # coherence score
         c_score += COHERENCE_PTS if to_float(table[j][j]) == 1 else 0
 
-        for i in range(1, len(table)):            
+        # defender = table[1][0]
+        for i in range(1, n_cols):
             defender = table[i][0]
+            print(f"i: {i}", defender)
             if defender == SOLUTION:
                 # look at the transpose position to determine TA score
                 ta_score += to_float(table[j][i])
 
-            o_score += (1 - to_float(table[i][j]))
-            d_score += (2 if to_float(table[j][i]) == 1 else 0)
+            o_score += (OFFENSIVE_PTS * (1 - to_float(table[i][j])))
+            d_score += (DEFENSIVE_PTS * to_float(table[j][i]))
 
         # print(f"attacker: {attacker}\n oscore: {o_score} \ndscore: {d_score}\n cscore: {c_score}")
 
         # Populate the new rows
-        ta_points_row[j] = round(ta_score * TA_WEIGHT, 3)
-        defensive_row[j] = round(d_score * DEFENSIVE_PTS, 2)
-        offensive_row[j] = round(o_score * OFFENSIVE_PTS, 2)
+        ta_points_row[j] = str(round(ta_score * TA_WEIGHT, 3))
+        defensive_row[j] = str(round(d_score, 2))
+        offensive_row[j] = str(round(o_score, 2))
         coherence_row[j] = round(c_score, 3)
-        total_row[j] = defensive_row[j] + offensive_row[j] + coherence_row[j]
+        total_row[j] = str(float(defensive_row[j]) + float(offensive_row[j]) + float(coherence_row[j]))
 
     # Append new rows to the table
     table.append(defensive_row)
@@ -106,19 +115,20 @@ def add_competitive_rows(table):
 
 if __name__ == "__main__":
 
-    input_files = ['interpreter.csv', 'riscv.csv', 'x86.csv', 'arm.csv'] 
+    input_files = ['Grades.csv'] 
     tc_tables = [] 
     for file in input_files:
         with open(file, 'r') as f:
             reader = csv.reader(f)
             tc_table = list(reader)
             tc_tables.append(add_competitive_rows(tc_table))
-
+    
+    print(tc_tables)
     tc_avg = average_toolchain_tables(tc_tables)
     normalize_competetive_scores(tc_avg)
     print(tc_avg)
 
-    output_file = './scalc-grades.csv'
+    output_file = './vcalc-grades.csv'
     with open(output_file, 'w') as f:
         writer = csv.writer(f)
         for table in tc_tables:

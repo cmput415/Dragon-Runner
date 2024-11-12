@@ -1,6 +1,5 @@
 import json
 import os
-import pathlib
 import sys
 from pathlib                    import Path
 from typing                     import Dict, List, Optional
@@ -213,6 +212,7 @@ class Config:
         """
         Prints a simple formatted table of test information.
         """
+        log("\nPackages:", level=1)
         for pkg in self.packages:
             log(f"-- ({pkg.name})", level=1)
             for spkg in pkg.subpackages:

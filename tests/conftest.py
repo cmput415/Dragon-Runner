@@ -1,4 +1,5 @@
 import pytest
+from typing import Optional
 from pathlib import Path
 from dragon_runner.cli import CLIArgs
 from dragon_runner.config import load_config, Config
@@ -6,20 +7,21 @@ from dragon_runner.config import load_config, Config
 def get_config_path(config_name: str) -> Path:
     return Path(__file__).parent / "configs" / config_name
 
-def create_config(config_name: str) -> Config:
+def create_config(config_name: str) -> Optional[Config]:
     config_path = get_config_path(config_name)
     return load_config(str(config_path))
 
 def create_cli_args(**kwargs) -> CLIArgs:
     return CLIArgs(
-        kwargs.get('config_file', None),
-        kwargs.get('grade_file', None),
-        kwargs.get('failure_file', None),
-        kwargs.get('timeout', None),
-        kwargs.get('debug-package', None),
-        kwargs.get('time', None),
-        kwargs.get('verbosity', None),
-        kwargs.get('verify', None)
+        config_file     = kwargs.get('config_file', None),
+        output_file     = kwargs.get('output_file', None),
+        failure_log     = kwargs.get('failure_log', None),
+        debug_package   = kwargs.get('debug_package', None),
+        mode            = kwargs.get('mode', None),
+        timeout         = kwargs.get('timeout', None),
+        time            = kwargs.get('time', None),
+        verbosity       = kwargs.get('verbosity', None),
+        verify          = kwargs.get('verify', None)
     )
 
 @pytest.fixture(scope="session")

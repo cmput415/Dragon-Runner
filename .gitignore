@@ -8,6 +8,7 @@ scratch/
 **/GazpreaPackage/**
 **/GeneratorPackage/**
 **/VCalcPackage/**
+**/VCalc24Package/**
 
 gazpreaConfig.json
 GeneratorConfig.json
