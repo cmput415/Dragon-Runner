@@ -196,7 +196,6 @@ class ToolChainRunner():
                         tr.did_pass = True
                     else:
                         tr.did_pass = False
-
                 return tr;
 
             elif last_step:
@@ -265,7 +264,7 @@ class ToolChainRunner():
                 resolved.append(arg)
         return Command(resolved)
 
-def diff_bytes(s1: bytes, s2: bytes):
+def diff_bytes(s1: bytes, s2: bytes) -> str:
     """
     The difflib library appears to have an infinite recursion bug.
     It is simple to write our own.
@@ -301,18 +300,23 @@ def lenient_diff(produced: bytes, expected: bytes, pattern: str) -> str:
     """
     Perform a lenient diff on error messages, using the pattern as a mask/filter.
     Unfortunately we have to convert from and back to bytes in order to apply regex.
-    """
-    produced_str = bytes_to_str(produced).strip()
-    expected_str = bytes_to_str(expected).strip()
+    Bytes must be UTF-8 decodable.
+    """  
+    produced_str = p.strip() if (p := bytes_to_str(produced)) else None
+    expected_str = e.strip() if (e := bytes_to_str(expected)) else None
     
+    if not produced_str or not expected_str:
+        return "Failed to decode error bytes"
+
     # Apply the mask/filter to both strings
     produced_masked = re.sub(pattern, r'\1', produced_str, flags=re.IGNORECASE | re.DOTALL)
     expected_masked = re.sub(pattern, r'\1', expected_str, flags=re.IGNORECASE | re.DOTALL)
-    
+       
     # If the masked strings are identical, return an empty string (no diff)
-    if produced_masked == expected_masked:
+    if produced_masked.lower() == expected_masked.lower(): 
         return ""
-    return diff_bytes(str_to_bytes(produced_str), str_to_bytes(expected_str))
+
+    return diff_bytes(produced, expected)
 
 def color_diff(diff_lines: list) -> str:
     """
