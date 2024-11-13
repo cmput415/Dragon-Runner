@@ -47,12 +47,13 @@ class TestHarness:
                             test_result: Optional[TestResult] = tc_runner.run(test, exe)
                             if not test_result:
                                 success=False
-                                continue
+                                log(f"Failed to receive test result for: {test.stem}")
                             elif test_result.did_pass:
                                 sp_pass_count += 1     
+                                test_result.log(args=self.cli_args)
                             else:
                                 self.failures.append(test_result) 
-                            test_result.log(args=self.cli_args) 
+                                test_result.log(args=self.cli_args)
                             sp_test_count +=1 
                         log("Subpackage Passed: ", sp_pass_count, "/", sp_test_count, indent=2)
                         pkg_pass_count += sp_pass_count

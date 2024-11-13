@@ -17,6 +17,15 @@ class TestFile(Verifiable):
         self.comment_syntax = comment_syntax # default C99 //
         self.expected_out: Union[bytes, TestFileError] = self.get_content("CHECK:", "CHECK_FILE:")
         self.input_stream: Union[bytes, TestFileError] = self.get_content("INPUT:", "INPUT_FILE:")
+    
+    def get_expected_out(self) -> bytes:
+        """
+        Get expected output for logging purposes only. Using this method for test diffs
+        can result in false retreival of empty output when test is ill-defined.
+        """
+        if isinstance(self.expected_out, bytes):
+            return self.expected_out
+        return b''
 
     def verify(self) -> ErrorCollection:
         """

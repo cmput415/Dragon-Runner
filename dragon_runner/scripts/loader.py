@@ -18,7 +18,6 @@ class Loader:
         Select the script to run from the mode argument passed through
         dragon-runner CLI.
         """
-
         def unknown_script():
             print(f"script: {self.script} did not match any registered script.")
 
