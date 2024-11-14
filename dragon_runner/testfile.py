@@ -18,10 +18,19 @@ class TestFile(Verifiable):
         self.expected_out: Union[bytes, TestFileError] = self.get_content("CHECK:", "CHECK_FILE:")
         self.input_stream: Union[bytes, TestFileError] = self.get_content("INPUT:", "INPUT_FILE:")
     
+    def get_input_stream(self) -> bytes:
+        """
+        Get the input-stream supplied for the test. Assumes this testfile instance
+        has had self.verify() called beforehand.
+        """
+        if isinstance(self.input_stream, bytes):
+            return self.input_stream
+        return b''
+
     def get_expected_out(self) -> bytes:
         """
-        Get expected output for logging purposes only. Using this method for test diffs
-        can result in false retreival of empty output when test is ill-defined.
+        Get the expected output for the test. Assumes this testfile instance
+        has had self.verify() called beforehand.
         """
         if isinstance(self.expected_out, bytes):
             return self.expected_out
@@ -68,8 +77,7 @@ class TestFile(Verifiable):
             if file_bytes is None:
                 return TestFileError(f"Failed to convert file {full_path} to bytes")
  
-            return file_bytes
-        
+            return file_bytes 
         else:
             return b''
     

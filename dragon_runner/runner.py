@@ -4,6 +4,7 @@ import re
 import json
 import time
 import sys
+
 from subprocess                 import TimeoutExpired, CompletedProcess
 from typing                     import List, Dict, Optional, Union
 from dataclasses                import dataclass, asdict
@@ -61,30 +62,24 @@ class TestResult:
     execution time, and error information.
     """
     __test__ = False  # pytest gets confused when classes start with 'Test' 
-    def __init__(
-        self,
-        test: 'TestFile',
-        did_pass: bool = False,
-        error_test: bool = False,
-        did_panic: bool = False,
-        time: Optional[float] = None,
-        diff: Optional[str] = None,
-        error_msg: Optional[str] = None,
-        failing_step: Optional[str] = None,
-        gen_output: Optional[bytes] = b'',
-    ):
-        self.test = test                # test result is derived from
-        self.did_pass = did_pass        # did expected out match generated
-        self.error_test = error_test    # did test return with non-zero exit
-        self.did_panic = did_panic      # did test cause the toolchain to panic
-        self.time = time                # time test took on the final step
-        self.diff = diff                # diff if the test failed gracefully
-        self.error_msg = error_msg      # error message if test did not fail gracefully
-        self.failing_step = failing_step # step the TC failed on
-        self.gen_output = gen_output    # output of the test
-        self.command_history = []       # list of command histories for this test
+    def __init__(self, test:TestFile): 
+        # required fields 
+        self.test = test
+        self.did_pass: bool = False
+        self.error_test: bool = False
+        self.command_history: List[CommandResult] = []
+
+        # optional fields
+        self.gen_output: Optional[bytes] = None
+        self.error_msg: Optional[str] = None
+        self.time: Optional[float] = None
+        self.failing_step: Optional[str] = None
 
     def log(self, file=sys.stdout, args: Union['CLIArgs', None]=None):
+        """
+        Print a TestResult to the log with various levels of verbosity.
+        This is the main output the user is concerned with.
+        """
         pass_msg = "[E-PASS] " if self.error_test else "[PASS] "
         fail_msg = "[E-FAIL] " if self.error_test else "[FAIL] " 
         test_name = f"{self.test.file:<50}"    
@@ -141,12 +136,10 @@ class ToolChainRunner():
             cr.subprocess=result
             cr.exit_status=result.returncode
             cr.time=wall_time
-
         except TimeoutExpired:
             cr.time=0
             cr.timed_out=True
-            cr.exit_status=255
-        
+            cr.exit_status=255 
         except Exception:
             cr.exit_status=1
 
@@ -181,15 +174,13 @@ class ToolChainRunner():
         tr = TestResult(test=test)
         
         for index, step in enumerate(self.tc):
-
-            last_step = index == len(self.tc) - 1
             
-            if step.uses_ins and isinstance(test.input_stream, bytes):
-                input_stream = test.input_stream
-            else:
-                input_stream = b''
-
-            output_file = self.resolve_output_file(step) 
+            # set up input and output
+            last_step = (index == len(self.tc) - 1) 
+            input_stream = test.get_input_stream() if step.uses_ins else b''
+            output_file = self.resolve_output_file(step)
+            
+            # resolve magic parameters for currents step
             magic_params = MagicParams(exe.exe_path, input_file, output_file)
             command = self.resolve_command(step, magic_params)
             command_result  = self.run_command(command, input_stream) 
@@ -202,7 +193,7 @@ class ToolChainRunner():
                 """
                 OS failed to exec the command.
                 """
-                tr.did_pass = False; tr.did_panic = True;
+                tr.did_pass = False;
                 return tr
             
             step_stdout = child_process.stdout 
@@ -216,7 +207,7 @@ class ToolChainRunner():
                 """
                 timeout_msg = f"Toolchain timed out for test: {test.file}"
                 tr.did_pass=False;
-                tr.did_panic=True;
+                # tr.did_panic=True;
                 tr.failing_step=step.name;
                 tr.error_msg=timeout_msg;
                 return tr
@@ -236,14 +227,12 @@ class ToolChainRunner():
                     tr.did_pass = False
 
                 # get compile time error result is not last step
-                elif step.allow_error:
- 
+                elif step.allow_error: 
                     # Choose the compile time or runtime error pattern
                     if not last_step:
                         error_pattern = r'.*?(Error on line \d+):?.*' 
                     else:
                         error_pattern = r'\s*(\w+Error):?.*'
-
                     if lenient_diff(step_stderr, expected, error_pattern) == "":
                         tr.did_pass = True
                     else:
@@ -388,3 +377,4 @@ def color_diff(diff_lines: list) -> str:
         else:
             colored_lines.append(Fore.RESET + line)
     return '\n'.join(colored_lines)
+
