@@ -10,11 +10,11 @@ from dataclasses                import dataclass, asdict
 from colorama                   import Fore, init
 from dragon_runner.testfile     import TestFile 
 from dragon_runner.config       import Executable, ToolChain
-from dragon_runner.log          import log, log_multiline
-from dragon_runner.utils        import make_tmp_file, bytes_to_str,\
-                                       file_to_bytes, str_to_bytes, truncated_bytes
+from dragon_runner.log          import log
 from dragon_runner.toolchain    import Step
 from dragon_runner.cli          import CLIArgs
+from dragon_runner.utils        import make_tmp_file, bytes_to_str,\
+                                       file_to_bytes, truncated_bytes
 
 init(autoreset=True)
 
@@ -26,10 +26,13 @@ class MagicParams:
     def __repr__(self):
         return json.dumps(asdict(self), indent=2)
 
-@dataclass
 class Command:
-    cmd: str
-    args: List[str] 
+    """
+    Wrapper for a list of arguments to run fork/exec style
+    """
+    def __init__(self, args):
+        self.args: List[str]    = args
+        self.cmd: str           = self.args[0]
 
 @dataclass
 class CommandResult:
@@ -44,7 +47,7 @@ class CommandResult:
             stdout = self.subprocess.stdout
             stderr = self.subprocess.stderr
              
-            log(f"==> {self.cmd} (exit {self.exit_status})", indent=indent)
+            log(f"==> {self.cmd} (exit {self.exit_status})", indent=indent, level=level)
 
             log(f"stdout ({len(stdout)} bytes):", truncated_bytes(stdout, max_bytes=512),
                 indent=indent+2, level=level)
@@ -100,7 +103,7 @@ class TestResult:
         
         # Log the command history
         level = 3 if self.did_pass else 2
-        log(f"==> Command History", indent=5)
+        log(f"==> Command History", indent=5, level=level)
         for cmd in self.command_history:
             cmd.log(level=level, indent=7)
         
@@ -108,10 +111,10 @@ class TestResult:
         expected_out = self.test.get_expected_out()
         generated_out = x if (x := self.gen_output) else b''
  
-        log(f"==> Expected Out ({len(expected_out)} bytes):", indent=5, level=level)
-        log(str(expected_out), level=level, indent=6)
-        log(f"==> Generated Out ({len(generated_out)} bytes):", indent=5, level=level)
-        log(str(generated_out), level=level, indent=6) 
+        log(f"==> Expected Out ({len(expected_out)} bytes):", indent=5, level=level-1)
+        log(str(expected_out), level=level-1, indent=6)
+        log(f"==> Generated Out ({len(generated_out)} bytes):", indent=5, level=level-1)
+        log(str(generated_out), level=level-1, indent=6) 
         
     def __repr__(self):
         return "PASS" if self.did_pass else "FAIL"
@@ -130,7 +133,6 @@ class ToolChainRunner():
         stdout = subprocess.PIPE
         stderr = subprocess.PIPE
         start_time = time.time()
-
         cr = CommandResult(cmd=command.cmd)
         try:
             result = subprocess.run(command.args, env=env, input=stdin, stdout=stdout,
@@ -145,6 +147,9 @@ class ToolChainRunner():
             cr.timed_out=True
             cr.exit_status=255
         
+        except Exception:
+            cr.exit_status=1
+
         return cr
         
     def resolve_output_file(self, step: Step) -> Optional[str]:
@@ -159,7 +164,7 @@ class ToolChainRunner():
         """
         replace magic parameters with real arguments
         """
-        command = Command(step.exe_path, [step.exe_path] + step.arguments)
+        command = Command([step.exe_path] + step.arguments)
         command = self.replace_magic_args(command, params)
         command = self.replace_env_vars(command)
         exe = command.args[0]
@@ -174,14 +179,21 @@ class ToolChainRunner():
         input_file = test.path
         expected = test.expected_out if isinstance(test.expected_out, bytes) else b'' 
         tr = TestResult(test=test)
+        
         for index, step in enumerate(self.tc):
 
-            last_step       = index == len(self.tc) - 1
-            input_stream    = test.input_stream if step.uses_ins and isinstance(test.input_stream, bytes) else b'' 
-            output_file     = self.resolve_output_file(step) 
-            command         = self.resolve_command(step, MagicParams(exe.exe_path, input_file, output_file))
+            last_step = index == len(self.tc) - 1
+            
+            if step.uses_ins and isinstance(test.input_stream, bytes):
+                input_stream = test.input_stream
+            else:
+                input_stream = b''
+
+            output_file = self.resolve_output_file(step) 
+            magic_params = MagicParams(exe.exe_path, input_file, output_file)
+            command = self.resolve_command(step, magic_params)
             command_result  = self.run_command(command, input_stream) 
-           
+            
             # save command history for logging
             tr.command_history.append(command_result)
 
@@ -207,10 +219,7 @@ class ToolChainRunner():
                 tr.did_panic=True;
                 tr.failing_step=step.name;
                 tr.error_msg=timeout_msg;
-
                 return tr
-                # return TestResult(test=test, did_pass=False, did_panic=True, error_test=False,
-                #                   gen_output=b'', failing_step=step.name, error_msg=timeout_msg)
             
             elif child_process.returncode != 0:
                 """
@@ -218,8 +227,6 @@ class ToolChainRunner():
                 is specified in the config, we can perform a lenient diff based on CompileTime
                 or RuntimeError message rules. Otherwise, we abort the toolchain.
                 """
-                # tr = TestResult(test=test, gen_output=step_stderr, failing_step=step.name,
-                                                                   # error_test=True)
                 tr.gen_output=step_stderr
                 tr.failing_step=step.name
                 tr.error_test=True
@@ -255,7 +262,6 @@ class ToolChainRunner():
                     output_file_contents = file_to_bytes(output_file)
                     step_stdout = output_file_contents 
                 
-                # tr = TestResult(test=test, time=step_time, gen_output=step_stdout)
                 tr.time=step_time
                 tr.gen_output=step_stdout
 
@@ -292,7 +298,7 @@ class ToolChainRunner():
                 resolved.append(arg)
             else:
                 resolved.append(arg)
-        return Command(cmd.cmd, resolved)
+        return Command(resolved)
 
     @staticmethod
     def replace_magic_args(command: Command, params: MagicParams) -> Command:
@@ -309,7 +315,7 @@ class ToolChainRunner():
                 resolved.append(params.output_file) 
             else:
                 resolved.append(arg)
-        return Command(command.cmd, resolved)
+        return Command(resolved)
 
 def diff_bytes(s1: bytes, s2: bytes) -> str:
     """
