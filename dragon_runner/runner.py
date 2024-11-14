@@ -360,21 +360,3 @@ def lenient_diff(produced: bytes, expected: bytes, pattern: str) -> str:
 
     return diff_bytes(produced, expected)
 
-def color_diff(diff_lines: list) -> str:
-    """
-    Returns a colored string representation of the diff.
-    """
-    if not diff_lines:
-        return "No differences found."
-    colored_lines = []
-    for line in diff_lines:
-        if line.startswith('+'):
-            colored_lines.append(Fore.GREEN + line)
-        elif line.startswith('-'):
-            colored_lines.append(Fore.RED + line)
-        elif line.startswith('?'):
-            colored_lines.append(Fore.CYAN + line)
-        else:
-            colored_lines.append(Fore.RESET + line)
-    return '\n'.join(colored_lines)
-
