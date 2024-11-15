@@ -2,6 +2,7 @@
 from typing import List
 from dragon_runner.scripts.build import build 
 from dragon_runner.scripts.gather import gather 
+from dragon_runner.scripts.gen_config import main as gen_config 
 
 class Loader:
     """
@@ -24,6 +25,7 @@ class Loader:
         script_dispatch = {
             "build":        lambda: build(*self.args),
             "gather":       lambda: gather(*self.args),
+            "gen-config":   lambda: gen_config(*self.args),
             "anon-tests":   lambda: print("TODO"),
             "anon-csv":     lambda: print("TODO"),
             "preview":      lambda: print("TODO")
