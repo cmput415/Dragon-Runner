@@ -9,7 +9,7 @@
 <br>
 
 
-## What
+## What is Dragon-Runner
 
 `dragon-runner` is a successor to the [415-tester](https://github.com/cmput415/Tester). Its name is derived by being a test runner for a compiler class that likes dragon iconography. `dragon-runner` has dual functions for students and graders. For students it serves as unit tester, versaitle to use over arbitrary toolchains through a generic JSON configuration language. For graders dragon-runner is an swiss army knife of sorts. It wraps scripts for building, gathering tests, and meta JSON configuration which are useful for herding an arbitrary number of compiler submissions into place. It also can run tests in a tournament mode, where each submitted compier and test-suite pair is ran in a cross product with every other submission. The tournament mode produces a CSV output according to the CMPUT 415 grading scheme. 
 

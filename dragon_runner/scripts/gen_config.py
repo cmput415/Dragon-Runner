@@ -1,3 +1,12 @@
+"""
+============================== 415 Grading Script ==============================
+Author: Justin Meimar 
+Name: gen_config.py
+Desc: 
+================================================================================
+"""
+
+
 import json
 import argparse
 from typing import Optional

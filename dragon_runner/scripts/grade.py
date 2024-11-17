@@ -1,16 +1,28 @@
-
+"""
+============================== 415 Grading Script ==============================
+Author: Justin Meimar 
+Name: grade.py
+Desc: 
+================================================================================
+"""
+import argparse
 import csv
-from fractions import Fraction
+from pathlib    import Path 
+from fractions  import Fraction
+from typing     import List
 
+# These are hard coded as to not bloat the CLI. Probably easier to change in place.
 DEFENSIVE_PTS       = 2
 OFFENSIVE_PTS       = 1
 COHERENCE_PTS       = 10
 COMPETITIVE_WEIGHT  = 0.2
 TA_WEIGHT           = 0.5
-SOLUTION            = "solution"
+SOLUTION            = "solution" # the EXE of the solution
 
 def to_float(to_convert) -> float:
-    """Helper function to convert fraction strings to floating point."""
+    """
+    Helper function to convert fraction strings to floating point.
+    """
     try:
         return float(Fraction(to_convert))
     except ValueError:
@@ -21,9 +33,8 @@ def normalize_competetive_scores(tc_table):
     Normalize the competative scores of a table relative to the max score.
     By convention the last row contains the total score for the toolchain  
     """
-    n_rows = len(tc_table)
-    n_cols = len(tc_table[0])
-    
+    # n_rows = len(tc_table)
+    # n_cols = len(tc_table[0])    
 
     print("TC_TABLE", tc_table)
     print("COMPETITIVE ROW:", tc_table[-2][1:])
@@ -95,14 +106,13 @@ def add_competitive_rows(table):
             o_score += (OFFENSIVE_PTS * (1 - to_float(table[i][j])))
             d_score += (DEFENSIVE_PTS * to_float(table[j][i]))
 
-        # print(f"attacker: {attacker}\n oscore: {o_score} \ndscore: {d_score}\n cscore: {c_score}")
-
         # Populate the new rows
         ta_points_row[j] = str(round(ta_score * TA_WEIGHT, 3))
         defensive_row[j] = str(round(d_score, 2))
         offensive_row[j] = str(round(o_score, 2))
         coherence_row[j] = round(c_score, 3)
-        total_row[j] = str(float(defensive_row[j]) + float(offensive_row[j]) + float(coherence_row[j]))
+        total_row[j] = str(
+                float(defensive_row[j]) + float(offensive_row[j]) + float(coherence_row[j]))
 
     # Append new rows to the table
     table.append(defensive_row)
@@ -113,11 +123,14 @@ def add_competitive_rows(table):
 
     return table
 
-if __name__ == "__main__":
-
-    input_files = ['Grades.csv'] 
+def tournament(tournament_csv_paths: List[str], grade_path: str):
+    """
+    Run the tournament for each tournament csv then average all the
+    toolchain tables. Write all the tables including the average to 
+    the final grade_path
+    """
     tc_tables = [] 
-    for file in input_files:
+    for file in tournament_csv_paths:
         with open(file, 'r') as f:
             reader = csv.reader(f)
             tc_table = list(reader)
@@ -128,10 +141,51 @@ if __name__ == "__main__":
     normalize_competetive_scores(tc_avg)
     print(tc_avg)
 
-    output_file = './vcalc-grades.csv'
-    with open(output_file, 'w') as f:
+    with open(grade_path, 'w') as f:
         writer = csv.writer(f)
         for table in tc_tables:
             writer.writerows(table)
             writer.writerow([]) # newline
         writer.writerows(tc_avg)
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "tournament_csvs",
+        type=Path,
+        nargs="+",
+        help="Path to one or more csv files generated from grade mode"
+    )
+    parser.add_argument(
+        "output_csv",
+        type=Path,
+        help="Path to final output csv with grades"
+    )
+    
+    args = parser.parse_args() 
+    tournament(args.tournament_csvs, args.log_file)
+    
+    #
+    # input_files = ['Grades.csv'] 
+    # tc_tables = [] 
+    # for file in input_files:
+    #     with open(file, 'r') as f:
+    #         reader = csv.reader(f)
+    #         tc_table = list(reader)
+    #         tc_tables.append(add_competitive_rows(tc_table))
+    # 
+    # print(tc_tables)
+    # tc_avg = average_toolchain_tables(tc_tables)
+    # normalize_competetive_scores(tc_avg)
+    # print(tc_avg)
+    #
+    # output_file = './vcalc-grades.csv'
+    # with open(output_file, 'w') as f:
+    #     writer = csv.writer(f)
+    #     for table in tc_tables:
+    #         writer.writerows(table)
+    #         writer.writerow([]) # newline
+    #     writer.writerows(tc_avg)
+
+

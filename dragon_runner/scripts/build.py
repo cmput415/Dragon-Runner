@@ -1,3 +1,11 @@
+"""
+============================== 415 Grading Script ==============================
+Author: Justin Meimar 
+Name: build.py
+Desc: 
+================================================================================
+"""
+
 import os
 import subprocess
 import shutil

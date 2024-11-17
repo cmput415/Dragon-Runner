@@ -1,3 +1,11 @@
+"""
+============================== 415 Grading Script ==============================
+Author: Justin Meimar 
+Name: gather.py
+Desc: 
+================================================================================
+"""
+
 import shutil
 import argparse
 from pathlib import Path

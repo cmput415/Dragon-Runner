@@ -11,7 +11,7 @@ class TestHarness:
     __test__ = False 
     def __init__(self, config: Config, cli_args: CLIArgs):
         self.config                     = config
-        self.cli_args                   = cli_args
+        self.cli_args: CLIArgs          = cli_args
         self.failures: List[TestResult] = []
 
     def log_failures(self):
@@ -73,12 +73,14 @@ class TestHarness:
         """
         decide wether to run in regular mode or grade mode based on the CLI args 
         """ 
-        if self.cli_args.mode == "grade":
-            assert self.cli_args.failure_log is not None, "Need to supply failure log!"
-            print("Running Dragon Runner in grade mode")
-            return self.run_grader_json()
-        else:
+        if self.cli_args.is_tournament_mode():
+            return self.run_tournament()
+
+        elif self.cli_args.is_regular_mode():
             return self.run_regular()
+
+        else:
+            return False
 
     def log_failure_to_file(self, file, result: TestResult):
         """
@@ -125,7 +127,7 @@ class TestHarness:
         """
         return {}
 
-    def run_grader_json(self) -> bool:
+    def run_tournament(self) -> bool:
         """
         Run the tester in grade mode. Run all test packages for each tested executable.
         Write each toolchain table to the CSV file as it's completed.

@@ -14,7 +14,7 @@ def main():
     log(args, level=1)
     
     # dragon-runner can also be used as a frontend for grading scripts
-    if args.mode not in ["regular", "grade"]:
+    if args.mode not in ["regular", "tournament"]:
         print(f"Use dragon-runner as a loader for script: {args.mode}")
         loader = Loader(args.mode, args.script_args)
         loader.run() 

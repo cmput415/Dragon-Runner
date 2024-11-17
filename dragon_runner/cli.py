@@ -22,6 +22,10 @@ class CLIArgs(NamedTuple):
     verbosity: int
     verify: bool
     script_args: List[str]
+    
+    def is_regular_mode(self):      return self.mode == "regular"
+    def is_tournament_mode(self):   return self.mode == "tournament"
+    def is_script_mode(self):       return self.mode not in ["regular", "tournament"]
 
     def __repr__(self) -> str:
         return (
@@ -43,10 +47,10 @@ def parse_cli_args() -> CLIArgs:
     
     # Make config_file optional
     parser.add_argument("config_file", nargs="?", default=None,
-        help="Path to the tester JSON configuration file (required for regular and grade modes).")
+        help="Path to the tester JSON configuration file (required for regular and tournament modes).")
     
     parser.add_argument("--mode", dest="mode", default="regular",
-        help="run in regular, grade or script mode")
+        help="run in regular, tournament or script mode")
     
     parser.add_argument("--script-args", type=parse_script_args, default=[],
         help='Arguments to pass to the script (quote the entire string, e.g. --script-args="arg1 arg2")')
@@ -75,19 +79,19 @@ def parse_cli_args() -> CLIArgs:
     args = parser.parse_args()
     
     # Check if config file is required based on mode
-    if args.mode in ["regular", "grade"]:
+    if args.mode in ["regular", "tournament"]:
         if not args.config_file:
             parser.error(f"Config file is required for {args.mode} mode")
         if not os.path.isfile(args.config_file):
             parser.error(f"The config file {args.config_file} does not exist.")
-    if args.mode == "grade" and (not bool(args.failure_log) or not bool(args.output)):
-        parser.error("Failure log and ouput file must be supplied when using grade mode.") 
+    if args.mode == "tournament" and (not bool(args.failure_log) or not bool(args.output)):
+        parser.error("Failure log and ouput file must be supplied when using tournament mode.") 
     
     if args.verbosity > 0:
         os.environ["DEBUG"] = str(args.verbosity)
     
     return CLIArgs(
-        config_file    = args.config_file,
+        config_file   = args.config_file,
         mode          = args.mode,
         failure_log   = args.failure_log,
         timeout       = args.timeout,
@@ -98,3 +102,4 @@ def parse_cli_args() -> CLIArgs:
         verify        = args.verify,
         script_args   = args.script_args
     )
+
