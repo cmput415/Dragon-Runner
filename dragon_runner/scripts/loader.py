@@ -1,6 +1,7 @@
 
 from typing import List
 from dragon_runner.scripts.build import build 
+from dragon_runner.scripts.grade import grade 
 from dragon_runner.scripts.gather import gather 
 from dragon_runner.scripts.gen_config import main as gen_config 
 
@@ -24,6 +25,7 @@ class Loader:
 
         script_dispatch = {
             "build":        lambda: build(*self.args),
+            "grade":        lambda: grade(*self.args),
             "gather":       lambda: gather(*self.args),
             "gen-config":   lambda: gen_config(*self.args),
             "anon-tests":   lambda: print("TODO"),

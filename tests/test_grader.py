@@ -8,7 +8,6 @@ def test_grader_config(config_factory, cli_factory):
     config : Config = config_factory("ConfigGrade.json")
     args : CLIArgs = cli_factory(**{
         "mode": "tournament",
-        "output_file": "Grades.csv",
         "failure_log": "Failures.txt",
         "timeout": 5
     })
@@ -17,4 +16,4 @@ def test_grader_config(config_factory, cli_factory):
     assert harness is not None
     
     harness.run()
-    assert os.path.exists(args.output_file)
+    assert os.path.exists(args.failure_log)

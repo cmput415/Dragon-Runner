@@ -184,7 +184,11 @@ class Config:
                 if rt_id == id :
                     return os.path.abspath(resolve_relative(rt_path, self.config_path))
             return ""
-        return [Executable(id, resolve_relative(path, self.config_path), find_runtime(id)) for id, path in executables_data.items()]
+        return [Executable(
+                    id,
+                    resolve_relative(path, self.config_path),
+                    find_runtime(id)
+                ) for id, path in executables_data.items()]
     
     def parse_toolchains(self, toolchains_data: Dict[str, List[Dict]]) -> List[ToolChain]:
         """
