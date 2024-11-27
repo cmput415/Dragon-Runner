@@ -135,18 +135,18 @@ class TestHarness:
         attacking_pkgs = sorted(self.config.packages, key=lambda pkg: pkg.name.lower())
         defending_exes = sorted(self.config.executables, key=lambda exe: exe.id.lower())
         solution_exe = self.config.solution_exe 
-        
+        failure_log = self.cli_args.failure_log
+
         # track grader internal errors
         exit_status = True
-        
-        with open(self.cli_args.failure_log, 'w') as sol_fail_log, \
-            open(self.cli_args.output_file, 'w', newline='') as grade_csv: 
-            csv_writer = csv.writer(grade_csv)
 
-            for toolchain in self.config.toolchains:
-                tc_runner = ToolChainRunner(toolchain, self.cli_args.timeout)
-                tc_table = self.create_tc_dataframe(toolchain.name, defending_exes, attacking_pkgs) 
+        for toolchain in self.config.toolchains:
+            tc_runner = ToolChainRunner(toolchain, self.cli_args.timeout)
+            tc_table = self.create_tc_dataframe(toolchain.name, defending_exes, attacking_pkgs)
+
+            with open(f"toolchain_{toolchain.name}.csv", 'w') as toolchain_csv:
                 print(f"\nToolchain: {toolchain.name}") 
+                csv_writer = csv.writer(toolchain_csv)
                 for def_exe in defending_exes: 
                     def_exe.source_env()
                     def_feedback_file = f"{def_exe.id}-{toolchain.name}feedback.txt" 
@@ -166,13 +166,15 @@ class TestHarness:
                                 else:      
                                     print(Fore.RED + '.' + Fore.RESET, end='')
                                     self.log_failure_to_file(def_feedback_file, test_result)
-                                    if solution_exe == def_exe.id:
-                                        sol_fail_log.write(f"{toolchain.name} {a_pkg.name} {test.path}\n")
-                        tc_table[def_exe.id][a_pkg.name] = f"{pass_count}/{test_count}"
+                                    if solution_exe == def_exe.id and failure_log is not None:
+                                        with open(failure_log, 'a') as f_log:
+                                            f_log.write(f"{toolchain.name} {a_pkg.name} {test.path}\n")
 
+                        tc_table[def_exe.id][a_pkg.name] = f"{pass_count}/{test_count}"
+                
+                # write the toolchain results into the table
                 csv_writer.writerow([toolchain.name] + [pkg.name for pkg in attacking_pkgs]) 
                 for exe in defending_exes:
                     csv_writer.writerow([exe.id] + [tc_table[exe.id][pkg.name] for pkg in attacking_pkgs])
-                csv_writer.writerow([])  # empty row for separation
 
         return exit_status 

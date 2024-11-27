@@ -31,9 +31,11 @@ class Command:
     """
     Wrapper for a list of arguments to run fork/exec style
     """
-    def __init__(self, args):
-        self.args: List[str]    = args
-        self.cmd: str           = self.args[0]
+    def __init__(self, args, stdout_path=None, stderr_path=None):
+        self.args: List[str]                = args
+        self.cmd: str                       = self.args[0] 
+        self.stdout_path: Optional[str]     = stdout_path
+        self.stderr_path: Optional[str]     = stderr_path
 
 @dataclass
 class CommandResult:
@@ -47,12 +49,16 @@ class CommandResult:
         if self.subprocess:
             stdout = self.subprocess.stdout
             stderr = self.subprocess.stderr
-             
-            log(f"==> {self.cmd} (exit {self.exit_status})", indent=indent, level=level)
-
-            log(f"stdout ({len(stdout)} bytes):", truncated_bytes(stdout, max_bytes=512),
-                indent=indent+2, level=level)
             
+            if stderr is None:
+                stderr = b''
+            if stdout is None:
+                stdout = b''
+
+            log(f"==> {self.cmd} (exit {self.exit_status})", indent=indent, level=level)
+        
+            log(f"stdout ({len(stdout)} bytes):", truncated_bytes(stdout, max_bytes=512),
+                indent=indent+2, level=level) 
             log(f"stderr ({len(stderr)} bytes):", truncated_bytes(stderr, max_bytes=512),
                 indent=indent+2, level=level)
 
@@ -125,23 +131,24 @@ class ToolChainRunner():
         execute a resolved command
         """
         env = os.environ.copy()
-        stdout = subprocess.PIPE
-        stderr = subprocess.PIPE
+        stdout = open(command.stdout_path, 'w') if command.stdout_path is not None else subprocess.PIPE
+        stderr = open(command.stderr_path, 'w') if command.stderr_path is not None else subprocess.PIPE
+
         start_time = time.time()
         cr = CommandResult(cmd=command.cmd)
         try:
             result = subprocess.run(command.args, env=env, input=stdin, stdout=stdout,
                                     stderr=stderr, check=False, timeout=self.timeout)
             wall_time = time.time() - start_time
-            cr.subprocess=result
-            cr.exit_status=result.returncode
-            cr.time=wall_time
+            cr.subprocess = result
+            cr.exit_status = result.returncode
+            cr.time = wall_time
         except TimeoutExpired:
-            cr.time=0
-            cr.timed_out=True
-            cr.exit_status=255 
+            cr.time = self.timeout # max time
+            cr.timed_out = True
+            cr.exit_status = 255 
         except Exception:
-            cr.exit_status=1
+            cr.exit_status = 1
 
         return cr
         
@@ -157,7 +164,11 @@ class ToolChainRunner():
         """
         replace magic parameters with real arguments
         """
-        command = Command([step.exe_path] + step.arguments)
+        command = Command(
+            args=[step.exe_path] + step.arguments,
+            stdout_path = step.stdout_path,
+            stderr_path = step.stderr_path
+        )
         command = self.replace_magic_args(command, params)
         command = self.replace_env_vars(command)
         exe = command.args[0]
@@ -287,24 +298,27 @@ class ToolChainRunner():
                 resolved.append(arg)
             else:
                 resolved.append(arg)
-        return Command(resolved)
+        cmd.args = resolved 
+        return cmd
 
     @staticmethod
-    def replace_magic_args(command: Command, params: MagicParams) -> Command:
+    def replace_magic_args(command: Command, params: MagicParams) -> Command: 
         """
         Magic args are inherited from previous steps
         """
         resolved = []
         for arg in command.args:
-            if arg == '$EXE':
-                resolved.append(params.exe_path)
-            elif arg == '$INPUT':
-                resolved.append(params.input_file)
-            elif arg == '$OUTPUT':
-                resolved.append(params.output_file) 
+            if '$EXE' in arg:
+                resolved.append(arg.replace('$EXE', params.exe_path))
+            elif '$INPUT' in arg and params.input_file:
+                resolved.append(arg.replace('$INPUT', params.input_file))
+            elif '$OUTPUT' in arg and params.output_file:
+                resolved.append(arg.replace('$OUTPUT', params.output_file))
             else:
                 resolved.append(arg)
-        return Command(resolved)
+        command.args = resolved
+        command.cmd = command.args[0]
+        return command
 
 def diff_bytes(s1: bytes, s2: bytes) -> str:
     """

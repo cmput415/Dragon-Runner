@@ -84,9 +84,7 @@ def parse_cli_args() -> CLIArgs:
             parser.error(f"Config file is required for {args.mode} mode")
         if not os.path.isfile(args.config_file):
             parser.error(f"The config file {args.config_file} does not exist.")
-    if args.mode == "tournament" and (not bool(args.failure_log) or not bool(args.output)):
-        parser.error("Failure log and ouput file must be supplied when using tournament mode.") 
-    
+
     if args.verbosity > 0:
         os.environ["DEBUG"] = str(args.verbosity)
     

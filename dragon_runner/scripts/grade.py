@@ -9,7 +9,6 @@ import argparse
 import csv
 from pathlib    import Path 
 from fractions  import Fraction
-from typing     import List
 
 # These are hard coded as to not bloat the CLI. Probably easier to change in place.
 DEFENSIVE_PTS       = 2
@@ -33,14 +32,9 @@ def normalize_competetive_scores(tc_table):
     Normalize the competative scores of a table relative to the max score.
     By convention the last row contains the total score for the toolchain  
     """
-    # n_rows = len(tc_table)
-    # n_cols = len(tc_table[0])    
-
-    print("TC_TABLE", tc_table)
-    print("COMPETITIVE ROW:", tc_table[-2][1:])
-    raw_competitive_scores = tc_table[-2][1:]
+    raw_competitive_scores = [float(score) for score in tc_table[-2][1:]]
     max_score = max(raw_competitive_scores)
-    print("MAX SCORE: ", max_score)
+    print("MAX SCORE: ", max_score, "FROM :", raw_competitive_scores)
     norm_competitive_scores = [
         round(COMPETITIVE_WEIGHT * (float(score) / float(max_score)), 3)
         for score in raw_competitive_scores
@@ -48,21 +42,16 @@ def normalize_competetive_scores(tc_table):
     norm_scores_row = ["Normalized Points (20% Weight)"] + norm_competitive_scores
     tc_table.append(norm_scores_row)
 
-def average_toolchain_tables(tables):
+def average_toolchain_tables(tables, n_compilers):
     """
     Take a number of identical toolchain tables and return the average
     of all their values. 
     """ 
-    n_rows = len(tables[0])
-    n_cols = len(tables[0][0])
-    for table in tables:
-        assert len(table) == n_rows, "num rows differ"
-        assert len(table[0]) == n_cols, "num cols differ"
-    
+    print("N_COMPILERS: ", n_compilers)
     avg_table = [row[:] for row in tables[0]]
     avg_table[0][0] = "toolchain summary" 
-    for i in range(1, n_cols):
-        for j in range(1, n_cols):
+    for i in range(1, n_compilers+1):
+        for j in range(1, n_compilers+1):
             avg = 0 
             for tc in tables:
                 avg += to_float(tc[i][j])
@@ -76,19 +65,19 @@ def add_competitive_rows(table):
     Add a row at the bottom of the table for defensive, offesnsive
     and coherence points. Not yet normalized to highest score. 
     """
-    n_cols = len(table[0])
-    print("N_COLS:", n_cols)
-    print("N_ROWS:", len(table))
-    
-    # Declare new rows
-    ta_points_row = ["TA Testing Score (50% Weight)"] + [0] * (n_cols - 1)
-    defensive_row = ["Defensive Points"] + [0] * (n_cols - 1)
-    offensive_row = ["Offensive Points"] + [0] * (n_cols - 1)
-    coherence_row = ["Coherence Points"] + [0] * (n_cols - 1)
-    total_row = ["Competitive Points"] + [0] * (n_cols - 1)
+    n_compilers = len(table)-1 # one row for labels 
+    print(table)
+    print("N_COMPILERS: ", n_compilers)
 
-    for j in range(1, n_cols):
-        attacker = table[0][j]
+    # Declare new rows
+    ta_points_row = ["TA Testing Score (50% Weight)"] + [0] * (n_compilers)
+    defensive_row = ["Defensive Points"] + [0] * (n_compilers)
+    offensive_row = ["Offensive Points"] + [0] * (n_compilers)
+    coherence_row = ["Coherence Points"] + [0] * (n_compilers)
+    total_row = ["Competitive Points"] + [0] * (n_compilers)
+
+    for j in range(1, n_compilers+1):
+
         ta_score = 0 # score on "solution" package
         o_score = 0 # offensive score
         d_score = 0 # defensive score
@@ -96,9 +85,8 @@ def add_competitive_rows(table):
         c_score += COHERENCE_PTS if to_float(table[j][j]) == 1 else 0
 
         # defender = table[1][0]
-        for i in range(1, n_cols):
+        for i in range(1, n_compilers+1):
             defender = table[i][0]
-            print(f"i: {i}", defender)
             if defender == SOLUTION:
                 # look at the transpose position to determine TA score
                 ta_score += to_float(table[j][i])
@@ -111,8 +99,8 @@ def add_competitive_rows(table):
         defensive_row[j] = str(round(d_score, 2))
         offensive_row[j] = str(round(o_score, 2))
         coherence_row[j] = round(c_score, 3)
-        total_row[j] = str(
-                float(defensive_row[j]) + float(offensive_row[j]) + float(coherence_row[j]))
+        total_row[j] = str(round(
+                float(defensive_row[j]) + float(offensive_row[j]) + float(coherence_row[j]), 3))
 
     # Append new rows to the table
     table.append(defensive_row)
@@ -123,24 +111,34 @@ def add_competitive_rows(table):
 
     return table
 
-def tournament(tournament_csv_paths: List[str], grade_path: str):
+def grade(*args):
     """
     Run the tournament for each tournament csv then average all the
     toolchain tables. Write all the tables including the average to 
     the final grade_path
     """
+    
+    if len(args) < 2:
+        print("Must supply at least two arguments: <toolchain_csv>+ <grade_csv>")
+        return 1
+    
+    # do some mangaling with args to be able to pass in variadic from loader.py
+    toolchain_csv_paths = args[:-1]
+    grade_path = args[-1]
+    n_compilers = 0
+
     tc_tables = [] 
-    for file in tournament_csv_paths:
+    for file in toolchain_csv_paths:
         with open(file, 'r') as f:
             reader = csv.reader(f)
             tc_table = list(reader)
             tc_tables.append(add_competitive_rows(tc_table))
     
-    print(tc_tables)
-    tc_avg = average_toolchain_tables(tc_tables)
+    n_compilers = len(tc_tables[0][0]) - 1
+    print("N COMPILERS: ", n_compilers)
+    tc_avg = average_toolchain_tables(tc_tables, n_compilers)
     normalize_competetive_scores(tc_avg)
-    print(tc_avg)
-
+    
     with open(grade_path, 'w') as f:
         writer = csv.writer(f)
         for table in tc_tables:
@@ -164,28 +162,5 @@ if __name__ == "__main__":
     )
     
     args = parser.parse_args() 
-    tournament(args.tournament_csvs, args.log_file)
+    grade(*args.tournament_csvs, args.output_csv)
     
-    #
-    # input_files = ['Grades.csv'] 
-    # tc_tables = [] 
-    # for file in input_files:
-    #     with open(file, 'r') as f:
-    #         reader = csv.reader(f)
-    #         tc_table = list(reader)
-    #         tc_tables.append(add_competitive_rows(tc_table))
-    # 
-    # print(tc_tables)
-    # tc_avg = average_toolchain_tables(tc_tables)
-    # normalize_competetive_scores(tc_avg)
-    # print(tc_avg)
-    #
-    # output_file = './vcalc-grades.csv'
-    # with open(output_file, 'w') as f:
-    #     writer = csv.writer(f)
-    #     for table in tc_tables:
-    #         writer.writerows(table)
-    #         writer.writerow([]) # newline
-    #     writer.writerows(tc_avg)
-
-

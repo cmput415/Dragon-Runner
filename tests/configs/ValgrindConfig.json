@@ -1,0 +1,31 @@
+{
+  "testDir": "../packages/CPackage/RegularPass/",
+  "testedExecutablePaths": {
+    "clang": "/usr/bin/clang"
+  },
+  "toolchains": {
+    "LLVM": [
+      {
+        "stepName": "compile",
+        "executablePath": "$EXE",
+        "arguments": ["$INPUT", "-o", "$OUTPUT"],
+        "output": "prog.o",
+        "allowError": true 
+      },
+      {
+	"stepName": "valgrind",
+        "executablePath": "/usr/bin/valgrind",
+        "arguments": [
+	  "--leak-check=full",
+	  "--error-exitcode=1",
+	  "--log-fd=2",
+	  "$INPUT"
+	],
+	"stderrPath": "/dev/null",
+        "usesInStr": true,
+        "allowError": false
+      }
+    ] 
+  }
+}
+

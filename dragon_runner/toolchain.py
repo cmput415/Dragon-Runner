@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 from typing import Dict, List, Iterator
 from dragon_runner.errors import *
 
@@ -12,15 +13,20 @@ class Step(Verifiable):
         self.allow_error    = kwargs.get('allowError', False)
         self.uses_ins       = kwargs.get('usesInStr', False)
         self.uses_runtime   = kwargs.get('usesRuntime', False)
+        self.stdout_path    = kwargs.get('stdoutPath', None)
+        self.stderr_path    = kwargs.get('stderrPath', None)
     
     def verify(self) -> ErrorCollection:
         errors = ErrorCollection()
         if not self.name:
             errors.add(ConfigError(f"Missing required filed 'stepName' in Step {self.name}"))
+        
         if not self.exe_path:
             errors.add(ConfigError(f"Missing required field 'exe_path' in Step: {self.name}"))
+
         elif not os.path.exists(self.exe_path) and not self.exe_path.startswith('$'):
             errors.add(ConfigError(f"Cannot find exe_path '{self.exe_path}' in Step: {self.name}"))
+        
         return errors 
 
     def to_dict(self) -> Dict:
@@ -31,7 +37,9 @@ class Step(Verifiable):
             'output': self.output,
             'allowError': self.allow_error,
             'usesInStr': self.uses_ins,
-            'usesRuntime': self.uses_runtime
+            'usesRuntime': self.uses_runtime,
+            'stdoutPath': self.stdout_path,
+            'stderrPath': self.stderr_path
         }
 
     def __repr__(self):
