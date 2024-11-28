@@ -357,10 +357,11 @@ def lenient_diff(produced: bytes, expected: bytes, pattern: str) -> str:
     Perform a lenient diff on error messages, using the pattern as a mask/filter.
     Unfortunately we have to convert from and back to bytes in order to apply regex.
     Bytes must be UTF-8 decodable.
-    """  
-    produced_str = p.strip() if (p := bytes_to_str(produced)) else None
+    """
+    produced_first_line = produced.split(b'\n', 1)[0]
+    produced_str = p.strip() if (p := bytes_to_str(produced_first_line)) else None
     expected_str = e.strip() if (e := bytes_to_str(expected)) else None
-    
+
     if not produced_str or not expected_str:
         return "Failed to decode error bytes"
 
