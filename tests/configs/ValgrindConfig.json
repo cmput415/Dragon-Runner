@@ -1,5 +1,5 @@
 {
-  "testDir": "../packages/CPackage/RegularPass/",
+  "testDir": "../packages/MemoryLeaks",
   "testedExecutablePaths": {
     "clang": "/usr/bin/clang"
   },
@@ -17,7 +17,7 @@
         "executablePath": "/usr/bin/valgrind",
         "arguments": [
 	  "--leak-check=full",
-	  "--error-exitcode=1",
+	  "--error-exitcode=111",
 	  "--log-fd=2",
 	  "$INPUT"
 	],

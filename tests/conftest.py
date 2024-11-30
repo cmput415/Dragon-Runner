@@ -18,7 +18,7 @@ def create_cli_args(**kwargs) -> CLIArgs:
         failure_log     = kwargs.get('failure_log', None),
         debug_package   = kwargs.get('debug_package', None),
         mode            = kwargs.get('mode', None),
-        timeout         = kwargs.get('timeout', None),
+        timeout         = kwargs.get('timeout', 5),
         time            = kwargs.get('time', None),
         verbosity       = kwargs.get('verbosity', None),
         verify          = kwargs.get('verify', None),

@@ -14,6 +14,7 @@ from dragon_runner.config       import Executable, ToolChain
 from dragon_runner.log          import log
 from dragon_runner.toolchain    import Step
 from dragon_runner.cli          import CLIArgs
+from dragon_runner.constants    import VALGRIND_EXIT_CODE
 from dragon_runner.utils        import make_tmp_file, bytes_to_str,\
                                        file_to_bytes, truncated_bytes
 
@@ -73,6 +74,7 @@ class TestResult:
         self.test = test
         self.did_pass: bool = False
         self.error_test: bool = False
+        self.memory_leak: bool = False
         self.command_history: List[CommandResult] = []
 
         # optional fields
@@ -122,9 +124,10 @@ class TestResult:
 
 class ToolChainRunner():
     def __init__(self, tc: ToolChain, timeout: float, env: Dict[str, str]={}):
-        self.tc         = tc
-        self.timeout    = timeout
-        self.env        = env
+        self.tc                     = tc
+        self.timeout                = timeout
+        self.env                    = env
+        self.reserved_exit_codes    = [VALGRIND_EXIT_CODE]
 
     def run_command(self, command: Command, stdin: bytes) -> CommandResult:
         """
@@ -210,7 +213,16 @@ class ToolChainRunner():
             step_stdout = child_process.stdout 
             step_stderr = child_process.stderr
             step_time = round(command_result.time, 4)
-
+            
+            if child_process.returncode in self.reserved_exit_codes:
+                """
+                Special case for reserved exit codes
+                1) Valgrind
+                """
+                if child_process.returncode == VALGRIND_EXIT_CODE:
+                    print("LEAKY")
+                    tr.memory_leak = True
+            
             # Check if the command timed out
             if command_result.timed_out:
                 """
@@ -223,7 +235,8 @@ class ToolChainRunner():
                 tr.error_msg=timeout_msg;
                 return tr
             
-            elif child_process.returncode != 0:
+            elif child_process.returncode != 0 and \
+                child_process.returncode not in self.reserved_exit_codes:
                 """
                 A step in the toolchain has returned a non-zero exit status. If "allowError"
                 is specified in the config, we can perform a lenient diff based on CompileTime
@@ -271,8 +284,7 @@ class ToolChainRunner():
                     tr.did_pass = True
                 else:
                     tr.did_pass = False
-                return tr
- 
+                return tr 
             else:
                 """
                 Set up the next steps input file which is the $OUTPUT of the previous step.
