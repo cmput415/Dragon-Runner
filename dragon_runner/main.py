@@ -54,7 +54,6 @@ def main():
     if args.mode == "regular":
         # run in regular mode
         harness = RegularHarness(config, args)
-        harness.log_failures()
 
     elif args.mode == "tournament":
         # run the tester in tournament mode
@@ -72,6 +71,7 @@ def main():
         raise RuntimeError(f"Failed to provide valid mode: {args.mode}")
     
     success = harness.run()
+    harness.log_failures()
     if success:
         return 1
     return 0

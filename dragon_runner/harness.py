@@ -17,6 +17,7 @@ class TestHarness:
 
     def log_failures(self):
         """Report failures to stdout."""
+        log("Failure Log:") 
         for result in self.failures:
             result.log()
 
@@ -37,34 +38,34 @@ class TestHarness:
 
     def iterate(self):
         for exe in self.config.executables:
-            log("Running executable:\t", exe.id)
+            log("Running executable:\t", exe.id, indent=0)
             exe.source_env()
             exe_pass_count = 0
             exe_test_count = 0
             for toolchain in self.config.toolchains:
                 tc_runner = ToolChainRunner(toolchain, self.cli_args.timeout)
-                log("Running Toolchain:\t", toolchain.name)
+                log("Running Toolchain:\t", toolchain.name, indent=1)
                 tc_pass_count = 0
                 tc_test_count = 0
                 for pkg in self.config.packages:
                     pkg_pass_count = 0
                     pkg_test_count = 0
-                    log(f"Entering package {pkg.name}", indent=1)
+                    log(f"Entering package {pkg.name}", indent=2)
                     for spkg in pkg.subpackages:
-                        log(f"Entering subpackage {spkg.name}", indent=2)
+                        log(f"Entering subpackage {spkg.name}", indent=3)
                         counters = {"pass_count": 0, "test_count": 0}
                         self.pre_subpackage_hook(spkg)
                         for test in spkg.tests:
                             test_result: Optional[TestResult] = tc_runner.run(test, exe)
                             self.process_test_result(test_result, counters)
                         self.post_subpackage_hook(counters)
-                        log("Subpackage Passed: ", counters["pass_count"], "/", counters["test_count"], indent=2)
+                        log("Subpackage Passed: ", counters["pass_count"], "/", counters["test_count"], indent=3)
                         pkg_pass_count += counters["pass_count"]
                         pkg_test_count += counters["test_count"]
-                    log("Packaged Passed: ", pkg_pass_count, "/", pkg_test_count, indent=1)
+                    log("Packaged Passed: ", pkg_pass_count, "/", pkg_test_count, indent=2)
                     tc_pass_count += pkg_pass_count
                     tc_test_count += pkg_test_count
-                log("Toolchain Passed: ", tc_pass_count, "/", tc_test_count)
+                log("Toolchain Passed: ", tc_pass_count, "/", tc_test_count, indent=1)
                 exe_pass_count += tc_pass_count
                 exe_test_count += tc_test_count
             log("Executable Passed: ", exe_pass_count, "/", exe_test_count)

@@ -105,28 +105,28 @@ class TestResult:
             log_msg = f"{Fore.GREEN}{pass_msg}{Fore.RESET}{test_name}{time_display}"
             log(log_msg, indent=3, file=file)
         else:
-            log(Fore.RED + fail_msg + Fore.RESET + f"{test_name}", indent=3, file=file)
+            log(Fore.RED + fail_msg + Fore.RESET + f"{test_name}", indent=4, file=file)
         
         # Log leaks if in memcheck mode
         if args and args.mode == "memcheck":
             if self.memory_leak:
                 log(Fore.YELLOW + "[WARNING] " + Fore.RESET + f"Valgrind detected memory leak!",
-                    indent=4, file=file)
+                    indent=5, file=file)
 
         # Log the command history
         level = 3 if self.did_pass else 2
-        log(f"==> Command History", indent=5, level=level)
+        log(f"==> Command History", indent=6, level=level)
         for cmd in self.command_history:
-            cmd.log(level=level, indent=7)
+            cmd.log(level=level, indent=8)
         
         # Log test expected and generated
         expected_out = self.test.get_expected_out()
         generated_out = x if (x := self.gen_output) else b''
  
-        log(f"==> Expected Out ({len(expected_out)} bytes):", indent=5, level=level-1)
-        log(str(expected_out), level=level-1, indent=6)
-        log(f"==> Generated Out ({len(generated_out)} bytes):", indent=5, level=level-1)
-        log(str(generated_out), level=level-1, indent=6) 
+        log(f"==> Expected Out ({len(expected_out)} bytes):", indent=6, level=level-1)
+        log(str(expected_out), level=level-1, indent=7)
+        log(f"==> Generated Out ({len(generated_out)} bytes):", indent=6, level=level-1)
+        log(str(generated_out), level=level-1, indent=7) 
         
     def __repr__(self):
         return "PASS" if self.did_pass else "FAIL"
