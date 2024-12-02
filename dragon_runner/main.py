@@ -3,10 +3,8 @@ from dragon_runner.cli      import parse_cli_args, CLIArgs
 from dragon_runner.config   import load_config
 from dragon_runner.log      import log, log_multiline
 from dragon_runner.scripts.loader import Loader 
-from dragon_runner.harness  import MemoryCheckHarness, \
-                                   PerformanceTestingHarness, \
-                                   RegularHarness, \
-                                   TournamentHarness
+from dragon_runner.harness  import MemoryCheckHarness, PerformanceTestingHarness, \
+                                   RegularHarness, TournamentHarness
 
 # initialize terminal colors
 init(autoreset=True)
@@ -71,10 +69,10 @@ def main():
         raise RuntimeError(f"Failed to provide valid mode: {args.mode}")
     
     success = harness.run()
-    harness.log_failures()
+    harness.post_run_log()
     if success:
-        return 1
-    return 0
+        return 0
+    return 1
 
 if __name__ == "__main__":
     main()

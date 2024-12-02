@@ -103,16 +103,10 @@ class TestResult:
                 time_str = f"{self.time:.4f}"
                 time_display = f"{time_str:>10} (s)" 
             log_msg = f"{Fore.GREEN}{pass_msg}{Fore.RESET}{test_name}{time_display}"
-            log(log_msg, indent=3, file=file)
+            log(log_msg, indent=4, file=file)
         else:
             log(Fore.RED + fail_msg + Fore.RESET + f"{test_name}", indent=4, file=file)
-        
-        # Log leaks if in memcheck mode
-        if args and args.mode == "memcheck":
-            if self.memory_leak:
-                log(Fore.YELLOW + "[WARNING] " + Fore.RESET + f"Valgrind detected memory leak!",
-                    indent=5, file=file)
-
+       
         # Log the command history
         level = 3 if self.did_pass else 2
         log(f"==> Command History", indent=6, level=level)

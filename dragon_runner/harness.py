@@ -15,11 +15,12 @@ class TestHarness:
         self.cli_args: CLIArgs = cli_args
         self.failures: List[TestResult] = []
 
-    def log_failures(self):
+    def post_run_log(self):
         """Report failures to stdout."""
-        log("Failure Log:") 
-        for result in self.failures:
-            result.log()
+        if self.failures != []:
+            log("Failure Log:") 
+            for result in self.failures:
+                result.log()
 
     def process_test_result(self, test_result: Optional[TestResult], counters: Dict[str, int]):
         """
@@ -29,15 +30,28 @@ class TestHarness:
         raise NotImplementedError("Subclasses must implement this method")
 
     def pre_subpackage_hook(self, spkg):
-        """Hook for actions before iterating through a subpackage."""
+        """Hook to run before iterating through a subpackage."""
         pass
 
     def post_subpackage_hook(self, counters: Dict[str, int]):
-        """Hook for actions after iterating through a subpackage."""
+        """Hook to run after iterating through a subpackage."""
+        pass
+
+    def pre_executable_hook(self):
+        """Hook to runb efore iterating through an executable."""
+        pass
+
+    def post_executable_hook(self):
+        """Hook to run after iterating through an executable"""
         pass
 
     def iterate(self):
+        """
+        Basic structure to record which tests pass and fail. Additional functionality
+        can be implemented by overriding default hooks.
+        """
         for exe in self.config.executables:
+            self.pre_executable_hook()
             log("Running executable:\t", exe.id, indent=0)
             exe.source_env()
             exe_pass_count = 0
@@ -69,6 +83,7 @@ class TestHarness:
                 exe_pass_count += tc_pass_count
                 exe_test_count += tc_test_count
             log("Executable Passed: ", exe_pass_count, "/", exe_test_count)
+            self.post_executable_hook()
 
     def run(self) -> bool:
         """Default run implementation."""
@@ -77,7 +92,7 @@ class TestHarness:
         except Exception as e:
             log("Error during iteration:", e)
             return False
-        return len(self.failures) == 0
+        return (len(self.failures) == 0)
 
 class RegularHarness(TestHarness):
      
@@ -148,7 +163,8 @@ class TournamentHarness(TestHarness):
                     for a_pkg in attacking_pkgs:
                         counters = {"pass_count": 0, "test_count": a_pkg.n_tests}
                         print(f"\n  {a_pkg.name:<12} --> {def_exe.id:<12}", end='')
-
+                        
+                        # TODO: refactor this
                         context = {
                             "def_feedback_file": def_feedback_file,
                             "solution_exe": solution_exe,
@@ -221,20 +237,43 @@ class TournamentHarness(TestHarness):
 
 class MemoryCheckHarness(TestHarness):
     
+    def __init__(self, config: Config, cli_args: CLIArgs):
+        super().__init__(config, cli_args) 
+        self.leak_count = 0
+        self.leak_tests: List[TestResult] = []
+    
+    def post_executable_hook(self):
+        """Report failures to stdout."""
+        log("Leaked tests for executable:", indent=1) 
+        for result in self.leak_tests:
+            log(Fore.YELLOW + "[LEAK] " + Fore.RESET + f"Valgrind detected leak: {result.test.file}",
+                indent=3)
+            log(f"Total Leaked: {len(self.leak_tests)}", indent=2)
+
     def process_test_result(self, test_result: Optional[TestResult], counters: Dict[str, int]):
         """
         Override the hook for regular run-specific implementation of counting passes
         """
+        # increment the test count 
+        counters["test_count"] += 1
+        
         if not test_result:
             log("Failed to receive test result")
-        elif test_result.did_pass:
+            return
+        
+        # log the test result
+        test_result.log(args=self.cli_args)
+        
+        # track tests which leak
+        if test_result.memory_leak:
+            self.leak_tests.append(test_result)
+     
+        # track passes as usual
+        if test_result.did_pass:
             counters["pass_count"] += 1
-            test_result.log(args=self.cli_args)
         else:
-            self.failures.append(test_result)
-            test_result.log(args=self.cli_args)
-        counters["test_count"] += 1
-
+            self.failures.append(test_result) 
+        
 class PerformanceTestingHarness(TestHarness):
     
     def process_test_result(self, test_result: Optional[TestResult], counters: Dict[str, int]):

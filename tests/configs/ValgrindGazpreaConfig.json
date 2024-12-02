@@ -1,0 +1,46 @@
+{
+  "testDir": "../packages/GazpreaPackage",
+  "testedExecutablePaths": {
+    "solution": "/home/justin/CDOL/Solutions/Gazprea24Solution/bin/gazc"
+  }, 
+  "runtimes": {
+    "solution":"/home/justin/CDOL/Solutions/Gazprea24Solution/bin/libgazrt.so"
+  },
+  "solutionExecutable": "solution",
+  "toolchains": {
+    "gazprea-llc": [
+      {
+        "stepName": "gazprea",
+        "executablePath": "$EXE",
+        "arguments": ["$INPUT", "$OUTPUT"],
+        "output": "/tmp/gaz.ll",
+        "allowError": true 
+      }, 
+      {
+        "stepName": "llc",
+        "executablePath": "/home/justin/install/llvm/llvm-18/bin/llc",
+        "arguments": ["-filetype=obj", "-relocation-model=pic", "$INPUT", "-o", "$OUTPUT"],
+        "output": "/tmp/gaz.o"
+      },
+      {
+        "stepName": "clang",
+        "executablePath": "/usr/bin/clang",
+        "arguments": ["$INPUT", "-o", "$OUTPUT", "-L$RT_PATH", "-l$RT_LIB", "-lm"],
+        "output": "/tmp/gaz"
+      },
+      {
+	"stepName": "valgrind",
+        "executablePath": "/usr/bin/valgrind",
+        "arguments": [
+	  "--leak-check=full",
+	  "--error-exitcode=111",
+	  "--log-fd=2",
+	  "$INPUT"
+	],
+	"stderrPath": "/dev/null",
+        "usesInStr": true,
+        "allowError": false
+      } 
+    ] 
+  }
+}
