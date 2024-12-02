@@ -13,8 +13,6 @@ class Step(Verifiable):
         self.allow_error    = kwargs.get('allowError', False)
         self.uses_ins       = kwargs.get('usesInStr', False)
         self.uses_runtime   = kwargs.get('usesRuntime', False)
-        self.stdout_path    = kwargs.get('stdoutPath', None)
-        self.stderr_path    = kwargs.get('stderrPath', None)
     
     def verify(self) -> ErrorCollection:
         errors = ErrorCollection()
@@ -37,9 +35,7 @@ class Step(Verifiable):
             'output': self.output,
             'allowError': self.allow_error,
             'usesInStr': self.uses_ins,
-            'usesRuntime': self.uses_runtime,
-            'stdoutPath': self.stdout_path,
-            'stderrPath': self.stderr_path
+            'usesRuntime': self.uses_runtime
         }
 
     def __repr__(self):

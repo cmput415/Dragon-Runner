@@ -29,17 +29,18 @@
         "output": "/tmp/gaz"
       },
       {
+
 	"stepName": "valgrind",
         "executablePath": "/usr/bin/valgrind",
         "arguments": [
 	  "--leak-check=full",
 	  "--error-exitcode=111",
-	  "--log-fd=2",
+	  "--log-file=/dev/null",
 	  "$INPUT"
 	],
-	"stderrPath": "/dev/null",
         "usesInStr": true,
-        "allowError": false
+        "usesRuntime": true,
+        "allowError": true
       } 
     ] 
   }

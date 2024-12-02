@@ -101,7 +101,7 @@ class RegularHarness(TestHarness):
         Override the hook for regular run-specific implementation of counting passes
         """
         if not test_result:
-            log("Failed to receive test result")
+            log("[ERROR] Failed to receive test result", indent=7)
         elif test_result.did_pass:
             counters["pass_count"] += 1
             test_result.log(args=self.cli_args)
@@ -229,8 +229,6 @@ class TournamentHarness(TestHarness):
                         Generated Output: {gen_out} 
                     """
                 )
-                if result.error_msg:
-                    feedback_file.write(f"Error Message: {result.error_msg}\n")
                 if result.failing_step:
                     feedback_file.write(f"Failing Step: {result.failing_step}\n")
                 feedback_file.write("\n")
@@ -240,27 +238,32 @@ class MemoryCheckHarness(TestHarness):
     def __init__(self, config: Config, cli_args: CLIArgs):
         super().__init__(config, cli_args) 
         self.leak_count = 0
+        self.test_count = 0
         self.leak_tests: List[TestResult] = []
     
     def post_executable_hook(self):
         """Report failures to stdout."""
         log("Leaked tests for executable:", indent=1) 
         for result in self.leak_tests:
-            log(Fore.YELLOW + "[LEAK] " + Fore.RESET + f"Valgrind detected leak: {result.test.file}",
+            log(Fore.YELLOW + "[LEAK] " + Fore.RESET + f"Detected in: {result.test.file}",
                 indent=3)
-            log(f"Total Leaked: {len(self.leak_tests)}", indent=2)
+        log(f"Total Leaked: {len(self.leak_tests)}/{self.test_count}", indent=2)
+        self.leak_tests = []
+        self.test_count = 0 # reset per exec
 
     def process_test_result(self, test_result: Optional[TestResult], counters: Dict[str, int]):
         """
         Override the hook for regular run-specific implementation of counting passes
         """
-        # increment the test count 
+        # increment the test count
+        self.test_count += 1
         counters["test_count"] += 1
-        
+
+        # the test may have failed to run
         if not test_result:
-            log("Failed to receive test result")
+            log(Fore.RED + "[ERROR]" + Fore.RESET + f" Failed to run test", indent=4)
             return
-        
+
         # log the test result
         test_result.log(args=self.cli_args)
         

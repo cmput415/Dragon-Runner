@@ -35,11 +35,9 @@ class Command:
     """
     Wrapper for a list of arguments to run fork/exec style
     """
-    def __init__(self, args, stdout_path=None, stderr_path=None):
-        self.args: List[str]                = args
-        self.cmd: str                       = self.args[0] 
-        self.stdout_path: Optional[str]     = stdout_path
-        self.stderr_path: Optional[str]     = stderr_path
+    def __init__(self, args):
+        self.args: List[str]    = args
+        self.cmd: str           = self.args[0] 
 
 @dataclass
 class CommandResult:
@@ -59,8 +57,7 @@ class CommandResult:
             if stdout is None:
                 stdout = b''
 
-            log(f"==> {self.cmd} (exit {self.exit_status})", indent=indent, level=level)
-        
+            log(f"==> {self.cmd} (exit {self.exit_status})", indent=indent, level=level) 
             log(f"stdout ({len(stdout)} bytes):", truncated_bytes(stdout, max_bytes=512),
                 indent=indent+2, level=level) 
             log(f"stderr ({len(stderr)} bytes):", truncated_bytes(stderr, max_bytes=512),
@@ -76,13 +73,13 @@ class TestResult:
         # required fields 
         self.test = test
         self.did_pass: bool = False
+        self.did_timeout: bool = False 
         self.error_test: bool = False
         self.memory_leak: bool = False
         self.command_history: List[CommandResult] = []
 
         # optional fields
         self.gen_output: Optional[bytes] = None
-        self.error_msg: Optional[str] = None
         self.time: Optional[float] = None
         self.failing_step: Optional[str] = None
 
@@ -91,13 +88,19 @@ class TestResult:
         Print a TestResult to the log with various levels of verbosity.
         This is the main output the user is concerned with.
         """
+        # TODO: This is very messy. Find some time to clean in up!
         pass_msg = "[E-PASS] " if self.error_test else "[PASS] "
-        fail_msg = "[E-FAIL] " if self.error_test else "[FAIL] " 
+        fail_msg = "[E-FAIL] " if self.error_test else "[FAIL] "
+        timeout_msg = "[TIMEOUT] "
+
         test_name = f"{self.test.file:<50}"    
         show_time = args and args.time and self.time is not None
         
+        if self.did_timeout:
+            log(Fore.YELLOW + timeout_msg + Fore.RESET + f"{test_name.strip()}", indent=4, file=file)
+         
         # Log test result
-        if self.did_pass:
+        elif self.did_pass:
             time_display = "" 
             if show_time:
                 time_str = f"{self.time:.4f}"
@@ -106,7 +109,7 @@ class TestResult:
             log(log_msg, indent=4, file=file)
         else:
             log(Fore.RED + fail_msg + Fore.RESET + f"{test_name}", indent=4, file=file)
-       
+
         # Log the command history
         level = 3 if self.did_pass else 2
         log(f"==> Command History", indent=6, level=level)
@@ -124,7 +127,7 @@ class TestResult:
         
     def __repr__(self):
         return "PASS" if self.did_pass else "FAIL"
-
+    
 class ToolChainRunner():
     def __init__(self, tc: ToolChain, timeout: float, env: Dict[str, str]={}):
         self.tc                     = tc
@@ -132,30 +135,35 @@ class ToolChainRunner():
         self.env                    = env
         self.reserved_exit_codes    = [VALGRIND_EXIT_CODE]
 
-    def run_command(self, command: Command, stdin: bytes) -> CommandResult:
+    def run_command(self, command, stdin: bytes):
         """
-        execute a resolved command
+        Execute a resolved command and ensure FD=200 is available for Valgrind.
+        This coupled FD alignment between config and here is hacky but works for now.
         """
         env = os.environ.copy()
-        stdout = open(command.stdout_path, 'w') if command.stdout_path is not None else subprocess.PIPE
-        stderr = open(command.stderr_path, 'w') if command.stderr_path is not None else subprocess.PIPE
-
         start_time = time.time()
         cr = CommandResult(cmd=command.cmd)
         try:
-            result = subprocess.run(command.args, env=env, input=stdin, stdout=stdout,
-                                    stderr=stderr, check=False, timeout=self.timeout)
+            result = subprocess.run(
+                command.args,
+                env=env,
+                input=stdin,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+                timeout=self.timeout
+            )
             wall_time = time.time() - start_time
             cr.subprocess = result
-            cr.exit_status = result.returncode
+            cr.exit_status = result.returncode 
             cr.time = wall_time
-        except TimeoutExpired:
-            cr.time = self.timeout # max time
+        except subprocess.TimeoutExpired:
+            cr.time = self.timeout
             cr.timed_out = True
-            cr.exit_status = 255 
+            cr.exit_status = 255
         except Exception:
+            print("EXIT OTHERWISE")
             cr.exit_status = 1
-
         return cr
         
     def resolve_output_file(self, step: Step) -> Optional[str]:
@@ -170,11 +178,7 @@ class ToolChainRunner():
         """
         replace magic parameters with real arguments
         """
-        command = Command(
-            args=[step.exe_path] + step.arguments,
-            stdout_path = step.stdout_path,
-            stderr_path = step.stderr_path
-        )
+        command = Command(args=[step.exe_path] + step.arguments)
         command = self.replace_magic_args(command, params)
         command = self.replace_env_vars(command)
         exe = command.args[0]
@@ -204,7 +208,18 @@ class ToolChainRunner():
             
             # save command history for logging
             tr.command_history.append(command_result)
-
+ 
+            # Check if the command timed out
+            if command_result.timed_out:
+                """
+                A step timed out based on the max timeout specified by CLI arg.
+                """
+                tr.did_pass=False;
+                tr.did_timeout=True
+                tr.failing_step=step.name;
+                tr.time = self.timeout
+                return tr
+            
             child_process = command_result.subprocess
             if not child_process:
                 """
@@ -212,7 +227,7 @@ class ToolChainRunner():
                 """
                 tr.did_pass = False;
                 return tr
-            
+
             step_stdout = child_process.stdout 
             step_stderr = child_process.stderr
             step_time = round(command_result.time, 4)
@@ -224,20 +239,8 @@ class ToolChainRunner():
                 """
                 if child_process.returncode == VALGRIND_EXIT_CODE:
                     tr.memory_leak = True 
-
-            # Check if the command timed out
-            if command_result.timed_out:
-                """
-                A step timed out based on the max timeout specified by CLI arg.
-                """
-                timeout_msg = f"Toolchain timed out for test: {test.file}"
-                tr.did_pass=False;
-                # tr.did_panic=True;
-                tr.failing_step=step.name;
-                tr.error_msg=timeout_msg;
-                return tr
             
-            elif child_process.returncode != 0 and \
+            if child_process.returncode != 0 and \
                 child_process.returncode not in self.reserved_exit_codes:
                 """
                 A step in the toolchain has returned a non-zero exit status. If "allowError"
@@ -372,12 +375,15 @@ def lenient_diff(produced: bytes, expected: bytes, pattern: str) -> str:
     Unfortunately we have to convert from and back to bytes in order to apply regex.
     Bytes must be UTF-8 decodable.
     """
+    if not produced or not expected:
+        return "[ERROR] Test failed to generate bytes"
+
     produced_first_line = produced.split(b'\n', 1)[0]
     produced_str = p.strip() if (p := bytes_to_str(produced_first_line)) else None
     expected_str = e.strip() if (e := bytes_to_str(expected)) else None
 
     if not produced_str or not expected_str:
-        return "Failed to decode error bytes"
+        return "[ERROR] Failed to decode error bytes"
 
     # Apply the mask/filter to both strings
     produced_masked = re.sub(pattern, r'\1', produced_str, flags=re.IGNORECASE | re.DOTALL)
