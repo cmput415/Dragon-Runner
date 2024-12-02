@@ -1,32 +1,43 @@
-import sys
-
-from dragon_runner.runner import ToolChainRunner, TestResult
+from dragon_runner.harness import RegularHarness
 from dragon_runner.config import Config
+from dragon_runner.cli import CLIArgs
 
-def run_tests_for_config(config: Config, expected_result: bool):
-    assert config.packages is not None
+def test_gcc_pass(config_factory, cli_factory):
+
+    config : Config = config_factory("gccPassConfig.json")
+    args : CLIArgs = cli_factory(**{
+        "mode": "regular",
+        "timeout": 5
+    })
     
-    for exe in config.executables:
-        exe.source_env()
-        for tc in config.toolchains:
-            tc_runner = ToolChainRunner(tc, timeout=3.0)
-            for pkg in config.packages:
-                for sp in pkg.subpackages:
-                    for test in sp.tests:
-                        result: TestResult = tc_runner.run(test, exe)
-                        assert result.did_pass == expected_result
+    harness = RegularHarness(config=config, cli_args=args) 
+    assert harness is not None 
+    success = harness.run()
+    assert success == True
 
-def test_gcc_toolchain_success(config_factory):
-    config = config_factory("gccPassConfig.json")
-    run_tests_for_config(config, expected_result=True)
+def test_gcc_pass_darwin(config_factory, cli_factory):
 
-def test_cat_toolchain_success(config_factory):
-    if sys.platform == "darwin":
-        config = config_factory("catConfigDarwin.json")
-    else:
-        config = config_factory("catConfig.json")
-    run_tests_for_config(config, expected_result=True)
+    config : Config = config_factory("catConfigDarwin.json")
+    args : CLIArgs = cli_factory(**{
+        "mode": "regular",
+        "timeout": 5
+    })
+    
+    harness = RegularHarness(config=config, cli_args=args) 
+    assert harness is not None 
+    success = harness.run()
+    assert success == True
 
-def test_gcc_toolchain_failures(config_factory):
-    config = config_factory("gccFailConfig.json")
-    run_tests_for_config(config, expected_result=False)
+def test_gcc_fail(config_factory, cli_factory):
+
+    config : Config = config_factory("gccFail.json")
+    args : CLIArgs = cli_factory(**{
+        "mode": "regular",
+        "timeout": 5
+    })
+    
+    harness = RegularHarness(config=config, cli_args=args) 
+    assert harness is not None 
+    success = harness.run()
+    assert success == False
+

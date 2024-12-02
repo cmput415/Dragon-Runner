@@ -14,11 +14,14 @@ from dragon_runner.config       import Executable, ToolChain
 from dragon_runner.log          import log
 from dragon_runner.toolchain    import Step
 from dragon_runner.cli          import CLIArgs
-from dragon_runner.constants    import VALGRIND_EXIT_CODE
 from dragon_runner.utils        import make_tmp_file, bytes_to_str,\
                                        file_to_bytes, truncated_bytes
 
+# Terminal colors
 init(autoreset=True)
+
+# Reserve a specific status code to use for valgrind
+VALGRIND_EXIT_CODE = 111
 
 @dataclass
 class MagicParams:
@@ -104,6 +107,12 @@ class TestResult:
         else:
             log(Fore.RED + fail_msg + Fore.RESET + f"{test_name}", indent=3, file=file)
         
+        # Log leaks if in memcheck mode
+        if args and args.mode == "memcheck":
+            if self.memory_leak:
+                log(Fore.YELLOW + "[WARNING] " + Fore.RESET + f"Valgrind detected memory leak!",
+                    indent=4, file=file)
+
         # Log the command history
         level = 3 if self.did_pass else 2
         log(f"==> Command History", indent=5, level=level)
@@ -220,9 +229,8 @@ class ToolChainRunner():
                 1) Valgrind
                 """
                 if child_process.returncode == VALGRIND_EXIT_CODE:
-                    print("LEAKY")
-                    tr.memory_leak = True
-            
+                    tr.memory_leak = True 
+
             # Check if the command timed out
             if command_result.timed_out:
                 """

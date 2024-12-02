@@ -23,9 +23,11 @@ class CLIArgs(NamedTuple):
     verify: bool
     script_args: List[str]
     
-    def is_regular_mode(self):      return self.mode == "regular"
-    def is_tournament_mode(self):   return self.mode == "tournament"
-    def is_script_mode(self):       return self.mode not in ["regular", "tournament"]
+    def is_script_mode(self):
+        """
+        TODO: refactor this -- bad code
+        """
+        return self.mode not in ["regular", "tournament", "perf", "memcheck"]
 
     def __repr__(self) -> str:
         return (
@@ -79,7 +81,7 @@ def parse_cli_args() -> CLIArgs:
     args = parser.parse_args()
     
     # Check if config file is required based on mode
-    if args.mode in ["regular", "tournament"]:
+    if args.mode in ["regular", "tournament", "perf", "memcheck"]:
         if not args.config_file:
             parser.error(f"Config file is required for {args.mode} mode")
         if not os.path.isfile(args.config_file):

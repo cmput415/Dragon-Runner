@@ -2,8 +2,11 @@ from colorama               import init, Fore
 from dragon_runner.cli      import parse_cli_args, CLIArgs
 from dragon_runner.config   import load_config
 from dragon_runner.log      import log, log_multiline
-from dragon_runner.harness  import TestHarness
 from dragon_runner.scripts.loader import Loader 
+from dragon_runner.harness  import MemoryCheckHarness, \
+                                   PerformanceTestingHarness, \
+                                   RegularHarness, \
+                                   TournamentHarness
 
 # initialize terminal colors
 init(autoreset=True)
@@ -14,7 +17,7 @@ def main():
     log(args, level=1)
     
     # dragon-runner can also be used as a frontend for grading scripts
-    if args.mode not in ["regular", "tournament"]:
+    if args.is_script_mode():
         print(f"Use dragon-runner as a loader for script: {args.mode}")
         loader = Loader(args.mode, args.script_args)
         loader.run() 
@@ -48,14 +51,30 @@ def main():
     # display the config info before running tests
     config.log_test_info()
     
-    # create a regular test harness
-    harness = TestHarness(config, args)
+    if args.mode == "regular":
+        # run in regular mode
+        harness = RegularHarness(config, args)
+        harness.log_failures()
+
+    elif args.mode == "tournament":
+        # run the tester in tournament mode
+        harness = TournamentHarness(config, args)
+
+    elif args.mode == "memcheck":
+        # check tests for memory leaks
+        harness = MemoryCheckHarness(config, args)
+
+    elif args.mode == "perf":
+        # performance testing
+        harness = PerformanceTestingHarness(config, args) 
+    
+    else:
+        raise RuntimeError(f"Failed to provide valid mode: {args.mode}")
+    
     success = harness.run()
     if success:
-        return 0
-
-    harness.log_failures()
-    return 1
+        return 1
+    return 0
 
 if __name__ == "__main__":
     main()
