@@ -1,10 +1,10 @@
 {
-  "testDir": "../packages/GazpreaPackage",
+  "testDir": "testfiles",
   "testedExecutablePaths": {
-    "solution": "/home/justin/CDOL/Solutions/Gazprea24Solution/bin/gazc"
+    "<team_name>": "<path_to_gazc>"
   }, 
   "runtimes": {
-    "solution":"/home/justin/CDOL/Solutions/Gazprea24Solution/bin/libgazrt.so"
+    ""<team_name>":"<path_to_libgazrt.so>"
   },
   "solutionExecutable": "solution",
   "toolchains": {
@@ -18,7 +18,7 @@
       }, 
       {
         "stepName": "llc",
-        "executablePath": "/home/justin/install/llvm/llvm-18/bin/llc",
+        "executablePath": "<path_to_llc>",
         "arguments": ["-filetype=obj", "-relocation-model=pic", "$INPUT", "-o", "$OUTPUT"],
         "output": "/tmp/gaz.o"
       },

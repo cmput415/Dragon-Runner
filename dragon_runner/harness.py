@@ -255,6 +255,8 @@ class MemoryCheckHarness(TestHarness):
         """
         Override the hook for regular run-specific implementation of counting passes
         """
+        # TODO: Refactor an clean up. Not simple enough
+
         # increment the test count
         self.test_count += 1
         counters["test_count"] += 1
