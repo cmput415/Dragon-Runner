@@ -110,4 +110,4 @@ def bytes_to_file(file: str, data: bytes) -> Optional[str]:
     except Exception as e:
         print(f"Writting bytes to file failed with: {e}")
         return None
-
+    

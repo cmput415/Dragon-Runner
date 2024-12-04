@@ -18,7 +18,7 @@ class TestHarness:
     def post_run_log(self):
         """Report failures to stdout."""
         if self.failures != []:
-            log("Failure Log:") 
+            log(f"Failure Summary: ({len(self.failures)} tests)") 
             for result in self.failures:
                 result.log()
 
@@ -52,13 +52,13 @@ class TestHarness:
         """
         for exe in self.config.executables:
             self.pre_executable_hook()
-            log("Running executable:\t", exe.id, indent=0)
+            log(f"Running executable: {exe.id}", indent=0)
             exe.source_env()
             exe_pass_count = 0
             exe_test_count = 0
             for toolchain in self.config.toolchains:
                 tc_runner = ToolChainRunner(toolchain, self.cli_args.timeout)
-                log("Running Toolchain:\t", toolchain.name, indent=1)
+                log(f"Running Toolchain: {toolchain.name}", indent=1)
                 tc_pass_count = 0
                 tc_test_count = 0
                 for pkg in self.config.packages:
@@ -242,14 +242,15 @@ class MemoryCheckHarness(TestHarness):
         self.leak_tests: List[TestResult] = []
     
     def post_executable_hook(self):
-        """Report failures to stdout."""
-        log("Leaked tests for executable:", indent=1) 
+        """
+        Report failures to stdout.
+        """
+        log(f"Leak Summary: ({len(self.leak_tests)} tests)") 
         for result in self.leak_tests:
-            log(Fore.YELLOW + "[LEAK] " + Fore.RESET + f"Detected in: {result.test.file}",
-                indent=3)
-        log(f"Total Leaked: {len(self.leak_tests)}/{self.test_count}", indent=2)
+            log(Fore.YELLOW + "[LEAK] " + Fore.RESET + f"{result.test.file}",
+                indent=4)
         self.leak_tests = []
-        self.test_count = 0 # reset per exec
+        self.test_count = 0 # reset for each executable
 
     def process_test_result(self, test_result: Optional[TestResult], counters: Dict[str, int]):
         """
