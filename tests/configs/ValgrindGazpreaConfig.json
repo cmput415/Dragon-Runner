@@ -2,9 +2,9 @@
   "testDir": "testfiles",
   "testedExecutablePaths": {
     "<team_name>": "<path_to_gazc>"
-  }, 
+  },
   "runtimes": {
-    ""<team_name>":"<path_to_libgazrt.so>"
+    "<team_name>":"<path_to_libgazrt.so>"
   },
   "solutionExecutable": "solution",
   "toolchains": {
@@ -13,35 +13,35 @@
         "stepName": "gazprea",
         "executablePath": "$EXE",
         "arguments": ["$INPUT", "$OUTPUT"],
-        "output": "/tmp/gaz.ll",
-        "allowError": true 
-      }, 
+        "output": "gaz.ll",
+        "allowError": true
+      },
       {
         "stepName": "llc",
-        "executablePath": "<path_to_llc>",
+        "executablePath": "/cshome/cmput415/415-resources/llvm-project/build/bin/llc",
         "arguments": ["-filetype=obj", "-relocation-model=pic", "$INPUT", "-o", "$OUTPUT"],
-        "output": "/tmp/gaz.o"
+        "output": "gaz.o"
       },
       {
         "stepName": "clang",
         "executablePath": "/usr/bin/clang",
         "arguments": ["$INPUT", "-o", "$OUTPUT", "-L$RT_PATH", "-l$RT_LIB", "-lm"],
-        "output": "/tmp/gaz"
+        "output": "gaz"
       },
       {
-
-	"stepName": "valgrind",
+        "stepName": "valgrind",
         "executablePath": "/usr/bin/valgrind",
         "arguments": [
-	  "--leak-check=full",
-	  "--error-exitcode=111",
-	  "--log-file=/dev/null",
-	  "$INPUT"
-	],
+	    "--leak-check=full",
+	    "--error-exitcode=111",
+	    "--log-file=/dev/null",
+	    "$INPUT"
+        ],
         "usesInStr": true,
         "usesRuntime": true,
         "allowError": true
-      } 
-    ] 
+      }
+    ]
   }
 }
+
