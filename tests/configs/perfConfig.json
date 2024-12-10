@@ -1,0 +1,26 @@
+{
+  "testDir": "../packages/CPackage/RegularPass/",
+  "testedExecutablePaths": {
+    "gcc1": "/usr/bin/gcc",
+    "gcc2": "/usr/bin/gcc",
+    "gcc3": "/usr/bin/gcc"
+  },
+  "toolchains": {
+    "GCC-toolchain": [
+      {
+        "stepName": "compile",
+        "executablePath": "$EXE",
+        "arguments": ["$INPUT", "-o", "$OUTPUT"],
+        "output": "/tmp/test.o",
+        "allowError": true
+      },
+      {
+        "stepName": "run",
+        "executablePath": "$INPUT",
+        "arguments": [],
+        "usesInStr": true,
+        "allowError": true
+      }
+    ]
+  }
+}

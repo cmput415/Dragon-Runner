@@ -4,6 +4,7 @@ from typing                 import List, Dict, Optional
 from dragon_runner.cli      import CLIArgs
 from dragon_runner.config   import Config, Executable, Package
 from dragon_runner.log      import log
+from dragon_runner.testfile import TestFile
 from dragon_runner.runner   import TestResult, ToolChainRunner
 from dragon_runner.utils    import file_to_str
 
@@ -15,12 +16,8 @@ class TestHarness:
         self.cli_args: CLIArgs = cli_args
         self.failures: List[TestResult] = []
     
-    def post_run_log(self):
-        pass
-
     def process_test_result(self, test_result: Optional[TestResult], counters: Dict[str, int]):
         """
-        Process each test result.
         Subclasses should override this method to handle test result processing and update counts.
         """
         raise NotImplementedError("Subclasses must implement this method")
@@ -33,7 +30,7 @@ class TestHarness:
         """Hook to run after iterating through a subpackage."""
         pass
 
-    def pre_executable_hook(self):
+    def pre_executable_hook(self, exe):
         """Hook to runb efore iterating through an executable."""
         pass
 
@@ -43,14 +40,21 @@ class TestHarness:
             log(f"Failure Summary: ({len(self.failures)} tests)") 
             for result in self.failures:
                 result.log()
+    
+    def post_run_hook(self):
+        pass
+
+    def pre_run_hook(self):
+        pass
 
     def iterate(self):
         """
         Basic structure to record which tests pass and fail. Additional functionality
         can be implemented by overriding default hooks.
         """
+        self.pre_run_hook()
         for exe in self.config.executables:
-            self.pre_executable_hook()
+            self.pre_executable_hook(exe.id)
             log(f"Running executable: {exe.id}", indent=0)
             exe.source_env()
             exe_pass_count = 0
@@ -83,6 +87,7 @@ class TestHarness:
                 exe_test_count += tc_test_count
             log("Executable Passed: ", exe_pass_count, "/", exe_test_count)
             self.post_executable_hook()
+        self.post_run_hook()
 
     def run(self) -> bool:
         """Default run implementation."""
@@ -278,18 +283,65 @@ class MemoryCheckHarness(TestHarness):
             counters["pass_count"] += 1
         else:
             self.failures.append(test_result) 
-        
+       
+from itertools import zip_longest
+
 class PerformanceTestingHarness(TestHarness):
+    
+    def __init__(self, config: Config, cli_args: CLIArgs):
+        super().__init__(config, cli_args)
+        self.csv_cols = []
+        self.cur_col = []
+        self.testfile_col = ["Test"]
+        self.first_exec = True
+
+    def create_tc_dataframe(defenders: List[Executable],
+                            attackers: List[TestFile]) -> Dict[str, Dict[str, str]]:
+        """
+        Create an empty toolchain table with labels for defenders and attackers 
+        """ 
+        df = {exe.id: {pkg.name: '' for pkg in attackers} for exe in defenders}
+        print(df) 
+        return df
     
     def process_test_result(self, test_result: Optional[TestResult], counters: Dict[str, int]):
         """
         Override the hook for regular run-specific implementation of counting passes
         """
+        if test_result.error_test:
+            raise RuntimeError("Can not run perf mode on error tests")
+
+        # only construct a column for the test file names once 
+        if self.first_exec:
+            self.testfile_col.append(test_result.test.file)
+        
         if test_result.did_pass:
             counters["pass_count"] += 1
             test_result.log(args=self.cli_args)
+            self.cur_col.append(test_result.time)
+            
         else:
+            self.cur_col.append(self.cli_args.timeout)
             self.failures.append(test_result)
             test_result.log(args=self.cli_args)
         counters["test_count"] += 1
-  
+    
+    def pre_executable_hook(self, exe):
+        self.cur_col.append(exe)
+
+    def post_executable_hook(self): 
+        if self.first_exec:
+            self.csv_cols.append(self.testfile_col)
+            self.first_exec = False
+        
+        self.csv_cols.append(self.cur_col)
+        self.cur_col = []
+    
+    def post_run_hook(self):  
+        # transpose the columns into rows for writing
+        csv_rows = zip_longest(*self.csv_cols, fillvalue='')
+        
+        with open('perf.csv', 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerows(csv_rows)
+

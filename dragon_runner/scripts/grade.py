@@ -1,9 +1,21 @@
 """
-============================== 415 Grading Script ==============================
+============================== 415 Grading Script ================================
+
 Author: Justin Meimar 
+
 Name: grade.py
-Desc: 
-================================================================================
+
+Desc: As a prerequisite to running this script, the following should have occured:
+      A config including all the student executables *and* the solution executable
+      has been run with --mode=tournament, producing a csv for each toolchain.
+
+      The csv toolchain ouputs are inputs for this script, which will apply
+      the 415 competitive testing algorithm to output a complete CSV.
+      
+Note: The solution executable in the original configshould be named "solution",
+      which this script uses as a reserved keyword.
+
+==================================================================================
 """
 import argparse
 import csv
