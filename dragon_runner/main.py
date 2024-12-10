@@ -69,7 +69,6 @@ def main():
         raise RuntimeError(f"Failed to provide valid mode: {args.mode}")
     
     success = harness.run()
-    harness.post_run_log()
     if success:
         return 0
     return 1

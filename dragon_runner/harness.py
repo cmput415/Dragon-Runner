@@ -14,6 +14,9 @@ class TestHarness:
         self.config = config
         self.cli_args: CLIArgs = cli_args
         self.failures: List[TestResult] = []
+    
+    def post_run_log(self):
+        pass
 
     def process_test_result(self, test_result: Optional[TestResult], counters: Dict[str, int]):
         """
