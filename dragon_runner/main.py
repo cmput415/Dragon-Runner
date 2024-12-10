@@ -14,7 +14,7 @@ def main():
     args: CLIArgs = parse_cli_args()
     log(args, level=1)
     
-    # dragon-runner can also be used as a frontend for grading scripts
+    # dragon-runner can also be used as a loader for grading & other scripts
     if args.is_script_mode():
         print(f"Use dragon-runner as a loader for script: {args.mode}")
         loader = Loader(args.mode, args.script_args)

@@ -15,13 +15,6 @@ class TestHarness:
         self.cli_args: CLIArgs = cli_args
         self.failures: List[TestResult] = []
 
-    def post_run_log(self):
-        """Report failures to stdout."""
-        if self.failures != []:
-            log(f"Failure Summary: ({len(self.failures)} tests)") 
-            for result in self.failures:
-                result.log()
-
     def process_test_result(self, test_result: Optional[TestResult], counters: Dict[str, int]):
         """
         Process each test result.
@@ -43,7 +36,10 @@ class TestHarness:
 
     def post_executable_hook(self):
         """Hook to run after iterating through an executable"""
-        pass
+        if self.failures != []:
+            log(f"Failure Summary: ({len(self.failures)} tests)") 
+            for result in self.failures:
+                result.log()
 
     def iterate(self):
         """
@@ -70,7 +66,7 @@ class TestHarness:
                         counters = {"pass_count": 0, "test_count": 0}
                         self.pre_subpackage_hook(spkg)
                         for test in spkg.tests:
-                            test_result: Optional[TestResult] = tc_runner.run(test, exe)
+                            test_result: TestResult = tc_runner.run(test, exe)
                             self.process_test_result(test_result, counters)
                         self.post_subpackage_hook(counters)
                         log("Subpackage Passed: ", counters["pass_count"], "/", counters["test_count"], indent=3)
@@ -100,9 +96,7 @@ class RegularHarness(TestHarness):
         """
         Override the hook for regular run-specific implementation of counting passes
         """
-        if not test_result:
-            log("[ERROR] Failed to receive test result", indent=7)
-        elif test_result.did_pass:
+        if test_result.did_pass:
             counters["pass_count"] += 1
             test_result.log(args=self.cli_args)
         else:
@@ -126,10 +120,7 @@ class TournamentHarness(TestHarness):
         toolchain_name = context["toolchain_name"]
         a_pkg_name = context["a_pkg_name"]
 
-        if not test_result:
-            log(f"Failed to run test {test.stem}")
-            context["exit_status"] = False
-        elif test_result.did_pass:
+        if test_result.did_pass:
             print(Fore.GREEN + '.' + Fore.RESET, end='')
             counters['pass_count'] += 1
         else:
@@ -251,6 +242,11 @@ class MemoryCheckHarness(TestHarness):
                 indent=4)
         self.leak_tests = []
         self.test_count = 0 # reset for each executable
+        
+        if self.failures != []:
+            log(f"Failure Summary: ({len(self.failures)} tests)") 
+            for result in self.failures:
+                result.log()
 
     def process_test_result(self, test_result: Optional[TestResult], counters: Dict[str, int]):
         """
@@ -286,9 +282,7 @@ class PerformanceTestingHarness(TestHarness):
         """
         Override the hook for regular run-specific implementation of counting passes
         """
-        if not test_result:
-            log("Failed to receive test result")
-        elif test_result.did_pass:
+        if test_result.did_pass:
             counters["pass_count"] += 1
             test_result.log(args=self.cli_args)
         else:

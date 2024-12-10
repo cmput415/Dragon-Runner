@@ -69,10 +69,10 @@ class TestResult:
     execution time, and error information.
     """
     __test__ = False  # pytest gets confused when classes start with 'Test' 
-    def __init__(self, test:TestFile): 
+    def __init__(self, test:TestFile, did_pass:bool=False): 
         # required fields 
         self.test = test
-        self.did_pass: bool = False
+        self.did_pass: bool = did_pass
         self.did_timeout: bool = False 
         self.error_test: bool = False
         self.memory_leak: bool = False
@@ -186,13 +186,13 @@ class ToolChainRunner():
             command.args[0] = os.path.abspath(exe)
         return command
     
-    def run(self, test: TestFile, exe: Executable) -> Optional[TestResult]: 
+    def run(self, test: TestFile, exe: Executable) -> TestResult: 
         """
         run each step of the toolchain for a given test and executable
         """
         input_file = test.path
         expected = test.expected_out if isinstance(test.expected_out, bytes) else b'' 
-        tr = TestResult(test=test)
+        tr = TestResult(test=test, did_pass=False)
         
         for index, step in enumerate(self.tc):
             
@@ -241,7 +241,7 @@ class ToolChainRunner():
                     tr.memory_leak = True 
             
             if child_process.returncode != 0 and \
-                child_process.returncode not in self.reserved_exit_codes:
+               child_process.returncode not in self.reserved_exit_codes:
                 """
                 A step in the toolchain has returned a non-zero exit status. If "allowError"
                 is specified in the config, we can perform a lenient diff based on CompileTime
@@ -296,6 +296,9 @@ class ToolChainRunner():
                 If $OUTPUT is not supplied, we create a temporary pipe.
                 """
                 input_file = output_file or make_tmp_file(child_process.stdout)
+        
+        # this code should be unreachable for well-defined toolchains 
+        return tr
 
     @staticmethod
     def replace_env_vars(cmd: Command) -> Command:

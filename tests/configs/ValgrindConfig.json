@@ -1,7 +1,8 @@
 {
   "testDir": "../packages/MemoryLeaks",
   "testedExecutablePaths": {
-    "clang": "/usr/bin/clang"
+    "clang": "/usr/bin/clang",
+    "clang2": "/usr/bin/clang"
   },
   "toolchains": {
     "LLVM": [
