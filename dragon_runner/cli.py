@@ -52,7 +52,8 @@ def parse_cli_args() -> CLIArgs:
         help="Path to the tester JSON configuration file (required for regular and tournament modes).")
     
     parser.add_argument("--mode", dest="mode", default="regular",
-        help="run in regular, tournament or script mode")
+                        help="run in one of the test-running modes: [regular, tournament, perf, memcheck]\
+                              or in a scripting mode")
     
     parser.add_argument("--script-args", type=parse_script_args, default=[],
         help='Arguments to pass to the script (quote the entire string, e.g. --script-args="arg1 arg2")')

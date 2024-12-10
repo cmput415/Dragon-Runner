@@ -219,18 +219,16 @@ class TournamentHarness(TestHarness):
             if not result.did_pass:
                 test_contents = file_to_str(result.test.path)
                 exp_out = trim_bytes(x) if isinstance(x := result.test.expected_out, bytes) else ""
-                gen_out = trim_bytes(x) if isinstance(x := result.gen_output, bytes) else ""
-
-                feedback_file.write(
-                    f"""Test: {result.test.file}\n
-                        Test contents: {test_contents}\n
-                        Expected Output: {exp_out}\n
-                        Generated Output: {gen_out} 
-                    """
+                gen_out = trim_bytes(x) if isinstance(x := result.gen_output, bytes) else ""               
+                feedback_string = (
+                  "="*40+'\n'
+                  f"Test: {result.test.file}\n"
+                  f"Test Contents: {test_contents.strip()}\n"
+                  f"Expected Output: {exp_out.strip()}\n"
+                  f"Generated Output: {gen_out.strip()}\n"
                 )
-                if result.failing_step:
-                    feedback_file.write(f"Failing Step: {result.failing_step}\n")
-                feedback_file.write("\n")
+
+                feedback_file.write(feedback_string)
 
 class MemoryCheckHarness(TestHarness):
     
