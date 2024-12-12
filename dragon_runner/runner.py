@@ -137,8 +137,7 @@ class ToolChainRunner():
 
     def run_command(self, command, stdin: bytes):
         """
-        Execute a resolved command and ensure FD=200 is available for Valgrind.
-        This coupled FD alignment between config and here is hacky but works for now.
+        Run a command and return the CommandResult
         """
         env = os.environ.copy()
         start_time = time.time()
@@ -162,7 +161,6 @@ class ToolChainRunner():
             cr.timed_out = True
             cr.exit_status = 255
         except Exception:
-            print("EXIT OTHERWISE")
             cr.exit_status = 1
         return cr
         
@@ -256,12 +254,18 @@ class ToolChainRunner():
                     tr.did_pass = False
 
                 # get compile time error result is not last step
-                elif step.allow_error: 
-                    # Choose the compile time or runtime error pattern
-                    if not last_step:
+                elif step.allow_error:
+                    # TODO: Adjust SizeError and MathError definitions
+                    # so we don't need to handle them specially.
+                    if "SizeError" in str(expected):
+                        error_pattern = r'\s*(SizeError):?.*'
+                    elif "MathError" in str(expected):
+                        error_pattern = r'\s*(MathError):?.*'
+                    elif not last_step:
                         error_pattern = r'.*?(Error on line \d+):?.*' 
                     else:
                         error_pattern = r'\s*(\w+Error):?.*'
+
                     if lenient_diff(step_stderr, expected, error_pattern) == "":
                         tr.did_pass = True
                     else:

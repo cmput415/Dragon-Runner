@@ -125,12 +125,16 @@ class TournamentHarness(TestHarness):
         def_feedback_file = context["def_feedback_file"]
         solution_exe = context["solution_exe"]
         failure_log = context["failure_log"]
+        pass_log = "pass_log.txt"
         toolchain_name = context["toolchain_name"]
         a_pkg_name = context["a_pkg_name"]
 
         if test_result.did_pass:
             print(Fore.GREEN + '.' + Fore.RESET, end='')
             counters['pass_count'] += 1
+            if solution_exe == context["def_exe_id"] and failure_log:
+                with open(pass_log, 'a') as f_log:
+                    f_log.write(f"{toolchain_name} {a_pkg_name} {test_result.test.path}\n")
         else:
             print(Fore.RED + '.' + Fore.RESET, end='')
             self.log_failure_to_file(def_feedback_file, test_result)
