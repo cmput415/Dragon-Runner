@@ -40,6 +40,7 @@ class TestHarness:
             log(f"Failure Summary: ({len(self.failures)} tests)") 
             for result in self.failures:
                 result.log()
+        self.failures = []
     
     def post_run_hook(self):
         pass
@@ -99,7 +100,7 @@ class TestHarness:
         return (len(self.failures) == 0)
 
 class RegularHarness(TestHarness):
-     
+    
     def process_test_result(self, test_result: Optional[TestResult], counters: Dict[str, int]):
         """
         Override the hook for regular run-specific implementation of counting passes
@@ -310,9 +311,6 @@ class PerformanceTestingHarness(TestHarness):
         """
         Override the hook for regular run-specific implementation of counting passes
         """
-        if test_result.error_test:
-            raise RuntimeError("Can not run perf mode on error tests")
-
         # only construct a column for the test file names once 
         if self.first_exec:
             self.testfile_col.append(test_result.test.file)
