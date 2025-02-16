@@ -17,8 +17,8 @@ def main():
     # dragon-runner can also be used as a loader for grading & other scripts
     if args.is_script_mode():
         print(f"Use dragon-runner as a loader for script: {args.mode}")
-        loader = Loader(args.mode, args.script_args)
-        loader.run() 
+        loader = Loader()
+        loader(args.script_file, args.script_args) 
         return 0
 
     # parse and verify the config

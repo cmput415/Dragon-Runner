@@ -14,7 +14,6 @@ import argparse
 from pathlib import Path
 
 def build(build_path, log_path, n_threads="2"): 
-    
     root_path = Path(build_path).absolute()
     log_path = Path(log_path).absolute()
 

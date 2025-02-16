@@ -14,7 +14,7 @@ def create_config(config_name: str) -> Optional[Config]:
 def create_cli_args(**kwargs) -> CLIArgs:
     return CLIArgs(
         config_file     = kwargs.get('config_file', None),
-        output_file     = kwargs.get('output_file', None),
+        output     = kwargs.get('output_file', None),
         failure_log     = kwargs.get('failure_log', None),
         debug_package   = kwargs.get('debug_package', None),
         mode            = kwargs.get('mode', None),

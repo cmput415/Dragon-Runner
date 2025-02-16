@@ -10,35 +10,39 @@ class Loader:
     """
     Dragon runner allows grading scripts to be run through its CLI.
     """
+    def __init__(self): 
+        self.script_dispatch = {
+            "build.py": build,
+            "gather.py": gather,
+            "gen-config.py": gen_config,
+            "grade.py": grade,
+            "grade-perf.py": grade_perf,
+            "anon-tests.py": lambda *args: print("TODO"),
+            "anon-csv.py": lambda *args: print("TODO"),
+            "preview.py": lambda *args: print("TODO")
+        }
 
-    def __init__(self, script: str, args: List[str]):
-        self.script = script 
-        self.args = args
-        self.errors = []
-        
-    def run(self):
+    def __call__(self, script: str, args: List[str]):
         """
         Select the script to run from the mode argument passed through
         dragon-runner CLI.
         """
-        def unknown_script():
-            print(f"script: {self.script} did not match any registered script.")
-
-        script_dispatch = {
-            "build":        lambda: build(*self.args),
-            "gather":       lambda: gather(*self.args),
-            "gen-config":   lambda: gen_config(*self.args),
-            "grade":        lambda: grade(*self.args),
-            "grade-perf":   lambda: grade_perf(*self.args),
-            "anon-tests":   lambda: print("TODO"),
-            "anon-csv":     lambda: print("TODO"),
-            "preview":      lambda: print("TODO")
-        }
-    
         try:
-            print(f"Running: {self.script} with args {self.args}")  
-            script_dispatch.get(self.script, lambda: unknown_script)()
-
+            print(f"Running: {script} with args {args}")
+            if script not in self.script_dispatch:
+                print(f"Script: {script} did not match any registered script.")
+                print(self)
+                return
+                
+            script_fn = self.script_dispatch[script]
+            script_fn(*args)
+            
         except Exception as e:
             print(f"Failed to run script: {e}")
- 
+    
+    def __repr__(self):
+        s = "Registered Scripts:\n"
+        for script in self.script_dispatch.keys():
+            s += f" - {script}\n"
+        return s
+
