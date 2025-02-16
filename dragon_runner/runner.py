@@ -5,7 +5,7 @@ import json
 import time
 import sys
 
-from subprocess                 import TimeoutExpired, CompletedProcess
+from subprocess                 import CompletedProcess
 from typing                     import List, Dict, Optional, Union
 from dataclasses                import dataclass, asdict
 from colorama                   import Fore, init

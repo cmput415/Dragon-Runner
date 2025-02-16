@@ -17,18 +17,22 @@ class SubPackage(Verifiable):
     def __init__(self, path: str): 
         self.path: str              = path
         self.name: str              = os.path.basename(path)
-
+        self.tests: List[TestFile]  = [] 
         if os.path.isdir(path):
-            self.tests: List[TestFile] = self.gather_tests()
+            self.tests = self.gather_tests()
         else:
-            self.tests: List[TestFile] = [TestFile(path)]
-    
+            self.tests = [TestFile(path)]
+
     def verify(self) -> ErrorCollection:
         """
         Verify the tests in our config have no errors.
         """
-        return ErrorCollection(ec for test in self.tests if (ec := test.verify()))
-
+        ec = ErrorCollection();
+        for test in self.tests:
+            test_errors = test.verify()
+            ec.extend(test_errors) 
+        return ec
+        
     @staticmethod
     def is_test(test_path: str):
         """

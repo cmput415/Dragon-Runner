@@ -25,8 +25,6 @@ class ErrorCollection:
                 self.errors = errors.errors.copy()
             elif isinstance(errors, Iterable):
                 self.errors = list(errors)
-            else:
-                raise TypeError("Must construct ErrorCollection with self or List of Error")
 
     def has_errors(self) -> bool:
         return self.__bool__()
@@ -39,8 +37,6 @@ class ErrorCollection:
             self.errors.extend(errors.errors)
         elif isinstance(errors, Iterable):
             self.errors.extend(errors)
-        else:
-            raise TypeError("Must extend ErrorCollection with self or List of Error")
 
     def __bool__(self):
         return len(self.errors) > 0
