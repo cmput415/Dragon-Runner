@@ -13,7 +13,6 @@ def main():
     # parse and verify the CLI arguments
     args: CLIArgs = parse_cli_args()
     log(args, level=1)
-    
     # dragon-runner can also be used as a loader for grading & other scripts
     if args.is_script_mode():
         print(f"Use dragon-runner as a loader for script: {args.mode}")

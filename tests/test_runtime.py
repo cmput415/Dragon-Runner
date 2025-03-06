@@ -48,5 +48,5 @@ def test_gcc_toolchain_success(config_factory, cli_factory):
         assert os.path.exists(expected_lib), "failed to create shared object"
 
     # now shared object exists where the config expects it, so we can run
-    os.environ["DEBUG"] = "3"
+    os.environ["DRAGON_RUNNER_DEBUG"] = "3"
     run_tests_for_config(config, expected_result=True)

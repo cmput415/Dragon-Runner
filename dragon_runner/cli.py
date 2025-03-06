@@ -2,6 +2,7 @@ from typing import NamedTuple, List
 from dragon_runner.scripts.loader import Loader 
 import argparse
 import sys
+import os
 
 class CLIArgs(NamedTuple):
     config_file: str = ""
@@ -46,8 +47,13 @@ def parse_runner_args(argv_start: int = 1) -> CLIArgs:
     parser.add_argument("-t", "--time", action="store_true")
     parser.add_argument("-v", "--verbosity", action="count", default=0)
     parser.add_argument("-o", "--output")
-
+    
+    # Parse arguments
     args = parser.parse_args(sys.argv[argv_start:])
+    
+    # Set debug environment variable 
+    os.environ["DRAGON_RUNNER_DEBUG"] = str(args.verbosity)
+
     return CLIArgs(**vars(args))
 
 def parse_script_args() -> CLIArgs:

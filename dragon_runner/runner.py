@@ -95,7 +95,6 @@ class TestResult:
 
         test_name = f"{self.test.file:<50}"    
         show_time = args and args.time and self.time is not None
-        
         if self.did_timeout:
             log(Fore.YELLOW + timeout_msg + Fore.RESET + f"{test_name.strip()}", indent=4, file=file)
          
@@ -119,7 +118,7 @@ class TestResult:
         # Log test expected and generated
         expected_out = self.test.get_expected_out()
         generated_out = x if (x := self.gen_output) else b''
- 
+            
         log(f"==> Expected Out ({len(expected_out)} bytes):", indent=6, level=level-1)
         log(str(expected_out), level=level-1, indent=7)
         log(f"==> Generated Out ({len(generated_out)} bytes):", indent=6, level=level-1)

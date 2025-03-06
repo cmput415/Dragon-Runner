@@ -105,6 +105,8 @@ class RegularHarness(TestHarness):
         """
         Override the hook for regular run-specific implementation of counting passes
         """
+        if not test_result:
+            return
         if test_result.did_pass:
             counters["pass_count"] += 1
             test_result.log(args=self.cli_args)

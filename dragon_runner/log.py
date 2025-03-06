@@ -7,7 +7,7 @@ class Logger:
         self.debug_level = self._get_debug_level()
 
     def _get_debug_level(self):
-        return int(os.environ.get('DEBUG', '0')) 
+        return int(os.environ.get('DRAGON_RUNNER_DEBUG', '0')) 
 
     def log(self, level, indent, *args, **kwargs):
         prefix = ' '*indent
