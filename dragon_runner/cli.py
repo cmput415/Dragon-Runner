@@ -73,6 +73,8 @@ def parse_script_args() -> CLIArgs:
 def parse_cli_args() -> CLIArgs:
     if len(sys.argv) < 2:
         print("Usage: dragon-runner [mode] config.json [args...]")
+        print("  mode: [regular|tournament|perf|memcheck|script])")
+        print("  args: dragon-runner -h")
         sys.exit(1)
 
     first_arg = sys.argv[1]
