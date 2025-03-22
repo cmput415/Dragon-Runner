@@ -13,7 +13,8 @@ requires-python = ">=3.6"
 classifiers = ["Tester"]
 dependencies = [
     "colorama==0.4.6",
-    "pytest==8.3.3"
+    "pytest==8.3.3",
+    "numpy==2.2.4"
 ]
 
 [project.scripts]
