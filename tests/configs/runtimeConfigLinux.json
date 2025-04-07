@@ -1,10 +1,10 @@
 {
   "testDir": "../packages/RuntimeCPackage",
   "testedExecutablePaths": {
-    "gcc": "/usr/bin/clang"
+    "clang": "/usr/bin/clang"
   },
   "runtimes": {
-    "gcc": "../lib/libfib.so"
+    "clang": "../lib/libfib.so"
   },
   "toolchains": {
     "clang-runtime": [
