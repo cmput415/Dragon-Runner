@@ -224,10 +224,10 @@ class ToolChainRunner():
                 """
                 tr.did_pass = False;
                 return tr
-
-            step_stdout = child_process.stdout 
-            step_stderr = child_process.stderr
-            step_time = round(command_result.time, 4)
+            
+            step_stdout = bytes(child_process.stdout) or b''
+            step_stderr = bytes(child_process.stderr) or b''
+            step_time = round(command_result.time, 4) 
             
             if child_process.returncode in self.reserved_exit_codes:
                 """
@@ -280,18 +280,18 @@ class ToolChainRunner():
                     raise RuntimeError(f"Command did not create specified output file {output_file}")
                 
                 if output_file is not None:
-                    output_file_contents = file_to_bytes(output_file)
-                    step_stdout = output_file_contents 
-                
+                    step_stdout = file_to_bytes(output_file) or b''
+                  
                 tr.time=step_time
                 tr.gen_output=step_stdout
 
                 # Diff the produced and expected outputs
-                diff = precise_diff(child_process.stdout, expected)
+                diff = precise_diff(step_stdout, expected)
                 if not diff:
                     tr.did_pass = True
                 else:
                     tr.did_pass = False
+
                 return tr 
             else:
                 """
