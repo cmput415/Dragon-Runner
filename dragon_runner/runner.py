@@ -11,11 +11,12 @@ from dataclasses                import dataclass, asdict
 from colorama                   import Fore, init
 from dragon_runner.testfile     import TestFile 
 from dragon_runner.config       import Executable, ToolChain
-from dragon_runner.log          import log
+from dragon_runner.log          import log, log_multiline
 from dragon_runner.toolchain    import Step
 from dragon_runner.cli          import CLIArgs
 from dragon_runner.utils        import make_tmp_file, bytes_to_str,\
-                                       file_to_bytes, truncated_bytes
+                                       file_to_bytes, truncated_bytes,\
+                                       file_to_str
 
 # Terminal colors
 init(autoreset=True)
@@ -108,6 +109,12 @@ class TestResult:
             log(log_msg, indent=4, file=file)
         else:
             log(Fore.RED + fail_msg + Fore.RESET + f"{test_name}", indent=4, file=file)
+    
+        # Log testcase
+        if args and args.show_testcase:
+            content = self.test.pretty_print()
+            level = 1 if self.did_pass else 0
+            log_multiline(content, indent=6, level=level)
 
         # Log the command history
         level = 3 if self.did_pass else 2

@@ -16,3 +16,6 @@ vcalcConfig.json
 ValgrindLocalConfig.json
 
 tests/lib/*.so
+
+default.nix
+flake.nix

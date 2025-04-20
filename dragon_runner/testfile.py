@@ -1,7 +1,7 @@
 import os
 from io                     import BytesIO
 from typing                 import Optional, Union
-from dragon_runner.utils    import str_to_bytes, bytes_to_str, file_to_bytes
+from dragon_runner.utils    import file_to_str, str_to_bytes, bytes_to_str, file_to_bytes
 from dragon_runner.errors   import Verifiable, ErrorCollection, TestFileError
 
 class TestFile(Verifiable):
@@ -141,3 +141,38 @@ class TestFile(Verifiable):
         return (f"{test_name:<{max_test_name_length}}"
                 f"{len(expected_out):>4}\t"
                 f"{len(input_stream):>4}")
+ 
+    def pretty_print(self) -> str:
+        """
+        Generate a pretty-formatted string representation of the test file contents
+        with borders around it.
+        """
+        file_content = file_to_str(self.path)
+        if not file_content: 
+            return f"Error reading file {self.path}:"
+        
+        # query size of border to draw for user
+        term_width = os.get_terminal_size().columns if hasattr(os, 'get_terminal_size') else 80
+        content_width = min(term_width - 10, 100) 
+        
+        # ascii border characters
+        top_border = '┌' + '─' * (content_width - 2) + '┐'
+        bottom_border = '└' + '─' * (content_width - 2) + '┘'
+        
+        # apply border format to each line in the file
+        formatted_lines = []
+        formatted_lines.append(top_border) 
+        for line in file_content.splitlines():
+            # truncate long lines
+            if len(line) > content_width - 4:
+                display_line = line[:content_width - 7] + '...'
+            else:
+                display_line = line  
+            
+            # format content with border 
+            padded_line = display_line.ljust(content_width - 4)
+            formatted_lines.append(f'│ {padded_line} │') 
+
+        formatted_lines.append(bottom_border) 
+        return '\n'.join(formatted_lines)
+

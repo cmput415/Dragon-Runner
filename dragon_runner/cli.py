@@ -14,6 +14,7 @@ class CLIArgs(NamedTuple):
     time: bool = False
     verbosity: int = 0
     verify: bool = False
+    show_testcase: bool = False
     script_file: str = ""
     script_args: List[str] = []
 
@@ -46,6 +47,7 @@ def parse_runner_args(argv_start: int = 1) -> CLIArgs:
     parser.add_argument("--debug-package")
     parser.add_argument("-t", "--time", action="store_true")
     parser.add_argument("-v", "--verbosity", action="count", default=0)
+    parser.add_argument("-s", "--show-testcase", action="count", default=0)
     parser.add_argument("-o", "--output")
     
     # Parse arguments
