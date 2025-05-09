@@ -1,8 +1,8 @@
 import os
-from io                     import BytesIO
-from typing                 import Optional, Union
-from dragon_runner.utils    import file_to_str, str_to_bytes, bytes_to_str, file_to_bytes
-from dragon_runner.errors   import Verifiable, ErrorCollection, TestFileError
+from io                         import BytesIO
+from typing                     import Optional, Union
+from dragon_runner.src.utils    import file_to_str, str_to_bytes, file_to_bytes
+from dragon_runner.src.errors   import Verifiable, ErrorCollection, TestFileError
 
 class TestFile(Verifiable):
     __test__ = False 

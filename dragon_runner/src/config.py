@@ -1,14 +1,14 @@
 import json
 import os
 import sys
-from pathlib                    import Path
-from typing                     import Dict, List, Optional
-from dragon_runner.testfile     import TestFile
-from dragon_runner.errors       import ConfigError, Verifiable, ErrorCollection
-from dragon_runner.toolchain    import ToolChain
-from dragon_runner.utils        import resolve_relative
-from dragon_runner.log          import log
-from dragon_runner.cli          import CLIArgs
+from pathlib                        import Path
+from typing                         import Dict, List, Optional
+from dragon_runner.src.testfile     import TestFile
+from dragon_runner.src.errors       import ConfigError, Verifiable, ErrorCollection
+from dragon_runner.src.toolchain    import ToolChain
+from dragon_runner.src.utils        import resolve_relative
+from dragon_runner.src.log          import log
+from dragon_runner.src.cli          import CLIArgs
 
 class SubPackage(Verifiable):
     """

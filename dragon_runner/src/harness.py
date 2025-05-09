@@ -1,12 +1,12 @@
 import csv
-from colorama               import Fore
-from typing                 import Any, List, Dict, Optional, Set
-from dragon_runner.cli      import CLIArgs
-from dragon_runner.config   import Config, Executable, Package
-from dragon_runner.log      import log
-from dragon_runner.runner   import TestResult, ToolChainRunner
-from dragon_runner.utils    import file_to_str
-from itertools              import zip_longest
+from colorama                   import Fore
+from typing                     import Any, List, Dict, Optional, Set
+from dragon_runner.src.cli      import CLIArgs
+from dragon_runner.src.config   import Config, Executable, Package
+from dragon_runner.src.log      import log
+from dragon_runner.src.runner   import TestResult, ToolChainRunner
+from dragon_runner.src.utils    import file_to_str
+from itertools                  import zip_longest
 
 class TestHarness:
     __test__ = False

@@ -1,7 +1,7 @@
 import os
-from dragon_runner.harness import TournamentHarness
-from dragon_runner.config import Config
-from dragon_runner.cli import CLIArgs
+from dragon_runner.src.harness import TournamentHarness
+from dragon_runner.src.config import Config
+from dragon_runner.src.cli import CLIArgs
 
 def test_grader_config(config_factory, cli_factory):
 

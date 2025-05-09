@@ -1,6 +1,6 @@
 import os
 import sys
-from dragon_runner.utils import bytes_to_str
+from dragon_runner.src.utils import bytes_to_str
 
 class Logger:
     def __init__(self):

@@ -2,9 +2,9 @@ import sys
 import os
 import subprocess
 
-from dragon_runner.runner   import ToolChainRunner, TestResult
-from dragon_runner.config   import Config
-from dragon_runner.cli      import CLIArgs
+from dragon_runner.src.runner   import ToolChainRunner, TestResult
+from dragon_runner.src.config   import Config
+from dragon_runner.src.cli      import CLIArgs
 
 def run_tests_for_config(config: Config, expected_result: bool):
     # TODO: move to conftest.py

@@ -2,7 +2,7 @@ import json
 import os
 import subprocess
 from typing import Dict, List, Iterator
-from dragon_runner.errors import *
+from dragon_runner.src.errors import *
 
 class Step(Verifiable):
     def __init__(self, **kwargs):

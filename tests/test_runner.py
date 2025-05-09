@@ -1,6 +1,6 @@
-from dragon_runner.harness import RegularHarness
-from dragon_runner.config import Config
-from dragon_runner.cli import CLIArgs
+from dragon_runner.src.harness import RegularHarness
+from dragon_runner.src.config import Config
+from dragon_runner.src.cli import CLIArgs
 
 def test_gcc_pass(config_factory, cli_factory):
 

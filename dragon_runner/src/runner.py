@@ -4,20 +4,18 @@ import re
 import json
 import time
 import sys
-
-from subprocess                 import CompletedProcess
-from typing                     import List, Dict, Optional, Union
-from dataclasses                import dataclass, asdict
-from colorama                   import Fore, init
-from dragon_runner.testfile     import TestFile 
-from dragon_runner.config       import Executable, ToolChain
-from dragon_runner.log          import log, log_multiline
-from dragon_runner.toolchain    import Step
-from dragon_runner.cli          import CLIArgs
-from dragon_runner.utils        import make_tmp_file, bytes_to_str,\
+from subprocess                     import CompletedProcess
+from typing                         import List, Dict, Optional, Union
+from dataclasses                    import dataclass, asdict
+from colorama                       import Fore, init
+from dragon_runner.src.testfile     import TestFile 
+from dragon_runner.src.config       import Executable, ToolChain
+from dragon_runner.src.log          import log, log_multiline
+from dragon_runner.src.toolchain    import Step
+from dragon_runner.src.cli          import CLIArgs
+from dragon_runner.src.utils        import make_tmp_file, bytes_to_str,\
                                        file_to_bytes, truncated_bytes,\
                                        file_to_str
-
 # Terminal colors
 init(autoreset=True)
 
