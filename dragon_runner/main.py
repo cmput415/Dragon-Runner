@@ -3,8 +3,7 @@ from dragon_runner.cli      import parse_cli_args, CLIArgs
 from dragon_runner.config   import load_config
 from dragon_runner.log      import log, log_multiline
 from dragon_runner.scripts.loader import Loader 
-from dragon_runner.harness  import MemoryCheckHarness, PerformanceTestingHarness, \
-                                   RegularHarness, TournamentHarness
+from dragon_runner.harness  import * 
 
 # initialize terminal colors
 init(autoreset=True)

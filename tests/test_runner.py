@@ -30,7 +30,7 @@ def test_gcc_pass_darwin(config_factory, cli_factory):
 
 def test_gcc_fail(config_factory, cli_factory):
 
-    config : Config = config_factory("gccFail.json")
+    config : Config = config_factory("gccFailConfig.json")
     args : CLIArgs = cli_factory(**{
         "mode": "regular",
         "timeout": 5
