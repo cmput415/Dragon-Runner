@@ -8,7 +8,7 @@ from dragon_runner.src.errors       import ConfigError, Verifiable, ErrorCollect
 from dragon_runner.src.toolchain    import ToolChain
 from dragon_runner.src.utils        import resolve_relative
 from dragon_runner.src.log          import log
-from dragon_runner.src.cli          import CLIArgs
+from dragon_runner.src.cli          import CLIArgs, RunnerArgs
 
 class SubPackage(Verifiable):
     """
@@ -254,7 +254,7 @@ class Config:
     def __repr__(self) -> str:
         return json.dumps(self.to_dict(), indent=2)
 
-def load_config(config_path: str, args: Optional[CLIArgs]=None) -> Optional[Config]:
+def load_config(config_path: str, args: Optional[RunnerArgs]=None) -> Optional[Config]:
     """
     Load and parse the JSON configuration file.
     """

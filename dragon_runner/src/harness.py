@@ -1,7 +1,7 @@
 import csv
 from colorama                   import Fore
 from typing                     import Any, List, Dict, Optional, Set
-from dragon_runner.src.cli      import CLIArgs
+from dragon_runner.src.cli      import RunnerArgs
 from dragon_runner.src.config   import Config, Executable, Package
 from dragon_runner.src.log      import log
 from dragon_runner.src.runner   import TestResult, ToolChainRunner
@@ -11,9 +11,9 @@ from itertools                  import zip_longest
 class TestHarness:
     __test__ = False
 
-    def __init__(self, config: Config, cli_args: CLIArgs):
+    def __init__(self, config: Config, cli_args: RunnerArgs):
         self.config = config
-        self.cli_args: CLIArgs = cli_args
+        self.cli_args: RunnerArgs = cli_args
         self.failures: List[TestResult] = []
         self.run_passed = True
     
@@ -205,7 +205,7 @@ class TournamentHarness(TestHarness):
 
 class MemoryCheckHarness(TestHarness):
     
-    def __init__(self, config: Config, cli_args: CLIArgs):
+    def __init__(self, config: Config, cli_args: RunnerArgs):
         super().__init__(config, cli_args) 
         self.leak_count = 0
         self.test_count = 0
@@ -252,7 +252,7 @@ class MemoryCheckHarness(TestHarness):
        
 class PerformanceTestingHarness(TestHarness):
     
-    def __init__(self, config: Config, cli_args: CLIArgs):
+    def __init__(self, config: Config, cli_args: RunnerArgs):
         super().__init__(config, cli_args)
         self.csv_cols = []
         self.cur_col = []
