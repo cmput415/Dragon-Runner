@@ -111,7 +111,7 @@ class TestResult:
         # Log testcase
         if args and args.show_testcase:
             content = self.test.pretty_print()
-            level = 1 if self.did_pass else 0
+            level = 2 if self.did_pass else 0
             log_multiline(content, indent=6, level=level)
 
         # Log the command history

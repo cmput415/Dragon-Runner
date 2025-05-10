@@ -1,6 +1,6 @@
 from colorama                       import init, Fore
 from pathlib                        import Path
-from dragon_runner.src.cli          import parse_cli_args, ServerArgs, ScriptArgs
+from dragon_runner.src.cli          import Mode, parse_cli_args, ServerArgs, ScriptArgs
 from dragon_runner.src.config       import load_config
 from dragon_runner.src.log          import log, log_multiline
 from dragon_runner.scripts.loader   import Loader
@@ -55,19 +55,19 @@ def main():
     # display the config info before running tests
     config.log_test_info()
 
-    if args.mode == "regular":
+    if args.mode == Mode.REGULAR:
         # run in regular mode
         harness = RegularHarness(config, args)
 
-    elif args.mode == "tournament":
+    elif args.mode == Mode.TOURNAMENT:
         # run the tester in tournament mode
         harness = TournamentHarness(config, args)
 
-    elif args.mode == "memcheck":
+    elif args.mode == Mode.MEMCHECK:
         # check tests for memory leaks
         harness = MemoryCheckHarness(config, args)
 
-    elif args.mode == "perf":
+    elif args.mode == Mode.PERF:
         # performance testing
         harness = PerformanceTestingHarness(config, args) 
     else:

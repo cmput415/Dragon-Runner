@@ -8,7 +8,7 @@ from dragon_runner.src.errors       import ConfigError, Verifiable, ErrorCollect
 from dragon_runner.src.toolchain    import ToolChain
 from dragon_runner.src.utils        import resolve_relative
 from dragon_runner.src.log          import log
-from dragon_runner.src.cli          import CLIArgs, RunnerArgs
+from dragon_runner.src.cli          import RunnerArgs
 
 class SubPackage(Verifiable):
     """

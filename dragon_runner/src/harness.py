@@ -17,7 +17,7 @@ class TestHarness:
         self.failures: List[TestResult] = []
         self.run_passed = True
     
-    def process_test_result(self, test_result: TestResult, **context):
+    def process_test_result(self, test_result: TestResult, context: Dict[str, Any]):
         """
         Subclasses should override this method to handle test result processing and update counts.
         """
@@ -76,7 +76,7 @@ class TestHarness:
                         self.pre_subpackage_hook(spkg)
                         for test in spkg.tests:
                             test_result: TestResult = tc_runner.run(test, exe)
-                            self.process_test_result(test_result, **counters)
+                            self.process_test_result(test_result, counters)
                         self.post_subpackage_hook(counters)
                         log("Subpackage Passed: ", counters["pass_count"], "/", counters["test_count"], indent=3)
                         pkg_pass_count += counters["pass_count"]
@@ -98,7 +98,7 @@ class TestHarness:
 
 class RegularHarness(TestHarness):
     
-    def process_test_result(self, test_result: TestResult, **context):
+    def process_test_result(self, test_result: TestResult, context: Dict[str, Any]):
         """
         Override the hook for regular run-specific implementation of counting passes
         """
@@ -227,7 +227,7 @@ class MemoryCheckHarness(TestHarness):
             for result in self.failures:
                 result.log()
 
-    def process_test_result(self, test_result: TestResult, **counters):
+    def process_test_result(self, test_result: TestResult, context: Dict[str, Any]):
         """
         Override the hook for regular run-specific implementation of counting passes
         """
@@ -235,7 +235,7 @@ class MemoryCheckHarness(TestHarness):
 
         # increment the test count
         self.test_count += 1
-        counters["test_count"] += 1
+        context["test_count"] += 1
 
         # log the test result
         test_result.log(args=self.cli_args)
@@ -246,7 +246,7 @@ class MemoryCheckHarness(TestHarness):
      
         # track passes as usual
         if test_result.did_pass:
-            counters["pass_count"] += 1
+            context["pass_count"] += 1
         else:
             self.failures.append(test_result) 
        
@@ -268,7 +268,7 @@ class PerformanceTestingHarness(TestHarness):
         df = {exe.id: {pkg.name for pkg in attackers} for exe in defenders}
         return df
     
-    def process_test_result(self, test_result: TestResult, **counters):
+    def process_test_result(self, test_result: TestResult, context: Dict[str, Any]):
         """
         Override the hook for regular run-specific implementation of counting passes
         """
@@ -277,7 +277,7 @@ class PerformanceTestingHarness(TestHarness):
             self.testfile_col.append(test_result.test.file)
         
         if test_result.did_pass:
-            counters["pass_count"] += 1
+            context["pass_count"] += 1
             test_result.log(args=self.cli_args)
             self.cur_col.append(test_result.time)
             
@@ -285,7 +285,7 @@ class PerformanceTestingHarness(TestHarness):
             self.cur_col.append(self.cli_args.timeout)
             self.failures.append(test_result)
             test_result.log(args=self.cli_args)
-        counters["test_count"] += 1
+        context["test_count"] += 1
     
     def pre_executable_hook(self, exe):
         self.cur_col.append(exe)
