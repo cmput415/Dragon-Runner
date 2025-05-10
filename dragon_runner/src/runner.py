@@ -306,7 +306,7 @@ class ToolChainRunner():
                 input_file = output_file or make_tmp_file(child_process.stdout)
         
         # this code should be unreachable for well-defined toolchains 
-        return tr
+        raise RuntimeError("Toolchain reached undefined conditions during execution.")
 
     @staticmethod
     def replace_env_vars(cmd: Command) -> Command:

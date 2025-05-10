@@ -1,0 +1,24 @@
+{
+  "testDir": "../packages/CPackage",
+  "testedExecutablePaths": {
+    "gcc": "/usr/bin/gcc"
+  },
+  "toolchains": {
+    "gcc-explorer": [
+      {
+        "stepName": "compile",
+        "executablePath": "$EXE",
+        "arguments": ["-xc", "$INPUT", "-o", "$OUTPUT"],
+        "output": "/tmp/test.o",
+        "allowError": true
+      },
+      {
+        "stepName": "run",
+        "executablePath": "$INPUT",
+        "arguments": [],
+        "usesInStr": true,
+        "allowError": true
+      }
+    ]
+  }
+}

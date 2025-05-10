@@ -6,7 +6,7 @@ setup(
     packages=find_packages(),
     entry_points={
         'console_scripts': [
-            'dragon-runner=dragon_runner.main:main',
+            'dragon-runner=dragon_runner.src.main:main',
         ],
     },
 )

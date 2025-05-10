@@ -1,12 +1,12 @@
 import os
 from io                         import BytesIO
-from typing                     import Optional, Union
-from dragon_runner.src.utils    import file_to_str, str_to_bytes, file_to_bytes
+from typing                     import Dict, Optional, Union
+from dragon_runner.src.utils    import bytes_to_str, file_to_str, str_to_bytes, file_to_bytes
 from dragon_runner.src.errors   import Verifiable, ErrorCollection, TestFileError
 
 class TestFile(Verifiable):
     __test__ = False 
-    def __init__(self, test_path, input_dir="input", input_stream_dir="input-stream",
+    def __init__(self, test_path: str, input_dir="input", input_stream_dir="input-stream",
                                   output_dir="output", comment_syntax="//"):   
         self.path = test_path
         self.stem, self.extension = os.path.splitext(os.path.basename(test_path))
@@ -18,6 +18,13 @@ class TestFile(Verifiable):
         self.expected_out: Union[bytes, TestFileError] = self.get_content("CHECK:", "CHECK_FILE:")
         self.input_stream: Union[bytes, TestFileError] = self.get_content("INPUT:", "INPUT_FILE:")
     
+    @classmethod
+    def from_test_contents(cls, content: bytes, test_name: str):
+
+        instance = cls.__new__(cls)
+         
+        return instance
+
     def get_input_stream(self) -> bytes:
         """
         Get the input-stream supplied for the test. Assumes this testfile instance
@@ -141,7 +148,18 @@ class TestFile(Verifiable):
         return (f"{test_name:<{max_test_name_length}}"
                 f"{len(expected_out):>4}\t"
                 f"{len(input_stream):>4}")
- 
+    
+    def to_dict(self) -> Dict:
+        # Todo: Elaborate payload with what is useful
+        if isinstance(self.expected_out, bytes):
+            out = bytes_to_str(self.expected_out)
+        else:
+            out = 'Error'
+        return {
+            "name": self.stem,
+            "expected_output": out
+        }
+
     def pretty_print(self) -> str:
         """
         Generate a pretty-formatted string representation of the test file contents
