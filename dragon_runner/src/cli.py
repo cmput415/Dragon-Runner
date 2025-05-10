@@ -1,8 +1,30 @@
+from pathlib import Path
 from typing import NamedTuple, List
 from dragon_runner.scripts.loader import Loader 
+from enum import Enum
 import argparse
 import sys
 import os
+
+class Mode(Enum):
+    REGULAR = 0,
+    TOURNAMENT = 1,
+    PERF = 2,
+    MEMCHECK = 3,
+    SERVE = 4,
+    SCRIPT = 5 
+
+class RunnerCLIArgs(NamedTuple):
+    config_file: str = ""
+    output: str = ""
+    failure_log: str = ""
+    debug_package: str = ""
+    mode: str = "regular"
+    timeout: float = 2.0
+    time: bool = False
+    verbosity: int = 0
+    verify: bool = False
+    show_testcase: bool = False
 
 class CLIArgs(NamedTuple):
     config_file: str = ""
@@ -17,7 +39,7 @@ class CLIArgs(NamedTuple):
     show_testcase: bool = False
     script_file: str = ""
     script_args: List[str] = []
-
+    
     def is_script_mode(self):
         return self.script_file != ""
 
@@ -36,6 +58,12 @@ class CLIArgs(NamedTuple):
             f"  Script Args: {' '.join(self.script_args)}"
         )
 
+# class ServerCLIArgs(CLIArgs):
+#     # TODO: Implement a scheme for inheriting CLIArgs
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(args) 
+#         serve_dir: Path = kwargs.get("serve_dir", ".") 
+#         
 def parse_runner_args(argv_start: int = 1) -> CLIArgs:
 
     parser = argparse.ArgumentParser(description="CMPUT 415 testing utility")
@@ -72,10 +100,14 @@ def parse_script_args() -> CLIArgs:
         script_args=sys.argv[3:]
     )
 
+def parse_server_args() -> CLIArgs:
+    print("Usage: dragon-runnner serve <config_dir|config>")
+    return CLIArgs(mode="serve")
+
 def parse_cli_args() -> CLIArgs:
     if len(sys.argv) < 2:
         print("Usage: dragon-runner [mode] config.json [args...]")
-        print("  mode: [regular|tournament|perf|memcheck|script])")
+        print("  mode: [regular|tournament|perf|memcheck|serve|script])")
         print("  args: dragon-runner -h")
         sys.exit(1)
 
@@ -86,6 +118,8 @@ def parse_cli_args() -> CLIArgs:
         return args._replace(mode=first_arg)
     elif first_arg == "script":
         return parse_script_args()
+    elif first_arg == "serve":
+        return parse_server_args()
     else:
         return parse_runner_args(1)
 

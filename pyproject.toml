@@ -14,11 +14,12 @@ classifiers = ["Tester"]
 dependencies = [
     "colorama==0.4.6",
     "pytest==8.3.3",
-    "numpy==2.2.4"
+    "numpy==2.2.4",
+    "Flask==3.1.0",
 ]
 
 [project.scripts]
-dragon-runner = "dragon_runner.main:main"
+dragon-runner = "dragon_runner.src.main:main"
 
 [tool.setuptools.package-data]
 dragon_runner = ["py.typed"]

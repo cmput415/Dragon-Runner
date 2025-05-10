@@ -1,8 +1,10 @@
 from colorama                       import init, Fore
+from pathlib                        import Path
 from dragon_runner.src.cli          import parse_cli_args, CLIArgs
 from dragon_runner.src.config       import load_config
 from dragon_runner.src.log          import log, log_multiline
-from dragon_runner.scripts.loader   import Loader 
+from dragon_runner.scripts.loader   import Loader
+from dragon_runner.src.server       import serve
 from dragon_runner.src.harness      import * 
 
 # initialize terminal colors
@@ -12,6 +14,12 @@ def main():
     # parse and verify the CLI arguments
     args: CLIArgs = parse_cli_args()
     log(args, level=1)
+    
+    # run the server for running configs through HTTP
+    if args.mode == "serve":
+        serve(Path("/home/justin/projects/dragon-runner/tests/configs"))
+        return 0
+
     # dragon-runner can also be used as a loader for grading & other scripts
     if args.is_script_mode():
         print(f"Use dragon-runner as a loader for script: {args.mode}")
@@ -46,7 +54,7 @@ def main():
 
     # display the config info before running tests
     config.log_test_info()
-    
+
     if args.mode == "regular":
         # run in regular mode
         harness = RegularHarness(config, args)
@@ -62,7 +70,6 @@ def main():
     elif args.mode == "perf":
         # performance testing
         harness = PerformanceTestingHarness(config, args) 
-    
     else:
         raise RuntimeError(f"Failed to provide valid mode: {args.mode}")
     
