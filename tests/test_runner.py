@@ -1,11 +1,11 @@
 from dragon_runner.src.harness import RegularHarness
 from dragon_runner.src.config import Config
-from dragon_runner.src.cli import CLIArgs
+from dragon_runner.src.cli import RunnerArgs
 
 def test_gcc_pass(config_factory, cli_factory):
 
     config : Config = config_factory("gccPassConfig.json")
-    args : CLIArgs = cli_factory(**{
+    args : RunnerArgs = cli_factory(**{
         "mode": "regular",
         "timeout": 5
     })
@@ -18,7 +18,7 @@ def test_gcc_pass(config_factory, cli_factory):
 def test_gcc_pass_darwin(config_factory, cli_factory):
 
     config : Config = config_factory("catConfigDarwin.json")
-    args : CLIArgs = cli_factory(**{
+    args : RunnerArgs = cli_factory(**{
         "mode": "regular",
         "timeout": 5
     })
@@ -31,7 +31,7 @@ def test_gcc_pass_darwin(config_factory, cli_factory):
 def test_gcc_fail(config_factory, cli_factory):
 
     config : Config = config_factory("gccFailConfig.json")
-    args : CLIArgs = cli_factory(**{
+    args : RunnerArgs = cli_factory(**{
         "mode": "regular",
         "timeout": 5
     })

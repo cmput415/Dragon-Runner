@@ -1,10 +1,13 @@
+from dragon_runner.src.runner   import ToolChainRunner, TestResult
+from dragon_runner.src.config   import Config
 import sys
 import os
 import subprocess
 
-from dragon_runner.src.runner   import ToolChainRunner, TestResult
-from dragon_runner.src.config   import Config
-from dragon_runner.src.cli      import CLIArgs
+TEST_DIR            = os.path.dirname(os.path.abspath(__file__))
+COMPILE_LIB_SCRIPT  = f"{TEST_DIR}/scripts/test-scripts/compile_lib.py"
+LIB_SRC_DIR         = os.path.join(TEST_DIR, "lib/src")
+LIB_OUT_DIR         = os.path.join(TEST_DIR, "lib")
 
 def run_tests_for_config(config: Config, expected_result: bool):
     # TODO: move to conftest.py
@@ -21,10 +24,6 @@ def run_tests_for_config(config: Config, expected_result: bool):
                         result.log()
                         assert result.did_pass == expected_result
 
-TEST_DIR            = os.path.dirname(os.path.abspath(__file__))
-COMPILE_LIB_SCRIPT  = f"{TEST_DIR}/scripts/test-scripts/compile_lib.py"
-LIB_SRC_DIR         = os.path.join(TEST_DIR, "lib/src")
-LIB_OUT_DIR         = os.path.join(TEST_DIR, "lib")
 
 def test_gcc_toolchain_success(config_factory, cli_factory):
     assert os.path.exists(COMPILE_LIB_SCRIPT), "missing library compiler script" 

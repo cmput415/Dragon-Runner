@@ -12,7 +12,7 @@ from dragon_runner.src.testfile     import TestFile
 from dragon_runner.src.config       import Executable, ToolChain
 from dragon_runner.src.log          import log, log_multiline
 from dragon_runner.src.toolchain    import Step
-from dragon_runner.src.cli          import CLIArgs
+from dragon_runner.src.cli          import CLIArgs, RunnerArgs
 from dragon_runner.src.utils        import make_tmp_file, bytes_to_str,\
                                        file_to_bytes, truncated_bytes,\
                                        file_to_str
@@ -82,7 +82,7 @@ class TestResult:
         self.time: Optional[float] = None
         self.failing_step: Optional[str] = None
 
-    def log(self, file=sys.stdout, args: Union['CLIArgs', None]=None):
+    def log(self, file=sys.stdout, args: Union['RunnerArgs', None]=None):
         """
         Print a TestResult to the log with various levels of verbosity.
         This is the main output the user is concerned with.

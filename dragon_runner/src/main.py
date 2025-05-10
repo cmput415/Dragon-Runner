@@ -1,6 +1,6 @@
 from colorama                       import init, Fore
 from pathlib                        import Path
-from dragon_runner.src.cli          import parse_cli_args, CLIArgs
+from dragon_runner.src.cli          import parse_cli_args, ServerArgs, ScriptArgs
 from dragon_runner.src.config       import load_config
 from dragon_runner.src.log          import log, log_multiline
 from dragon_runner.scripts.loader   import Loader
@@ -12,16 +12,16 @@ init(autoreset=True)
 
 def main(): 
     # parse and verify the CLI arguments
-    args: CLIArgs = parse_cli_args()
+    args = parse_cli_args()
     log(args, level=1)
     
     # run the server for running configs through HTTP
-    if args.mode == "serve":
-        serve(Path("/home/justin/projects/dragon-runner/tests/configs"))
+    if isinstance(args, ServerArgs):
+        serve(args)
         return 0
 
     # dragon-runner can also be used as a loader for grading & other scripts
-    if args.is_script_mode():
+    if isinstance(args, ScriptArgs):
         print(f"Use dragon-runner as a loader for script: {args.mode}")
         loader = Loader()
         loader(args.script_file, args.script_args) 

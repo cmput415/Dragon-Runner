@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Set
 from flask import Flask, jsonify, current_app
 from flask import request
+from dragon_runner.src.cli import ServerArgs
 from dragon_runner.src.runner import TestResult, ToolChainRunner
 from dragon_runner.src.config import load_config, Config
 from pathlib import Path
@@ -8,7 +9,6 @@ from flask import Blueprint, jsonify, request
 from dragon_runner.src.testfile import TestFile
 from tempfile import NamedTemporaryFile
 from dragon_runner.src.utils import bytes_to_str
-import os
 
 app = Flask(__name__)
 
@@ -104,15 +104,15 @@ def get_configs_to_serve(config_dir: Path) -> List[Config]:
     return configs
 
 # Usage in your serve function
-def serve(config_dir: Path):
-    configs = get_configs_to_serve(config_dir)
+def serve(args: ServerArgs):
+    configs = get_configs_to_serve(args.serve_path)
     
     # Create APIs for each config and register their blueprints
     for config in configs:
         api = ConfigAPI(config)
         app.register_blueprint(api.bp)
     
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True, host="0.0.0.0", port=args.port)
 
 ### ================================ ###
 #               DEBUG                  #

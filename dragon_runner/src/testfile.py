@@ -1,7 +1,7 @@
 import os
 from io                         import BytesIO
 from typing                     import Dict, Optional, Union
-from dragon_runner.src.utils    import bytes_to_str, file_to_str, str_to_bytes, file_to_bytes
+from dragon_runner.src.utils    import file_to_str, str_to_bytes, file_to_bytes
 from dragon_runner.src.errors   import Verifiable, ErrorCollection, TestFileError
 
 class TestFile(Verifiable):
@@ -149,15 +149,14 @@ class TestFile(Verifiable):
                 f"{len(expected_out):>4}\t"
                 f"{len(input_stream):>4}")
     
-    def to_dict(self) -> Dict:
-        # Todo: Elaborate payload with what is useful
-        if isinstance(self.expected_out, bytes):
-            out = bytes_to_str(self.expected_out)
-        else:
-            out = 'Error'
+    def to_dict(self) -> Dict:  
+        out = str(self.expected_out)
+        ins = str(self.input_stream)
         return {
             "name": self.stem,
-            "expected_output": out
+            "path": self.path,
+            "expected_output": out,
+            "input_stream": ins 
         }
 
     def pretty_print(self) -> str:
