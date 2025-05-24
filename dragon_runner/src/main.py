@@ -1,5 +1,4 @@
 from colorama                       import init, Fore
-from pathlib                        import Path
 from dragon_runner.src.cli          import Mode, parse_cli_args, ServerArgs, ScriptArgs
 from dragon_runner.src.config       import load_config
 from dragon_runner.src.log          import log, log_multiline

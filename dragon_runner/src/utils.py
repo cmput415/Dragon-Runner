@@ -1,6 +1,7 @@
 import os
 import sys
 import tempfile
+import base64
 from typing     import Optional
 from colorama   import init
 
@@ -62,6 +63,14 @@ def file_to_bytes(file: str) -> Optional[bytes]:
             return f.read()
     except Exception as e:
         print(f"Reading bytes from file failed with: {e}")
+        return None
+
+def file_to_base64(file_path: str) -> Optional[str]:
+    """Convert file to base64 string"""
+    try:
+        with open(file_path, 'rb') as file:
+            return base64.b64encode(file.read()).decode('utf-8')
+    except: 
         return None
 
 def truncated_bytes(data: bytes, max_bytes: int = 1024) -> bytes:

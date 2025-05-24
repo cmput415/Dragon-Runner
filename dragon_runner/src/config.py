@@ -164,6 +164,7 @@ class Config:
     An in memory representation of the JSON configuration file which directs the tester. 
     """
     def __init__(self, config_path: str, config_data: Dict, debug_package: Optional[str]):
+        self.name               = Path(config_path).stem
         self.config_path        = os.path.abspath(config_path)
         self.config_data        = config_data
         self.debug_package      = debug_package
@@ -245,6 +246,7 @@ class Config:
 
     def to_dict(self) -> Dict: 
         return {
+            'name': self.name,
             'testDir': self.test_dir,
             'executables': [exe.to_dict() for exe in self.executables],
             'toolchains': {tc.name: tc.to_dict()[tc.name] for tc in self.toolchains},
