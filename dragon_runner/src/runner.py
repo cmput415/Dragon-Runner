@@ -139,7 +139,7 @@ class ToolChainRunner():
         self.env                    = env
         self.reserved_exit_codes    = [VALGRIND_EXIT_CODE]
 
-    def run_command(self, command, stdin: bytes):
+    def run_command(self, command, stdin: bytes) -> CommandResult:
         """
         Run a command and return the CommandResult
         """

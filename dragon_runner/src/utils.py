@@ -65,13 +65,44 @@ def file_to_bytes(file: str) -> Optional[bytes]:
         print(f"Reading bytes from file failed with: {e}")
         return None
 
-def file_to_base64(file_path: str) -> Optional[str]:
+def utf8_file_to_base64(file_path: str) -> Optional[str]:
     """Convert file to base64 string"""
     try:
         with open(file_path, 'rb') as file:
             return base64.b64encode(file.read()).decode('utf-8')
     except: 
         return None
+
+def b64_to_bytes(b64_string: str) -> Optional[bytes]:
+   """
+   Convert base64 string to bytes.
+   """
+   try:
+       return base64.b64decode(b64_string)
+   except Exception as e:
+       print(f"Base64 decoding failed with: {e}", file=sys.stderr)
+       return None
+
+def b64_to_str(b64_string: str) -> Optional[str]:
+   """
+   Convert base64 string to string.
+   """
+   try:
+       return bytes_to_str(base64.b64decode(b64_string))
+   except Exception as e:
+       print(f"Base64 decoding failed with: {e}", file=sys.stderr)
+       return None
+
+def bytes_to_b64(data: bytes) -> Optional[str]:
+   """
+   Convert bytes to base64 string.
+   """
+   assert isinstance(data, bytes), "Supplied data that is not of type bytes."
+   try:
+       return base64.b64encode(data).decode('utf-8')
+   except Exception as e:
+       print(f"Base64 encoding failed with: {e}", file=sys.stderr)
+       return None
 
 def truncated_bytes(data: bytes, max_bytes: int = 1024) -> bytes:
     """

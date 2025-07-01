@@ -24,6 +24,12 @@ class TestFile(Verifiable):
         instance = cls.__new__(cls)
          
         return instance
+    
+    def set_input_stream(self, input_stream: bytes):
+        """
+        Manually set the input stream.
+        """
+        self.input_stream = input_stream
 
     def get_input_stream(self) -> bytes:
         """

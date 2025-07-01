@@ -1,20 +1,78 @@
 import os
-from typing                         import List, Dict, Any
-from dragon_runner.src.cli          import ServerArgs
-from dragon_runner.src.runner       import TestResult, ToolChainRunner
-from dragon_runner.src.toolchain    import ToolChain
-from dragon_runner.src.config       import load_config, Config
-from dragon_runner.src.utils        import bytes_to_str, file_to_base64
-from dragon_runner.src.testfile     import TestFile
-from tempfile                       import NamedTemporaryFile
-from pathlib                        import Path
-from flask                          import Blueprint, Flask, request, jsonify, current_app
-from flask_cors                     import CORS
+import subprocess
+import shutil
+from typing import                      List, Dict, Any, Optional
+from dragon_runner.src.cli import       ServerArgs
+from dragon_runner.src.runner import    TestResult, ToolChainRunner, Command, CommandResult
+from dragon_runner.src.toolchain import ToolChain
+from dragon_runner.src.config import    load_config, Config, Executable
+from dragon_runner.src.testfile import  TestFile
+from dragon_runner.src.utils import *
+from tempfile import                    NamedTemporaryFile
+from pathlib import                     Path
+from flask import                       Blueprint, Flask, request, jsonify, current_app
+from flask_cors import                  CORS
 
-SERVER_MODE     = os.environ.get("DR_SERVER_MODE", "DEBUG").upper()
-IS_PRODUCTION   = (SERVER_MODE == "PROD")
-app             = Flask(__name__)
+SERVER_MODE = os.environ.get("DR_SERVER_MODE", "DEBUG").upper()
+IS_PRODUCTION = (SERVER_MODE == "PROD")
+app = Flask(__name__)
 CORS(app)
+
+class SecureToolChainRunner(ToolChainRunner):
+    """
+    ToolChainRunner using firejail sandboxing
+    """ 
+    def __init__(self, tc, timeout: float, env=None, restrict_exes: List[Executable]=[]):
+        super().__init__(tc, timeout, env or {})
+        self.firejail_available = self._check_firejail()
+        self.restrict_exes = restrict_exes
+        
+    def _check_firejail(self) -> bool:
+        """
+        Check if firejail is available on the system.
+        """
+        return shutil.which('firejail') is not None
+
+    def _create_firejail_command(self, original_cmd: List[str]) -> List[str]:
+        """
+        Wrap command with firejail security options.
+        """
+        if not self.firejail_available:
+            return original_cmd
+            
+        firejail_cmd = [
+            'firejail',
+            '--noprofile',
+            '--seccomp',
+            '--noroot',
+            '--net=none',
+            '--noexec=/home',
+            '--private-tmp',
+            '--private-dev',
+            '--read-only=/usr',
+            '--read-only=/bin',
+            '--read-only=/lib',
+            '--read-only=/lib64',
+            '--blacklist=/home',
+            '--blacklist=/root',
+            '--blacklist=/etc',
+            '--rlimit-nproc=2',
+            '--rlimit-fsize=1048576', #1MB
+            f'--timeout=00:00:{int(self.timeout):02d}',
+            '--quiet',
+            '--'
+        ] 
+        return firejail_cmd + original_cmd
+
+    def run_command(self, command: Command, stdin: bytes) -> CommandResult:
+        """
+        Override to wrap commands with firejail
+        """
+        if self.firejail_available:
+            secure_args = self._create_firejail_command(command.args)
+            secure_command = Command(secure_args)
+            return super().run_command(secure_command, stdin)
+        return CommandResult(cmd="", exit_status=1)
 
 class Payload:
     def __init__(self):
@@ -38,11 +96,12 @@ class ToolChainPayload(Payload):
 class TestPayload(Payload):
     def __init__(self, test: TestFile):
         self.data = test.to_dict()
-        self.data.update({"content": file_to_base64(test.path)})    
+        self.data.update({"content": utf8_file_to_base64(test.path)})    
 
 class ConfigAPI:
     def __init__(self, config: Config):
         self.config = config
+        self.config_path = config.config_path
         self.name = Path(config.config_path).stem
         self.tests: Dict = self.unpack_tests()        
         
@@ -51,7 +110,6 @@ class ConfigAPI:
         self._register_routes()
     
     def unpack_tests(self) -> Dict:
-        # Compute tests dictionary only once for each config
         tests = {} 
         for pkg in self.config.packages:
             for spkg in pkg.subpackages:
@@ -76,39 +134,72 @@ class ConfigAPI:
     
     def run_test(self):
         data = request.get_json(silent=True) or {}
-        test_contents = data.get('test_contents', "int main() { return 0; }")
-        toolchain_name = data.get('toolchain_name', "")
-        exe_name = data.get('exe_name', "")
-        
+        toolchain_name: str = data.get('toolchain_name', "")
+        exe_name: str = data.get('exe_name', "")
+        test_stdin: Optional[bytes] = b64_to_bytes(data.get('stdin', ""))
+        test_contents: Optional[str] = b64_to_str(data.get('test_contents', ""))
+    
+        if test_stdin is None or test_contents is None:
+            app.logger.error(f"Test received stdin: {test_stdin} and contents {test_contents}")
+            return jsonify({
+                "status": "error",
+                "message": "Failed to decode stdin and/or test contents in request."
+            }), 500
+
         try: 
             # Find toolchain and executable
             exe = next((e for e in self.config.executables if e.id == exe_name), 
                       self.config.executables[0])
             tc = next((x for x in self.config.toolchains if x.name == toolchain_name), 
                      self.config.toolchains[0])
-            tc_runner = ToolChainRunner(tc, timeout=2)
             
-            # create a temporary file to use for runtime supplied test
-            with NamedTemporaryFile(mode='w+', delete=True) as temp:
+            if IS_PRODUCTION:
+                tc_runner = SecureToolChainRunner(tc, timeout=5, restrict_exes=self.config.executables)
+            else:
+                tc_runner = ToolChainRunner(tc, timeout=5)
+
+            # Create temporary file for runtime supplied test
+            with NamedTemporaryFile(mode='w+', delete=True, suffix='.test') as temp:
                 temp.write(test_contents)
                 temp.flush()
                 temp.seek(0) 
                 test = TestFile(temp.name)
+                test.set_input_stream(test_stdin)
 
-                # run test
+                # Run test in secure environment
+                app.logger.info(f"Running secure test: {test.stem} with toolchain: {toolchain_name}")
                 tr: TestResult = tc_runner.run(test, exe)
-                gen_output = bytes_to_str(tr.gen_output) if tr.gen_output is not None else ""
-                exp_output = bytes_to_str(test.expected_out) if isinstance(test.expected_out, bytes) else ""
+                
+                cmd = tr.command_history[-1] if tr.command_history else None
+                
+                if cmd and cmd.subprocess:
+                    stdout = bytes_to_b64(cmd.subprocess.stdout)
+                    stderr = bytes_to_b64(cmd.subprocess.stderr)
+                    exit_status = cmd.exit_status
+                else:
+                    stdout = ""
+                    stderr = "Toolchain execution failed"
+                    exit_status = -1
+                
                 return jsonify({
                     "config": self.name,
                     "test": test.stem,
                     "results": {
                         "passed": tr.did_pass,
-                        "exit_status": tr.command_history[-1].exit_status,
-                        "generated_output": gen_output,
-                        "expected_output": exp_output
+                        "exit_status": exit_status,
+                        "stdout": stdout,
+                        "stderr": stderr,
+                        "time": str(tr.time),
+                        "expected_output": str(test.expected_out),
                     }
                 })
+                
+        except subprocess.TimeoutExpired:
+            app.logger.error("Test execution timed out")
+            return jsonify({
+                "status": "error",
+                "message": "Test execution timed out"
+            }), 408
         except Exception as e:
             app.logger.error(f"Error running test: {str(e)}")
             return jsonify({
@@ -118,20 +209,16 @@ class ConfigAPI:
 
 @app.route("/")
 def root():
-    """
-    Base route that lists all available routes
-    """
+    """Base route that lists all available routes"""
     return jsonify({
         "service": "Dragon Runner API",
         "status": "running",
-        "mode": "production",
+        "mode": "production" if IS_PRODUCTION else "debug",
         "available_endpoints": [route['url'] for route in get_available_routes()]
     })
     
 def get_available_routes() -> List[Dict[str, Any]]:
-    """
-    Helper function to list all available routes
-    """
+    """Helper function to list all available routes"""
     routes = []
     for rule in current_app.url_map.iter_rules():
         if rule.endpoint != 'static' and rule.methods: 
@@ -142,9 +229,7 @@ def get_available_routes() -> List[Dict[str, Any]]:
     return routes
 
 def get_configs_to_serve(config_dir: Path) -> List[Config]:
-    """
-    Get all config files from a directory and its subdirectories
-    """
+    """Get all config files from a directory and its subdirectories"""
     configs: List[Config] = []
     
     def fill_config(path: Path):
@@ -154,7 +239,6 @@ def get_configs_to_serve(config_dir: Path) -> List[Config]:
                 configs.append(config)
             return
         
-        # Make a recursive call to each file in the directory
         for entry in path.iterdir():
             if entry.is_dir() or entry.is_file():
                 fill_config(entry)
@@ -163,9 +247,7 @@ def get_configs_to_serve(config_dir: Path) -> List[Config]:
     return configs
 
 def create_app(args: ServerArgs):
-    """
-    Create App for WSGI deployment
-    """
+    """Create App for WSGI deployment"""
     configs = get_configs_to_serve(args.serve_path)  
  
     def root_route():
@@ -175,10 +257,14 @@ def create_app(args: ServerArgs):
     bp.route("/configs", methods=["GET"])(root_route)
     app.register_blueprint(bp)
 
-    # create APIs for each config and register their blueprints
+    # Create APIs for each config and register their blueprints
     for config in configs:
         api = ConfigAPI(config)
         app.register_blueprint(api.bp)
+    
+    # Log security status
+    firejail_status = "ENABLED" if shutil.which('firejail') else "DISABLED"
+    app.logger.info(f"Security sandbox: {firejail_status}")
     
     return app
 
