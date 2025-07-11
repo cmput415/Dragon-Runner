@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dragon-runner"
-version = "0.1.0"
+version = "1.0.0"
 description = "An experimental successor to the 415 tester"
 authors = [{name = "Justin Meimar", email = "meimar@ualberta.ca"}]
 license = {file = "LICENSE"}

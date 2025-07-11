@@ -11,8 +11,7 @@ git clone https://github.com/cmput415/Dragon-Runner.git
 cd Dragon-Runner
 pip install .
 ```
-
-If `dragon-runner` isn't found, ensure `~/.local/bin` is in your `$PATH`.
+Some newer versions of python prevent system-wide package installations by default. To get around this use a virtual environment or `--break-system-packages`. If `dragon-runner`is not found in your `$PATH` after install, ensure `~/.local/bin` is added.
 
 ## Quick Start
 
