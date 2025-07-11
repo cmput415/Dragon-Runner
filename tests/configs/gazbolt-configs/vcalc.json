@@ -1,0 +1,28 @@
+{
+  "testDir": "./vcalc-tests",
+  "testedExecutablePaths": {
+    "meimar": "$VCALC_PATh"
+  },
+  "runtimes": {
+    "meimar": "$VCALC_RT_PATH"
+  },
+  "toolchains": {
+    "vcalc-lli": [
+      {
+        "stepName": "vcalc",
+        "executablePath": "$EXE",
+        "arguments": ["$INPUT", "$OUTPUT"],
+        "output": "/tmp/vcalc.ll",
+        "allowError": true
+      },
+      {
+        "stepName": "lli",
+        "executablePath": "/path/to/lli",
+        "arguments": [ "$INPUT" ],
+        "usesInStr": true,
+        "usesRuntime": true,
+        "allowError": true
+      }
+    ] 
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "testDir": "testfiles/",
+  "testedExecutablePaths": {
+    "solution": "$GENERATOR_PATH"
+  },
+  "toolchains": {
+      "interpreter": [
+        {
+          "stepName": "generator-interpreter",
+          "executablePath": "$EXE",
+          "arguments": [
+            "$INPUT",
+            "$OUTPUT"
+            ],
+          "output": "generator.out"
+        }
+      ]
+    }
+}

@@ -1,0 +1,21 @@
+
+{
+  "testDir": "./gazprea-tests",
+  "testedExecutablePaths": {
+    "solution": "$GAZC_PATH"
+  },
+  "runtimes": {
+    "solution": "$GAZ_RT_PATH"
+  },
+  "toolchains": {
+    "gazprea-llc": [
+      {
+        "stepName": "gazprea",
+        "executablePath": "$EXE",
+        "arguments": ["$INPUT", "$OUTPUT", "--interp"],
+        "output": "interp.out",
+        "allowError": true
+      }
+    ] 
+  }
+}
