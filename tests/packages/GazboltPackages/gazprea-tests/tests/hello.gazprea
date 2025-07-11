@@ -1,0 +1,8 @@
+
+procedure main() returns integer {
+    
+    "hello world" -> std_output;
+
+    return 0;
+}
+

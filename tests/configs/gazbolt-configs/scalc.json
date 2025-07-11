@@ -1,0 +1,21 @@
+{
+  "testDir": "../../packages/GazboltPackages/scalc-tests",
+  "testedExecutablePaths": {
+    "scalc": "$SCALC_RT_PATH"
+  },
+  "toolchains": {
+    "interpreter": [
+      {
+        "stepName": "scalc-interpreter",
+        "executablePath": "$EXE",
+        "arguments": [
+          "interpreter",
+          "$INPUT",
+          "$OUTPUT"
+        ],
+        "output": "scalc.out"
+      }
+    ]
+  }
+}
+

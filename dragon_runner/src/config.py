@@ -266,7 +266,7 @@ def load_config(config_path: str, args: Optional[RunnerArgs]=None) -> Optional[C
         with open(config_path, 'r') as config_file:
             config_data = json.load(config_file)
     except json.decoder.JSONDecodeError:
-        log("Config Error: Failed to parse config json")
+        log("Config Error: Failed to parse config: ", config_path)
         return None
 
     return Config(config_path, config_data, args.debug_package if args else None)

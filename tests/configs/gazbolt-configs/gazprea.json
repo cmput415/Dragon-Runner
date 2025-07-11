@@ -1,0 +1,20 @@
+{
+  "testDir": "../../packages/GazboltPackages/gazprea-tests",
+  "testedExecutablePaths": {
+    "gazc": "$GAZC_PATH"
+  },
+  "runtimes": {
+    "gazc-rt": "$GAZ_RT_PATH"
+  },
+  "toolchains": {
+    "gazprea-llc": [
+      {
+        "stepName": "gazprea",
+        "executablePath": "$EXE",
+        "arguments": ["$INPUT", "$OUTPUT", "--interp"],
+        "output": "interp.out",
+        "allowError": true
+      }
+    ] 
+  }
+}

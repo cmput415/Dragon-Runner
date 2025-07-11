@@ -1,0 +1,19 @@
+{
+  "testDir": "../../packages/GazboltPackages/generator-tests",
+  "testedExecutablePaths": {
+    "generator": "$GENERATOR_PATH"
+  },
+  "toolchains": {
+      "interpreter": [
+        {
+          "stepName": "generator-interpreter",
+          "executablePath": "$EXE",
+          "arguments": [
+            "$INPUT",
+            "$OUTPUT"
+            ],
+          "output": "generator.out"
+        }
+      ]
+    }
+}
