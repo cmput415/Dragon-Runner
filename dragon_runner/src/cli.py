@@ -33,6 +33,7 @@ class RunnerArgs(NamedTuple):
     verbosity: int = 0
     verify: bool = False
     show_testcase: bool = False
+    fast_fail: bool = False
 
 class ScriptArgs(NamedTuple):
     mode: Mode
@@ -56,6 +57,7 @@ def parse_runner_args(argv_skip: int=1) -> RunnerArgs:
     parser.add_argument("-v", "--verbosity", action="count", default=0)
     parser.add_argument("-s", "--show-testcase", action="store_true")
     parser.add_argument("-o", "--output", default="")
+    parser.add_argument("-f", "--fast-fail", dest="fast_fail", action="store_true")
     
     # Parse arguments
     args = parser.parse_args(sys.argv[argv_skip:])

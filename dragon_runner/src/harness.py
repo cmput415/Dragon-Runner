@@ -77,6 +77,11 @@ class TestHarness:
                         for test in spkg.tests:
                             test_result: TestResult = tc_runner.run(test, exe)
                             self.process_test_result(test_result, counters)
+                            if self.cli_args.fast_fail and not test_result.did_pass:
+                                self.post_subpackage_hook(counters)
+                                self.post_executable_hook()
+                                self.post_run_hook()
+                                return
                         self.post_subpackage_hook(counters)
                         log("Subpackage Passed: ", counters["pass_count"], "/", counters["test_count"], indent=3)
                         pkg_pass_count += counters["pass_count"]
