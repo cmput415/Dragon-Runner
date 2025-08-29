@@ -140,35 +140,38 @@ class ToolChainRunner():
         self.reserved_exit_codes    = [VALGRIND_EXIT_CODE]
     
 
-    def handle_error_test(self, tr: TestResult, generated: bytes, expected: bytes):
+    def handle_error_test(self, tr: TestResult, produced: bytes, expected: bytes):
         """
         An error test requires specific handling since a diff between expected and
         generated does not imply the test will fail. Instead we identify the relevent
         components of the error message using regular expressions and perform a lenient diff.
         """
-        rt_errors = ["SizeError", "IndexError", "MathError", "StrideError"]
-        rt_error = next((s for s in rt_errors if s in str(expected)), None)
-        
-        # Convert bytes to strings for comparison
-        produced_str = generated.decode('utf-8').strip() if generated else ""
+        RUNTIME_ERRORS = ["SizeError", "IndexError", "MathError", "StrideError"]
+        rt_error = next((s for s in RUNTIME_ERRORS if s in str(expected)), None)
+        produced_str = produced.decode('utf-8').strip() if produced else ""
         expected_str = expected.decode('utf-8').strip() if expected else ""
         
-        if rt_error is not None:
-            error_pattern = fr"{rt_error}(\s+on\s+line\s+\d+)?(:.*)?"
-            produced_match = re.search(error_pattern, produced_str)
-            expected_match = re.search(error_pattern, expected_str)
-            tr.did_pass = bool(produced_match and expected_match)
+        is_rt_error = any(err in produced_str for err in RUNTIME_ERRORS)
+        if is_rt_error:
+            # Expected can be either a runtime or compile time format.
+            rt_error = next(err for err in RUNTIME_ERRORS if err in expected_str)
+            pattern = fr"{rt_error}(\s+on\s+Line\s+\d+)?(:.*)?" 
+            tr.did_pass = bool(
+                re.search(pattern, produced_str) and 
+                re.search(pattern, expected_str)
+            )
         else:
-            error_type_pattern = r"(\w+Error)"
-            line_num_pattern = r"on\s+line\s+(\d+)"
+            # Expected must be in compile time format, i.e lines must match.
+            def extract_components(text):
+                error = re.search(r"(\w+Error)", text, re.IGNORECASE)
+                line = re.search(r"on\s+Line\s+(\d+)", text, re.IGNORECASE)
+                return error, line
+        
+            prod_error, prod_line = extract_components(produced_str)
+            exp_error, exp_line = extract_components(expected_str)
             
-            produced_error = re.search(error_type_pattern, produced_str)
-            expected_error = re.search(error_type_pattern, expected_str)
-            produced_line = re.search(line_num_pattern, produced_str)
-            expected_line = re.search(line_num_pattern, expected_str)
- 
-            if produced_error and expected_error and produced_line and expected_line:
-                tr.did_pass = (produced_line.group(1) == expected_line.group(1))
+            if prod_error and exp_error and prod_line and exp_line:
+                tr.did_pass = (prod_line.group(1) == exp_line.group(1))
             else:
                 tr.did_pass = False
 
