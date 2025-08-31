@@ -14,11 +14,11 @@ int main() {
     if (b != 0) {
         int c = a / b;
     } else {
-        fprintf(stderr, "DivideByZeroError: a was about to be divided by 0!");
+        fprintf(stderr, "MathError: a was about to be divided by 0!");
         exit(EXIT_DIVIDE_BY_ZERO);
     }  
     
     return 0;
 }
 
-//CHECK:DivideByZeroError:
+//CHECK:MathError:

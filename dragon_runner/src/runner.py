@@ -92,7 +92,7 @@ class TestResult:
         fail_msg = "[E-FAIL] " if self.error_test else "[FAIL] "
         timeout_msg = "[TIMEOUT] "
 
-        test_name = f"{self.test.file:<50}"    
+        test_name = f"{self.test.file:<50}".strip()    
         show_time = args and args.time and self.time is not None
         if self.did_timeout:
             log(Fore.YELLOW + timeout_msg + Fore.RESET + f"{test_name.strip()}", indent=4, file=file)
@@ -138,6 +138,42 @@ class ToolChainRunner():
         self.timeout                = timeout
         self.env                    = env
         self.reserved_exit_codes    = [VALGRIND_EXIT_CODE]
+    
+
+    def handle_error_test(self, tr: TestResult, produced: bytes, expected: bytes):
+        """
+        An error test requires specific handling since a diff between expected and
+        generated does not imply the test will fail. Instead we identify the relevent
+        components of the error message using regular expressions and perform a lenient diff.
+        """
+        RUNTIME_ERRORS = ["SizeError", "IndexError", "MathError", "StrideError"]
+        rt_error = next((s for s in RUNTIME_ERRORS if s in str(expected)), None)
+        produced_str = produced.decode('utf-8').strip() if produced else ""
+        expected_str = expected.decode('utf-8').strip() if expected else ""
+        
+        is_rt_error = any(err in produced_str for err in RUNTIME_ERRORS)
+        if is_rt_error:
+            # Expected can be either a runtime or compile time format.
+            rt_error = next(err for err in RUNTIME_ERRORS if err in expected_str)
+            pattern = fr"{rt_error}(\s+on\s+Line\s+\d+)?(:.*)?" 
+            tr.did_pass = bool(
+                re.search(pattern, produced_str) and 
+                re.search(pattern, expected_str)
+            )
+        else:
+            # Expected must be in compile time format, i.e lines must match.
+            def extract_components(text):
+                error = re.search(r"(\w+Error)", text, re.IGNORECASE)
+                line = re.search(r"on\s+Line\s+(\d+)", text, re.IGNORECASE)
+                return error, line
+        
+            prod_error, prod_line = extract_components(produced_str)
+            exp_error, exp_line = extract_components(expected_str)
+            
+            if prod_error and exp_error and prod_line and exp_line:
+                tr.did_pass = (prod_line.group(1) == exp_line.group(1))
+            else:
+                tr.did_pass = False
 
     def run_command(self, command, stdin: bytes) -> CommandResult:
         """
@@ -256,25 +292,11 @@ class ToolChainRunner():
                 # fail by default if errors are not explicitly allowed in config
                 if not step.allow_error:
                     tr.did_pass = False
-
+                
                 # get compile time error result is not last step
                 elif step.allow_error:
-                    # TODO: Adjust SizeError and MathError definitions
-                    # so we don't need to handle them specially.
-                    if "SizeError" in str(expected):
-                        error_pattern = r'\s*(SizeError):?.*'
-                    elif "MathError" in str(expected):
-                        error_pattern = r'\s*(MathError):?.*'
-                    elif not last_step:
-                        error_pattern = r'.*?(Error on line \d+):?.*' 
-                    else:
-                        error_pattern = r'\s*(\w+Error):?.*'
-
-                    if lenient_diff(step_stderr, expected, error_pattern) == "":
-                        tr.did_pass = True
-                    else:
-                        tr.did_pass = False
-                return tr;
+                    self.handle_error_test(tr, step_stderr, expected)
+                    return tr
 
             elif last_step:
                 """
@@ -378,31 +400,5 @@ def precise_diff(produced: bytes, expected: bytes) -> str:
     # identical strings implies no diff 
     if produced == expected:
         return ""
-    return diff_bytes(produced, expected)
-
-def lenient_diff(produced: bytes, expected: bytes, pattern: str) -> str:
-    """
-    Perform a lenient diff on error messages, using the pattern as a mask/filter.
-    Unfortunately we have to convert from and back to bytes in order to apply regex.
-    Bytes must be UTF-8 decodable.
-    """
-    if not produced or not expected:
-        return "[ERROR] Test failed to generate bytes"
-
-    produced_first_line = produced.split(b'\n', 1)[0]
-    produced_str = p.strip() if (p := bytes_to_str(produced_first_line)) else None
-    expected_str = e.strip() if (e := bytes_to_str(expected)) else None
-
-    if not produced_str or not expected_str:
-        return "[ERROR] Failed to decode error bytes"
-
-    # Apply the mask/filter to both strings
-    produced_masked = re.sub(pattern, r'\1', produced_str, flags=re.IGNORECASE | re.DOTALL)
-    expected_masked = re.sub(pattern, r'\1', expected_str, flags=re.IGNORECASE | re.DOTALL)
-       
-    # If the masked strings are identical, return an empty string (no diff)
-    if produced_masked.lower() == expected_masked.lower(): 
-        return ""
-
     return diff_bytes(produced, expected)
 
