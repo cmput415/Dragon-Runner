@@ -1,12 +1,15 @@
 import csv
 from colorama                   import Fore
-from typing                     import Any, List, Dict, Optional, Set
+from typing                     import Any, List, Dict, Optional, Set, Tuple
 from dragon_runner.src.cli      import RunnerArgs
 from dragon_runner.src.config   import Config, Executable, Package
 from dragon_runner.src.log      import log
 from dragon_runner.src.runner   import TestResult, ToolChainRunner
 from dragon_runner.src.utils    import file_to_str
 from itertools                  import zip_longest
+from concurrent.futures         import ThreadPoolExecutor, as_completed
+import threading
+import uuid
 
 class TestHarness:
     __test__ = False
@@ -48,6 +51,47 @@ class TestHarness:
 
     def pre_run_hook(self):
         pass
+    
+    def run_test_parallel(self, test, toolchain, timeout, exe, test_index):
+        """
+        Run a single test and return the result with its original index for ordering.
+        Creates a new ToolChainRunner instance to ensure thread safety.
+        """
+        # Create a new ToolChainRunner instance for each thread to ensure thread safety
+        tc_runner = ToolChainRunner(toolchain, timeout)
+        test_result = tc_runner.run(test, exe)
+        return (test_index, test_result)
+    
+    def execute_tests_parallel(self, tests, toolchain, timeout, exe, max_workers=1):
+        """
+        Execute tests in parallel while preserving order using an output queue.
+        """
+        if max_workers == 1:
+            # Sequential execution for single worker
+            tc_runner = ToolChainRunner(toolchain, timeout)
+            results = []
+            for i, test in enumerate(tests):
+                test_result = tc_runner.run(test, exe)
+                results.append((i, test_result))
+            return results
+        
+        # Parallel execution for multiple workers
+        results = [None] * len(tests)
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all test jobs
+            future_to_index = {
+                executor.submit(self.run_test_parallel, test, toolchain, timeout, exe, i): i
+                for i, test in enumerate(tests)
+            }
+            
+            # Collect results and preserve order
+            for future in as_completed(future_to_index):
+                test_index, test_result = future.result()
+                results[test_index] = test_result
+        
+        # Convert to list of tuples for compatibility
+        return [(i, result) for i, result in enumerate(results)]
 
     def iterate(self):
         """
@@ -74,9 +118,16 @@ class TestHarness:
                         log(f"Entering subpackage {spkg.name}", indent=3)
                         counters = {"pass_count": 0, "test_count": 0}
                         self.pre_subpackage_hook(spkg)
-                        for test in spkg.tests:
-                            test_result: TestResult = tc_runner.run(test, exe)
+                        
+                        # Execute tests in parallel if jobs > 1
+                        test_results = self.execute_tests_parallel(
+                            spkg.tests, toolchain, self.cli_args.timeout, exe, max_workers=self.cli_args.jobs
+                        )
+                        
+                        # Process results in original order
+                        for test_index, test_result in test_results:
                             self.process_test_result(test_result, counters)
+                        
                         self.post_subpackage_hook(counters)
                         log("Subpackage Passed: ", counters["pass_count"], "/", counters["test_count"], indent=3)
                         pkg_pass_count += counters["pass_count"]
@@ -138,8 +189,13 @@ class TournamentHarness(TestHarness):
                         pass_count = 0
                         test_count = 0
                         for a_spkg in a_pkg.subpackages:
-                            for test in a_spkg.tests:
-                                test_result: Optional[TestResult] = tc_runner.run(test, def_exe)
+                            # Execute tests in parallel for tournament mode
+                            test_results = self.execute_tests_parallel(
+                                a_spkg.tests, toolchain, self.cli_args.timeout, def_exe, max_workers=self.cli_args.jobs
+                            )
+                            
+                            # Process results in original order
+                            for test_index, test_result in test_results:
                                 if test_result and test_result.did_pass:
                                     print(Fore.GREEN + '.' + Fore.RESET, end='')
                                     pass_count += 1
