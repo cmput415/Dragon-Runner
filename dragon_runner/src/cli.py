@@ -15,7 +15,6 @@ class Mode(Enum):
     TOURNAMENT = "tournament"
     PERF = "perf"
     MEMCHECK = "memcheck"
-    SERVE = "serve"
     SCRIPT = "script"
 
 @runtime_checkable
@@ -40,10 +39,6 @@ class ScriptArgs(NamedTuple):
     script_file: str
     script_args: List[str] = []
 
-class ServerArgs(NamedTuple):
-    mode: Mode
-    port: int = 5000
-    serve_path: Path = Path(".")
 
 def parse_runner_args(argv_skip: int=1) -> RunnerArgs:
     parser = argparse.ArgumentParser(description="CMPUT 415 testing utility")
@@ -85,17 +80,6 @@ def parse_script_args() -> ScriptArgs:
         script_args=sys.argv[3:]
     )
 
-def parse_server_args() -> ServerArgs:
-    parser = argparse.ArgumentParser(description="Server mode")
-    parser.add_argument("serve_path", type=Path, help="Config directory or file")
-    parser.add_argument("--port", type=int, default=5000)
-    
-    args = parser.parse_args(sys.argv[2:])
-    return ServerArgs(
-        mode=Mode.SERVE,
-        port=args.port,
-        serve_path=args.serve_path
-    )
 
 def parse_cli_args() -> Any:
     # Handle --version flag before other parsing
@@ -106,7 +90,7 @@ def parse_cli_args() -> Any:
     
     if len(sys.argv) < 2:
         print("Usage: dragon-runner [mode] config.json [args...]")
-        print("  mode: [regular|tournament|perf|memcheck|serve|script])")
+        print("  mode: [regular|tournament|perf|memcheck|script])")
         print("  args: dragon-runner -h")
         sys.exit(1)
         
@@ -116,9 +100,7 @@ def parse_cli_args() -> Any:
     mode_map = {mode.value: mode for mode in Mode}
     
     if first_arg in mode_map:
-        if first_arg == Mode.SERVE.value:
-            return parse_server_args()
-        elif first_arg == Mode.SCRIPT.value:
+        if first_arg == Mode.SCRIPT.value:
             return parse_script_args()
         else:
             # For runner modes
