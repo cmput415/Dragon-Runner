@@ -138,28 +138,36 @@ class ToolChainRunner():
         self.timeout                = timeout
         self.env                    = env
         self.reserved_exit_codes    = [VALGRIND_EXIT_CODE]
+        self.RUNTIME_ERRORS         = ["SizeError", "IndexError", "MathError", "StrideError"]
     
-
     def handle_error_test(self, tr: TestResult, produced: bytes, expected: bytes):
         """
         An error test requires specific handling since a diff between expected and
         generated does not imply the test will fail. Instead we identify the relevent
         components of the error message using regular expressions and perform a lenient diff.
         """
-        RUNTIME_ERRORS = ["SizeError", "IndexError", "MathError", "StrideError"]
-        rt_error = next((s for s in RUNTIME_ERRORS if s in str(expected)), None)
-        produced_str = produced.decode('utf-8').strip() if produced else ""
-        expected_str = expected.decode('utf-8').strip() if expected else ""
+        produced_str = produced.decode('utf-8').strip() if produced else None
+        expected_str = expected.decode('utf-8').strip() if expected else None
         
-        is_rt_error = any(err in produced_str for err in RUNTIME_ERRORS)
-        if is_rt_error:
+        # An error test must be UTF-8 decodable.
+        if produced_str is None or expected_str is None:
+            tr.did_pass = False
+            return
+
+        rt_error = next((s for s in self.RUNTIME_ERRORS if s in expected_str), None)  
+        did_raise_rt_error = any(err in produced_str for err in self.RUNTIME_ERRORS)
+        if did_raise_rt_error:
             # Expected can be either a runtime or compile time format.
-            rt_error = next(err for err in RUNTIME_ERRORS if err in expected_str)
-            pattern = fr"{rt_error}(\s+on\s+Line\s+\d+)?(:.*)?" 
-            tr.did_pass = bool(
-                re.search(pattern, produced_str) and 
-                re.search(pattern, expected_str)
-            )
+            if rt_error is None:
+                # Raised a runtime error but did not expect one.
+                tr.did_pass = False
+            else:
+                # Raised a runtime error and expected one as well. 
+                pattern = fr"{rt_error}(\s+on\s+Line\s+\d+)?(:.*)?" 
+                tr.did_pass = bool(
+                    re.search(pattern, produced_str) and 
+                    re.search(pattern, expected_str)
+                )
         else:
             # Expected must be in compile time format, i.e lines must match.
             def extract_components(text):
