@@ -98,6 +98,12 @@ def parse_server_args() -> ServerArgs:
     )
 
 def parse_cli_args() -> Any:
+    # Handle --version flag before other parsing
+    if len(sys.argv) >= 2 and sys.argv[1] == "--version":
+        from dragon_runner import __version__
+        print(f"dragon-runner {__version__}")
+        sys.exit(0)
+    
     if len(sys.argv) < 2:
         print("Usage: dragon-runner [mode] config.json [args...]")
         print("  mode: [regular|tournament|perf|memcheck|serve|script])")
