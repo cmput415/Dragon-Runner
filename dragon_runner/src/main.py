@@ -1,9 +1,8 @@
 from colorama                       import init, Fore
-from dragon_runner.src.cli          import Mode, parse_cli_args, ServerArgs, ScriptArgs
+from dragon_runner.src.cli          import Mode, parse_cli_args, ScriptArgs
 from dragon_runner.src.config       import load_config
 from dragon_runner.src.log          import log, log_multiline
 from dragon_runner.scripts.loader   import Loader
-from dragon_runner.src.server       import serve
 from dragon_runner.src.harness      import * 
 
 # initialize terminal colors
@@ -14,10 +13,6 @@ def main():
     args = parse_cli_args()
     log(args, level=1)
     
-    # run the server for running configs through HTTP
-    if isinstance(args, ServerArgs):
-        serve(args)
-        return 0
 
     # dragon-runner can also be used as a loader for grading & other scripts
     if isinstance(args, ScriptArgs):
