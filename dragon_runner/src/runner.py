@@ -298,12 +298,11 @@ class ToolChainRunner():
                 tr.error_test=True
 
                 # fail by default if errors are not explicitly allowed in config
-                if not step.allow_error:
-                    tr.did_pass = False
-                
-                # get compile time error result is not last step
-                elif step.allow_error:
+                if step.allow_error:
                     self.handle_error_test(tr, step_stderr, expected)
+                    return tr
+                else: 
+                    tr.did_pass = False
                     return tr
 
             elif last_step:
@@ -335,6 +334,7 @@ class ToolChainRunner():
                 """
                 input_file = output_file or make_tmp_file(child_process.stdout)
         
+            print(index, step)
         # this code should be unreachable for well-defined toolchains 
         raise RuntimeError("Toolchain reached undefined conditions during execution.")
 
