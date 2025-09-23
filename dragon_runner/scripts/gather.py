@@ -10,7 +10,16 @@ import shutil
 import argparse
 from pathlib import Path
 
-def gather(ccids_file: str,
+def load_key(key_path: Path):
+    config = {}
+    with open(key_path) as key_file:
+        for line in key_file.readlines():
+            sid, gh_username = line.strip().split(' ')
+            print("SID: ", sid, "\tGH Username: ", gh_username)
+            config[sid] = gh_username
+    return config
+
+def gather(key_file: Path,
            search_path: str,
            project_name: str,
            output_dir: str = "submitted-testfiles"):
@@ -19,36 +28,35 @@ def gather(ccids_file: str,
     @search_path that contain @project_name. Inside each project look for
     tests/testfiles/TEAM_NAME and copy it out.
     """
+    config = load_key(key_file) 
     search_dir = Path(search_path)
-     
+    project_name = str(project_name).strip()
+
     if not search_dir.is_dir():
         error = "Could not create test directory."
         print(error)
         return 1
     
-    directories = [d for d in search_dir.iterdir() if d.is_dir() and project_name in d.name]
-    ccids = Path(ccids_file).read_text().splitlines()
-    
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    for dir_path in directories:
-        for ccid in ccids:
-            if ccid in str(dir_path):
-                expected_test_dir = dir_path / "tests" / "testfiles" / ccid
+    directories = [d for d in search_dir.iterdir() if d.is_dir() and str(project_name) in d.name]
+    for (sid, gh_user) in config.items():
+        print("Finding submission for: ", gh_user) 
+        for d in directories:
+            if gh_user in str(d):
+                expected_test_dir = d / "tests" / "testfiles" / sid
                 if expected_test_dir.is_dir():
-                    print(f"-- Found properly formatted testfiles for {ccid}")
-                    shutil.copytree(expected_test_dir, output_path / ccid, dirs_exist_ok=True)
+                    print(f"-- Found properly formatted testfiles for {sid}")
+                    shutil.copytree(expected_test_dir, (Path(output_dir) / sid), dirs_exist_ok=True)
                 else:
-                    print(f"-- Could NOT find testfiles for {ccid}")
- 
+                    print(f"-- Could NOT find testfiles for {sid}")
+                    exit(1)
+         
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("ccids_file", type=Path, help="File containing CCIDs")
+    parser.add_argument("key_file", type=Path, help="Key file which has a line for each (SID, GH_Username) pair")
     parser.add_argument("search_path", type=Path, help="Path to search for test files")
     parser.add_argument("project_name", type=Path, help="Path to search for test files")
     args = parser.parse_args()
     
-    gather(args.ccids_file, args.search_path, args.project_name)
+    gather(args.key_file, args.search_path, args.project_name)
 

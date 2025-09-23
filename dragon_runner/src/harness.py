@@ -135,6 +135,9 @@ class TournamentHarness(TestHarness):
             with open(f"toolchain_{toolchain.name}.csv", 'w') as toolchain_csv:
                 print(f"\nToolchain: {toolchain.name}")
                 csv_writer = csv.writer(toolchain_csv)
+                csv_writer.writerow([toolchain.name] + [pkg.name for pkg in attacking_pkgs])
+                toolchain_csv.flush()
+
                 for def_exe in defending_exes:
                     def_exe.source_env()
                     def_feedback_file = f"{def_exe.id}-{toolchain.name}feedback.txt"
@@ -161,11 +164,8 @@ class TournamentHarness(TestHarness):
 
                         cell_value = f"{pass_count}/{test_count}"
                         tc_table[def_exe.id][a_pkg.name] = cell_value
-
-                # write the toolchain results into the table
-                csv_writer.writerow([toolchain.name] + [pkg.name for pkg in attacking_pkgs])
-                for exe in defending_exes:
-                    csv_writer.writerow([exe.id] + [tc_table[exe.id][pkg.name] for pkg in attacking_pkgs])
+                    csv_writer.writerow([def_exe.id] + [tc_table[def_exe.id][pkg.name] for pkg in attacking_pkgs])
+                    toolchain_csv.flush()
 
     @staticmethod
     def create_tc_dataframe(defenders: List[Executable],
@@ -199,11 +199,11 @@ class TournamentHarness(TestHarness):
                 exp_out = trim_bytes(x) if isinstance(x := result.test.expected_out, bytes) else ""
                 gen_out = trim_bytes(x) if isinstance(x := result.gen_output, bytes) else ""               
                 feedback_string = (
-                  "="*40+'\n'
+                  "="*80+'\n'
                   f"Test: {result.test.file}\n"
-                  f"Test Contents: {test_contents.strip() if test_contents else ''}\n"
-                  f"Expected Output: {exp_out.strip()}\n"
-                  f"Generated Output: {gen_out.strip()}\n"
+                  f"\nTest Contents: {test_contents.strip() if test_contents else ''}\n"
+                  f"\nExpected Output: {exp_out.strip()}\n"
+                  f"\nGenerated Output: {gen_out.strip()}\n"
                 )
 
                 feedback_file.write(feedback_string)
