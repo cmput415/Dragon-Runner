@@ -13,21 +13,19 @@ import shutil
 import argparse
 from pathlib import Path
 
-def build(build_path, log_path, n_threads="2"): 
-    root_path = Path(build_path).absolute()
+def build(start_dir, log_path, dir_prefix, n_threads="2"): 
+    root_path = Path(start_dir).absolute()
     log_path = Path(log_path).absolute()
 
-    directories = [d for d in root_path.iterdir() if d.is_dir() and d.name != '.'] 
+    directories = [d for d in root_path.iterdir() if d.is_dir() and (dir_prefix in d.name) and d.name != '.'] 
     
     print("Directories to build:")
     for d in directories:
         print(" ", d)
 
     for dir_path in directories:
-        print(f"-- Building project: {dir_path.name}", end='')
-        
-        build_dir_path = dir_path / 'build'
-        
+        print(f"-- Building project: {dir_path.name}", end='') 
+        build_dir_path = dir_path / 'build' 
         try:
             os.chdir(dir_path)
         except OSError:
@@ -39,8 +37,7 @@ def build(build_path, log_path, n_threads="2"):
         if (build_dir_path).exists():
             shutil.rmtree(build_dir_path) 
         os.makedirs(build_dir_path)
-        os.chdir(build_dir_path)
-         
+        os.chdir(build_dir_path) 
         try:
             with open(log_path, 'a') as log_file:
                 log_file.write(f"\n=== Building {dir_path.name} ===\n")
@@ -69,12 +66,13 @@ def build(build_path, log_path, n_threads="2"):
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
-    parser.add_argument("build_path", type=Path, help="Path to build directory")
+    parser.add_argument("start_dir", type=Path, help="Walking and build directories from this path")
     parser.add_argument("log_file", type=Path, help="Path to log file")
+    parser.add_argument("dir_prefix", type=str, help="Prefix common to all directories to be built")
     parser.add_argument("n", type=int, default=2, help="n_threads")
-    
+
     args = parser.parse_args()
     args.log_file.unlink(missing_ok=True)
     
-    build(args.build_path, args.log_file, str(args.n))
+    build(args.start_dir, args.log_file, args.dir_prefix, str(args.n))
 
