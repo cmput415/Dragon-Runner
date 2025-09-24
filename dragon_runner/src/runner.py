@@ -334,7 +334,6 @@ class ToolChainRunner():
                 """
                 input_file = output_file or make_tmp_file(child_process.stdout)
         
-            print(index, step)
         # this code should be unreachable for well-defined toolchains 
         raise RuntimeError("Toolchain reached undefined conditions during execution.")
 
