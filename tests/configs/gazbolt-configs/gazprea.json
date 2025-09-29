@@ -1,10 +1,10 @@
 {
   "testDir": "../../packages/GazboltPackages/gazprea-tests",
   "testedExecutablePaths": {
-    "gazc": "$GAZC_PATH"
+    "gazc": "/usr/bin/gazc"
   },
   "runtimes": {
-    "gazc-rt": "$GAZ_RT_PATH"
+    "gazc-rt": "/usr/lib/libgazrt.so"
   },
   "toolchains": {
     "gazprea-llc": [

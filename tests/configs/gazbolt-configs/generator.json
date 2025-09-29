@@ -1,7 +1,7 @@
 {
   "testDir": "../../packages/GazboltPackages/generator-tests",
   "testedExecutablePaths": {
-    "generator": "$GENERATOR_PATH"
+    "generator": "/usr/bin/generator"
   },
   "toolchains": {
       "interpreter": [

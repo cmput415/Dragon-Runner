@@ -1,10 +1,10 @@
 {
   "testDir": "../../packages/GazboltPackages/vcalc-tests",
   "testedExecutablePaths": {
-    "vcalc": "$VCALC_PATh"
+    "vcalc": "/usr/bin/vcalc"
   },
   "runtimes": {
-    "vcalc-rt": "$VCALC_RT_PATH"
+    "vcalc-rt": "/usr/lib/libvcalcrt.so"
   },
   "toolchains": {
     "vcalc-lli": [

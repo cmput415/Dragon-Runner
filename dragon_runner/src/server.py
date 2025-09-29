@@ -10,69 +10,20 @@ from dragon_runner.src.testfile import  TestFile
 from dragon_runner.src.utils import *
 from tempfile import                    NamedTemporaryFile
 from pathlib import                     Path
-from flask import                       Blueprint, Flask, request, jsonify, current_app
+from flask import                       Blueprint, Flask, request, jsonify, current_app, \
+                                        send_from_directory
 from flask_cors import                  CORS
 
 SERVER_MODE = os.environ.get("DR_SERVER_MODE", "DEBUG").upper()
+STATIC_DIR = os.environ.get("DR_STATIC_DIR", "")
 IS_PRODUCTION = (SERVER_MODE == "PROD")
-app = Flask(__name__)
+
+if STATIC_DIR == "" or not os.path.exists(STATIC_DIR):
+    print("Must supply a static directory to serve.", file=sys.stderr)
+    exit(1)
+
+app = Flask(__name__, static_folder=STATIC_DIR, static_url_path='')
 CORS(app)
-
-class SecureToolChainRunner(ToolChainRunner):
-    """
-    ToolChainRunner using firejail sandboxing
-    """ 
-    def __init__(self, tc, timeout: float, env=None, restrict_exes: List[Executable]=[]):
-        super().__init__(tc, timeout, env or {})
-        self.firejail_available = self._check_firejail()
-        self.restrict_exes = restrict_exes
-        
-    def _check_firejail(self) -> bool:
-        """
-        Check if firejail is available on the system.
-        """
-        return shutil.which('firejail') is not None
-
-    def _create_firejail_command(self, original_cmd: List[str]) -> List[str]:
-        """
-        Wrap command with firejail security options.
-        """
-        if not self.firejail_available:
-            return original_cmd
-            
-        firejail_cmd = [
-            'firejail',
-            '--noprofile',
-            '--seccomp',
-            '--noroot',
-            '--net=none',
-            '--noexec=/home',
-            '--private-tmp',
-            '--private-dev',
-            '--read-only=/usr',
-            '--read-only=/bin',
-            '--read-only=/lib',
-            '--read-only=/lib64',
-            '--blacklist=/home',
-            '--blacklist=/root',
-            '--blacklist=/etc',
-            '--rlimit-nproc=2',
-            '--rlimit-fsize=1048576', #1MB
-            f'--timeout=00:00:{int(self.timeout):02d}',
-            '--quiet',
-            '--'
-        ] 
-        return firejail_cmd + original_cmd
-
-    def run_command(self, command: Command, stdin: bytes) -> CommandResult:
-        """
-        Override to wrap commands with firejail
-        """
-        if self.firejail_available:
-            secure_args = self._create_firejail_command(command.args)
-            secure_command = Command(secure_args)
-            return super().run_command(secure_command, stdin)
-        return CommandResult(cmd="", exit_status=1)
 
 class Payload:
     def __init__(self):
@@ -151,12 +102,8 @@ class ConfigAPI:
             exe = next((e for e in self.config.executables if e.id == exe_name), 
                       self.config.executables[0])
             tc = next((x for x in self.config.toolchains if x.name == toolchain_name), 
-                     self.config.toolchains[0])
-            
-            if IS_PRODUCTION:
-                tc_runner = SecureToolChainRunner(tc, timeout=5, restrict_exes=self.config.executables)
-            else:
-                tc_runner = ToolChainRunner(tc, timeout=5)
+                     self.config.toolchains[0]) 
+            tc_runner = ToolChainRunner(tc, timeout=5)
 
             # Create temporary file for runtime supplied test
             with NamedTemporaryFile(mode='w+', delete=True, suffix='.test') as temp:
@@ -166,12 +113,10 @@ class ConfigAPI:
                 test = TestFile(temp.name)
                 test.set_input_stream(test_stdin)
 
-                # Run test in secure environment
-                app.logger.info(f"Running secure test: {test.stem} with toolchain: {toolchain_name}")
-                tr: TestResult = tc_runner.run(test, exe)
+                app.logger.info(f"Running test: {test.stem} with toolchain: {toolchain_name}")
+                tr: TestResult = tc_runner.run(test, exe) 
                 
-                cmd = tr.command_history[-1] if tr.command_history else None
-                
+                cmd = tr.command_history[-1] if tr.command_history else None 
                 if cmd and cmd.subprocess:
                     stdout = bytes_to_b64(cmd.subprocess.stdout)
                     stderr = bytes_to_b64(cmd.subprocess.stderr)
@@ -207,8 +152,15 @@ class ConfigAPI:
                 "message": str(e)
             }), 500
 
-@app.route("/")
-def root():
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def root(path):
+    if path and os.path.exists(os.path.join(STATIC_DIR, path)):
+        return send_from_directory(STATIC_DIR, path)
+    return send_from_directory(STATIC_DIR, 'index.html')
+
+@app.route("/health")
+def health():
     """Base route that lists all available routes"""
     return jsonify({
         "service": "Dragon Runner API",
