@@ -1,9 +1,12 @@
 from typing import List
+from dragon_runner.scripts.add_empty import add_empty
 from dragon_runner.scripts.build import build 
 from dragon_runner.scripts.grade import grade 
 from dragon_runner.scripts.gather import gather 
 from dragon_runner.scripts.gen_config import main as gen_config 
 from dragon_runner.scripts.grade_perf import grade_perf
+from dragon_runner.scripts.checkout import checkout
+from dragon_runner.scripts.clean_build import clean_build
 
 class Loader:
     """
@@ -11,14 +14,14 @@ class Loader:
     """
     def __init__(self): 
         self.script_dispatch = {
-            "build.py": build,
-            "gather.py": gather,
-            "gen-config.py": gen_config,
-            "grade.py": grade,
-            "grade-perf.py": grade_perf,
-            "anon-tests.py": lambda *args: print("TODO"),
-            "anon-csv.py": lambda *args: print("TODO"),
-            "preview.py": lambda *args: print("TODO")
+            "add_empty.py":         add_empty,
+            "build.py":             build,
+            "clean_build.py":       clean_build,
+            "checkout.py":          checkout,
+            "gather.py":            gather,
+            "gen-config.py":        gen_config,
+            "grade.py":             grade,
+            "grade-perf.py":        grade_perf,
         }
 
     def __call__(self, script: str, args: List[str]):

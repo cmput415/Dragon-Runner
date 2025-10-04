@@ -39,7 +39,8 @@ def build(start_dir, log_path, dir_prefix, n_threads="2"):
         os.makedirs(build_dir_path)
         os.chdir(build_dir_path) 
         try:
-            with open(log_path, 'a') as log_file:
+            build_log = log_path.name + str(dir_path.stem)
+            with open(build_log, 'w') as log_file:
                 log_file.write(f"\n=== Building {dir_path.name} ===\n")
                 subprocess.run(
                     ['cmake', '..'],
@@ -56,7 +57,8 @@ def build(start_dir, log_path, dir_prefix, n_threads="2"):
             print(" [SUCCESS]")
         except subprocess.CalledProcessError:
             print(f" [FAILED]")
-            with open(log_path, 'a') as f:
+            build_log = log_path.name + str(dir_path.stem)
+            with open(build_log, 'w') as f:
                 f.write(f"{dir_path.name}: build failed\n")
         finally:
             os.chdir(root_path)
