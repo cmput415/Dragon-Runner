@@ -202,8 +202,8 @@ class TournamentHarness(TestHarness):
                   "="*80+'\n'
                   f"Test: {result.test.file}\n"
                   f"\nTest Contents: {test_contents.strip() if test_contents else ''}\n"
-                  f"\nExpected Output: {exp_out.strip()}\n"
-                  f"\nGenerated Output: {gen_out.strip()}\n"
+                  f"\nExpected Output: {exp_out}\n"
+                  f"\nGenerated Output: {gen_out}\n"
                 )
 
                 feedback_file.write(feedback_string)

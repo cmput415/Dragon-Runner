@@ -19,6 +19,8 @@ def load_key(key_path: Path):
             config[sid] = gh_username
     return config
 
+is_rt = True
+
 def gather(key_file: Path,
            search_path: str,
            project_name: str,
@@ -42,14 +44,20 @@ def gather(key_file: Path,
         print("Finding submission for: ", gh_user) 
         for d in directories:
             if gh_user in str(d):
-                expected_test_dir = d / "tests" / "testfiles" / sid
+                if is_rt:
+                    suffix = '-'.join(gh_user.split('-')[1:])
+                    expected_test_dir = d / "tests" / "testfiles" / suffix
+                else:
+                    expected_test_dir = d / "tests" / "testfiles" / sid
+
                 if expected_test_dir.is_dir():
                     print(f"-- Found properly formatted testfiles for {sid}")
                     shutil.copytree(expected_test_dir, (Path(output_dir) / sid), dirs_exist_ok=True)
+                    break
                 else:
                     print(f"-- Could NOT find testfiles for {sid}")
                     exit(1)
-         
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
