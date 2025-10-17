@@ -123,7 +123,7 @@ class ConfigAPI:
                     exit_status = cmd.exit_status
                 else:
                     stdout = ""
-                    stderr = "Toolchain execution failed"
+                    stderr = bytes_to_b64(b'Internal Error: Likely an issue with the server.')
                     exit_status = -1
                 
                 return jsonify({
