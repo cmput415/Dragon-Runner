@@ -4,6 +4,8 @@ import re
 import json
 import time
 import sys
+import threading
+import uuid
 from subprocess                     import CompletedProcess
 from typing                         import List, Dict, Optional, Union
 from dataclasses                    import dataclass, asdict
@@ -216,8 +218,21 @@ class ToolChainRunner():
         """
         make absolute path from output file in step
         """
+        if not step.output:
+            return None
+        
         current_dir = os.getcwd()
-        output_file = os.path.join(current_dir, step.output) if step.output else None
+        
+        # Generate unique output files for parallel execution to avoid conflicts
+        thread_id = threading.get_ident()
+        if step.output.startswith('/tmp/') or step.output.startswith('tmp/'):
+            # For temporary files, make them unique per thread
+            base_name, ext = os.path.splitext(step.output)
+            unique_output = f"{base_name}_{thread_id}_{uuid.uuid4().hex[:8]}{ext}"
+            output_file = os.path.join(current_dir, unique_output)
+        else:
+            output_file = os.path.join(current_dir, step.output)
+        
         return output_file
     
     def resolve_command(self, step: Step, params: MagicParams) -> Command:
