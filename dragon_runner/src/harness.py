@@ -10,6 +10,22 @@ from itertools                  import zip_longest
 from concurrent.futures         import ThreadPoolExecutor, as_completed
 import threading
 import uuid
+from queue import Queue
+from dataclasses import dataclass
+
+@dataclass
+class SubpackageResult:
+    subpackage: Any
+    test_results: List[Tuple[int, TestResult]]
+    counters: Dict[str, int]
+
+@dataclass
+class PackageResult:
+    package_index: int
+    package: Package
+    subpackage_results: List[SubpackageResult]
+    pass_count: int
+    test_count: int
 
 class TestHarness:
     __test__ = False
@@ -62,6 +78,48 @@ class TestHarness:
         test_result = tc_runner.run(test, exe)
         return (test_index, test_result)
 
+    def run_package_parallel(self, package, package_index, toolchain, timeout, exe, tests_per_package_workers):
+        """
+        Run a single package and return the result with its original index for ordering.
+        Creates a new ToolChainRunner instance to ensure thread safety.
+        """
+        subpackage_results = []
+        pkg_pass_count = 0
+        pkg_test_count = 0
+
+        for spkg in package.subpackages:
+            counters = {"pass_count": 0, "test_count": 0}
+
+            # Execute tests in parallel within this subpackage
+            test_results = self.execute_tests_parallel(
+                spkg.tests, toolchain, timeout, exe,
+                max_workers=tests_per_package_workers
+            )
+
+            # Process test results for this subpackage
+            for test_index, test_result in test_results:
+                # Update counters based on test result
+                if test_result.did_pass:
+                    counters["pass_count"] += 1
+                counters["test_count"] += 1
+
+            subpackage_results.append(SubpackageResult(
+                subpackage=spkg,
+                test_results=test_results,
+                counters=counters
+            ))
+
+            pkg_pass_count += counters["pass_count"]
+            pkg_test_count += counters["test_count"]
+
+        return PackageResult(
+            package_index=package_index,
+            package=package,
+            subpackage_results=subpackage_results,
+            pass_count=pkg_pass_count,
+            test_count=pkg_test_count
+        )
+
     def execute_tests_parallel(self, tests, toolchain, timeout, exe, max_workers=1):
         """
         Execute tests in parallel while preserving order using an output queue.
@@ -93,6 +151,75 @@ class TestHarness:
         # Convert to list of tuples for compatibility
         return [(i, result) for i, result in enumerate(results)]
 
+    def execute_packages_parallel(self, packages, toolchain, timeout, exe, max_workers=1):
+        """
+        Execute test packages in parallel while preserving order using an output queue.
+        """
+        if max_workers == 1:
+            # Sequential execution for single worker - process packages one by one
+            package_results = []
+            for i, package in enumerate(packages):
+                pkg_result = self.run_package_parallel(
+                    package, i, toolchain, timeout, exe, tests_per_package_workers=1
+                )
+                package_results.append(pkg_result)
+            return package_results
+
+        # Calculate thread allocation for package vs test parallelization
+        num_packages = len(packages)
+        package_workers = min(num_packages, max_workers)
+        tests_per_package_workers = max(1, max_workers // package_workers)
+
+        # Parallel execution for multiple workers
+        results = [None] * len(packages)
+
+        with ThreadPoolExecutor(max_workers=package_workers) as executor:
+            # Submit all package jobs
+            future_to_index = {
+                executor.submit(self.run_package_parallel, package, i, toolchain, timeout, exe, tests_per_package_workers): i
+                for i, package in enumerate(packages)
+            }
+
+            # Collect results and preserve order
+            for future in as_completed(future_to_index):
+                package_result = future.result()
+                results[package_result.package_index] = package_result
+
+        return results
+
+    def process_package_result(self, pkg_result: PackageResult, tc_pass_count: int, tc_test_count: int):
+        """
+        Process a package result sequentially to maintain clean logging and hook execution.
+        Returns updated (tc_pass_count, tc_test_count) tuple.
+        """
+        pkg_pass_count = 0
+        pkg_test_count = 0
+        log(f"Entering package {pkg_result.package.name}", indent=2)
+
+        for spkg_result in pkg_result.subpackage_results:
+            log(f"Entering subpackage {spkg_result.subpackage.name}", indent=3)
+            self.pre_subpackage_hook(spkg_result.subpackage)
+
+            # Process test results in original order
+            for test_index, test_result in spkg_result.test_results:
+                self.process_test_result(test_result, spkg_result.counters)
+                if self.cli_args.fast_fail and not test_result.did_pass:
+                    self.post_subpackage_hook(spkg_result.counters)
+                    self.post_executable_hook()
+                    self.post_run_hook()
+                    return tc_pass_count, tc_test_count, True  # Signal fast fail
+
+            self.post_subpackage_hook(spkg_result.counters)
+            log("Subpackage Passed: ", spkg_result.counters["pass_count"], "/", spkg_result.counters["test_count"], indent=3)
+            pkg_pass_count += spkg_result.counters["pass_count"]
+            pkg_test_count += spkg_result.counters["test_count"]
+
+        log("Packaged Passed: ", pkg_pass_count, "/", pkg_test_count, indent=2)
+        tc_pass_count += pkg_pass_count
+        tc_test_count += pkg_test_count
+
+        return tc_pass_count, tc_test_count, False  # No fast fail
+
     def iterate(self):
         """
         Basic structure to record which tests pass and fail. Additional functionality
@@ -106,40 +233,23 @@ class TestHarness:
             exe_pass_count = 0
             exe_test_count = 0
             for toolchain in self.config.toolchains:
-                tc_runner = ToolChainRunner(toolchain, self.cli_args.timeout)
                 log(f"Running Toolchain: {toolchain.name}", indent=1)
                 tc_pass_count = 0
                 tc_test_count = 0
-                for pkg in self.config.packages:
-                    pkg_pass_count = 0
-                    pkg_test_count = 0
-                    log(f"Entering package {pkg.name}", indent=2)
-                    for spkg in pkg.subpackages:
-                        log(f"Entering subpackage {spkg.name}", indent=3)
-                        counters = {"pass_count": 0, "test_count": 0}
-                        self.pre_subpackage_hook(spkg)
 
-                        # Execute tests in parallel if jobs > 1
-                        test_results = self.execute_tests_parallel(
-                            spkg.tests, toolchain, self.cli_args.timeout, exe, max_workers=self.cli_args.jobs
-                        )
+                # Execute packages in parallel if jobs > 1, otherwise sequentially
+                package_results = self.execute_packages_parallel(
+                    self.config.packages, toolchain, self.cli_args.timeout, exe,
+                    max_workers=self.cli_args.jobs
+                )
 
-                        # Process results in original order
-                        for test_index, test_result in test_results:
-                            self.process_test_result(test_result, counters)
-                            if self.cli_args.fast_fail and not test_result.did_pass:
-                                self.post_subpackage_hook(counters)
-                                self.post_executable_hook()
-                                self.post_run_hook()
-                                return
-
-                        self.post_subpackage_hook(counters)
-                        log("Subpackage Passed: ", counters["pass_count"], "/", counters["test_count"], indent=3)
-                        pkg_pass_count += counters["pass_count"]
-                        pkg_test_count += counters["test_count"]
-                    log("Packaged Passed: ", pkg_pass_count, "/", pkg_test_count, indent=2)
-                    tc_pass_count += pkg_pass_count
-                    tc_test_count += pkg_test_count
+                # Process results sequentially to maintain clean logging
+                for pkg_result in package_results:
+                    tc_pass_count, tc_test_count, should_fast_fail = self.process_package_result(
+                        pkg_result, tc_pass_count, tc_test_count
+                    )
+                    if should_fast_fail:
+                        return
                 log("Toolchain Passed: ", tc_pass_count, "/", tc_test_count, indent=1)
                 exe_pass_count += tc_pass_count
                 exe_test_count += tc_test_count
