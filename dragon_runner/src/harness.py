@@ -1,12 +1,15 @@
 import csv
 from colorama                   import Fore
-from typing                     import Any, List, Dict, Optional, Set
+from typing                     import Any, List, Dict, Optional, Set, Tuple
 from dragon_runner.src.cli      import RunnerArgs
 from dragon_runner.src.config   import Config, Executable, Package
 from dragon_runner.src.log      import log
 from dragon_runner.src.runner   import TestResult, ToolChainRunner
 from dragon_runner.src.utils    import file_to_str
 from itertools                  import zip_longest
+from concurrent.futures         import ThreadPoolExecutor, as_completed
+import threading
+import uuid
 
 class TestHarness:
     __test__ = False
@@ -16,7 +19,7 @@ class TestHarness:
         self.cli_args: RunnerArgs = cli_args
         self.failures: List[TestResult] = []
         self.run_passed = True
-    
+
     def process_test_result(self, test_result: TestResult, context: Dict[str, Any]):
         """
         Subclasses should override this method to handle test result processing and update counts.
@@ -38,16 +41,57 @@ class TestHarness:
     def post_executable_hook(self):
         """Hook to run after iterating through an executable"""
         if self.failures != []:
-            log(f"Failure Summary: ({len(self.failures)} tests)") 
+            log(f"Failure Summary: ({len(self.failures)} tests)")
             for result in self.failures:
                 result.log()
         self.failures = []
-    
+
     def post_run_hook(self):
         pass
 
     def pre_run_hook(self):
         pass
+
+    def run_test_parallel(self, test, toolchain, timeout, exe, test_index):
+        """
+        Run a single test and return the result with its original index for ordering.
+        Creates a new ToolChainRunner instance to ensure thread safety.
+        """
+        # Create a new ToolChainRunner instance for each thread to ensure thread safety
+        tc_runner = ToolChainRunner(toolchain, timeout)
+        test_result = tc_runner.run(test, exe)
+        return (test_index, test_result)
+
+    def execute_tests_parallel(self, tests, toolchain, timeout, exe, max_workers=1):
+        """
+        Execute tests in parallel while preserving order using an output queue.
+        """
+        if max_workers == 1:
+            # Sequential execution for single worker
+            tc_runner = ToolChainRunner(toolchain, timeout)
+            results = []
+            for i, test in enumerate(tests):
+                test_result = tc_runner.run(test, exe)
+                results.append((i, test_result))
+            return results
+
+        # Parallel execution for multiple workers
+        results = [None] * len(tests)
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all test jobs
+            future_to_index = {
+                executor.submit(self.run_test_parallel, test, toolchain, timeout, exe, i): i
+                for i, test in enumerate(tests)
+            }
+
+            # Collect results and preserve order
+            for future in as_completed(future_to_index):
+                test_index, test_result = future.result()
+                results[test_index] = test_result
+
+        # Convert to list of tuples for compatibility
+        return [(i, result) for i, result in enumerate(results)]
 
     def iterate(self):
         """
@@ -74,14 +118,21 @@ class TestHarness:
                         log(f"Entering subpackage {spkg.name}", indent=3)
                         counters = {"pass_count": 0, "test_count": 0}
                         self.pre_subpackage_hook(spkg)
-                        for test in spkg.tests:
-                            test_result: TestResult = tc_runner.run(test, exe)
+
+                        # Execute tests in parallel if jobs > 1
+                        test_results = self.execute_tests_parallel(
+                            spkg.tests, toolchain, self.cli_args.timeout, exe, max_workers=self.cli_args.jobs
+                        )
+
+                        # Process results in original order
+                        for test_index, test_result in test_results:
                             self.process_test_result(test_result, counters)
                             if self.cli_args.fast_fail and not test_result.did_pass:
                                 self.post_subpackage_hook(counters)
                                 self.post_executable_hook()
                                 self.post_run_hook()
                                 return
+
                         self.post_subpackage_hook(counters)
                         log("Subpackage Passed: ", counters["pass_count"], "/", counters["test_count"], indent=3)
                         pkg_pass_count += counters["pass_count"]
@@ -102,7 +153,7 @@ class TestHarness:
         return self.run_passed
 
 class RegularHarness(TestHarness):
-    
+
     def process_test_result(self, test_result: TestResult, context: Dict[str, Any]):
         """
         Override the hook for regular run-specific implementation of counting passes
@@ -142,12 +193,17 @@ class TournamentHarness(TestHarness):
                     def_exe.source_env()
                     def_feedback_file = f"{def_exe.id}-{toolchain.name}feedback.txt"
                     for a_pkg in attacking_pkgs:
-                        print(f"\n  {a_pkg.name:<12} --> {def_exe.id:<12}", end='') 
+                        print(f"\n  {a_pkg.name:<12} --> {def_exe.id:<12}", end='')
                         pass_count = 0
                         test_count = 0
                         for a_spkg in a_pkg.subpackages:
-                            for test in a_spkg.tests:
-                                test_result: Optional[TestResult] = tc_runner.run(test, def_exe)
+                            # Execute tests in parallel for tournament mode
+                            test_results = self.execute_tests_parallel(
+                                a_spkg.tests, toolchain, self.cli_args.timeout, def_exe, max_workers=self.cli_args.jobs
+                            )
+
+                            # Process results in original order
+                            for test_index, test_result in test_results:
                                 if test_result and test_result.did_pass:
                                     print(Fore.GREEN + '.' + Fore.RESET, end='')
                                     pass_count += 1
@@ -171,8 +227,8 @@ class TournamentHarness(TestHarness):
     def create_tc_dataframe(defenders: List[Executable],
                             attackers: List[Package]) -> Dict[str, Dict[str, str]]:
         """
-        Create an empty toolchain table with labels for defenders and attackers 
-        """ 
+        Create an empty toolchain table with labels for defenders and attackers
+        """
         df = {exe.id: {pkg.name: '' for pkg in attackers} for exe in defenders}
         return df
 
@@ -197,7 +253,7 @@ class TournamentHarness(TestHarness):
             if not result.did_pass:
                 test_contents = file_to_str(result.test.path)
                 exp_out = trim_bytes(x) if isinstance(x := result.test.expected_out, bytes) else ""
-                gen_out = trim_bytes(x) if isinstance(x := result.gen_output, bytes) else ""               
+                gen_out = trim_bytes(x) if isinstance(x := result.gen_output, bytes) else ""
                 feedback_string = (
                   "="*80+'\n'
                   f"Test: {result.test.file}\n"
@@ -209,26 +265,26 @@ class TournamentHarness(TestHarness):
                 feedback_file.write(feedback_string)
 
 class MemoryCheckHarness(TestHarness):
-    
+
     def __init__(self, config: Config, cli_args: RunnerArgs):
-        super().__init__(config, cli_args) 
+        super().__init__(config, cli_args)
         self.leak_count = 0
         self.test_count = 0
         self.leak_tests: List[TestResult] = []
-    
+
     def post_executable_hook(self):
         """
         Report failures to stdout.
         """
-        log(f"Leak Summary: ({len(self.leak_tests)} tests)") 
+        log(f"Leak Summary: ({len(self.leak_tests)} tests)")
         for result in self.leak_tests:
             log(Fore.YELLOW + "[LEAK] " + Fore.RESET + f"{result.test.file}",
                 indent=4)
         self.leak_tests = []
         self.test_count = 0 # reset for each executable
-        
+
         if self.failures != []:
-            log(f"Failure Summary: ({len(self.failures)} tests)") 
+            log(f"Failure Summary: ({len(self.failures)} tests)")
             for result in self.failures:
                 result.log()
 
@@ -244,19 +300,19 @@ class MemoryCheckHarness(TestHarness):
 
         # log the test result
         test_result.log(args=self.cli_args)
-        
+
         # track tests which leak
         if test_result.memory_leak:
             self.leak_tests.append(test_result)
-     
+
         # track passes as usual
         if test_result.did_pass:
             context["pass_count"] += 1
         else:
-            self.failures.append(test_result) 
-       
+            self.failures.append(test_result)
+
 class PerformanceTestingHarness(TestHarness):
-    
+
     def __init__(self, config: Config, cli_args: RunnerArgs):
         super().__init__(config, cli_args)
         self.csv_cols = []
@@ -268,45 +324,45 @@ class PerformanceTestingHarness(TestHarness):
     def create_tc_dataframe(defenders: List[Executable],
                             attackers: List[Package]) -> Dict[str, Set[str]]:
         """
-        Create an empty toolchain table with labels for defenders and attackers 
-        """ 
+        Create an empty toolchain table with labels for defenders and attackers
+        """
         df = {exe.id: {pkg.name for pkg in attackers} for exe in defenders}
         return df
-    
+
     def process_test_result(self, test_result: TestResult, context: Dict[str, Any]):
         """
         Override the hook for regular run-specific implementation of counting passes
         """
-        # only construct a column for the test file names once 
+        # only construct a column for the test file names once
         if self.first_exec:
             self.testfile_col.append(test_result.test.file)
-        
+
         if test_result.did_pass:
             context["pass_count"] += 1
             test_result.log(args=self.cli_args)
             self.cur_col.append(test_result.time)
-            
+
         else:
             self.cur_col.append(self.cli_args.timeout)
             self.failures.append(test_result)
             test_result.log(args=self.cli_args)
         context["test_count"] += 1
-    
+
     def pre_executable_hook(self, exe):
         self.cur_col.append(exe)
 
-    def post_executable_hook(self): 
+    def post_executable_hook(self):
         if self.first_exec:
             self.csv_cols.append(self.testfile_col)
             self.first_exec = False
-        
+
         self.csv_cols.append(self.cur_col)
         self.cur_col = []
-    
-    def post_run_hook(self):  
+
+    def post_run_hook(self):
         # transpose the columns into rows for writing
         csv_rows = zip_longest(*self.csv_cols, fillvalue='')
-        
+
         with open('perf.csv', 'w', newline='') as file:
             writer = csv.writer(file)
             writer.writerows(csv_rows)

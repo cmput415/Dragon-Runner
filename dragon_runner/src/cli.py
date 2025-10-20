@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import Any, NamedTuple, List
-from dragon_runner.scripts.loader import Loader 
+from dragon_runner.scripts.loader import Loader
 from enum import Enum
 import argparse
 from enum import Enum
@@ -34,6 +34,7 @@ class RunnerArgs(NamedTuple):
     verify: bool = False
     show_testcase: bool = False
     fast_fail: bool = False
+    jobs: int = 1
 
 class ScriptArgs(NamedTuple):
     mode: Mode
@@ -47,7 +48,7 @@ class ServerArgs(NamedTuple):
 
 def parse_runner_args(argv_skip: int=1) -> RunnerArgs:
     parser = argparse.ArgumentParser(description="CMPUT 415 testing utility")
-    
+
     parser.add_argument("config_file", help="Path to the JSON configuration file")
     parser.add_argument("--fail-log", dest="failure_log", default="")
     parser.add_argument("--timeout", type=float, default=2.0)
@@ -58,17 +59,18 @@ def parse_runner_args(argv_skip: int=1) -> RunnerArgs:
     parser.add_argument("-s", "--show-testcase", action="store_true")
     parser.add_argument("-o", "--output", default="")
     parser.add_argument("-f", "--fast-fail", dest="fast_fail", action="store_true")
-    
+    parser.add_argument("-j", "--jobs", type=int, default=1, help="Number of parallel jobs for test execution")
+
     # Parse arguments
     args = parser.parse_args(sys.argv[argv_skip:])
-    
-    # Set debug environment variable 
+
+    # Set debug environment variable
     os.environ["DRAGON_RUNNER_DEBUG"] = str(args.verbosity)
-    
+
     # Convert to dictionary and add mode
     args_dict = vars(args)
     args_dict["mode"] = Mode.REGULAR
-    
+
     return RunnerArgs(**args_dict)
 
 def parse_script_args() -> ScriptArgs:
@@ -78,7 +80,7 @@ def parse_script_args() -> ScriptArgs:
     elif len(sys.argv) < 3:
         print("Usage: dragon-runner script <script_file> [script_args...]")
         sys.exit(1)
-        
+
     return ScriptArgs(
         mode=Mode.SCRIPT,
         script_file=sys.argv[2],
@@ -89,7 +91,7 @@ def parse_server_args() -> ServerArgs:
     parser = argparse.ArgumentParser(description="Server mode")
     parser.add_argument("serve_path", type=Path, help="Config directory or file")
     parser.add_argument("--port", type=int, default=5000)
-    
+
     args = parser.parse_args(sys.argv[2:])
     return ServerArgs(
         mode=Mode.SERVE,
@@ -103,12 +105,12 @@ def parse_cli_args() -> Any:
         print("  mode: [regular|tournament|perf|memcheck|serve|script])")
         print("  args: dragon-runner -h")
         sys.exit(1)
-        
+
     first_arg = sys.argv[1]
-    
+
     # Create a mapping to convert string to Mode enum
     mode_map = {mode.value: mode for mode in Mode}
-    
+
     if first_arg in mode_map:
         if first_arg == Mode.SERVE.value:
             return parse_server_args()
