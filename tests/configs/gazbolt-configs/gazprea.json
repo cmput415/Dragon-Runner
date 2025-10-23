@@ -7,14 +7,24 @@
     "gazc-rt": "/usr/lib/libgazrt.so"
   },
   "toolchains": {
-    "gazprea-llc": [
+     "gaz-lli": [
       {
-        "stepName": "gazprea",
+        "stepName": "gazc",
         "executablePath": "$EXE",
-        "arguments": ["$INPUT", "$OUTPUT", "--interp"],
-        "output": "interp.out",
+        "arguments": ["$INPUT", "$OUTPUT"],
+        "output": "gazprea.ll",
+        "allowError": true
+      },
+      {
+        "stepName": "lli",
+        "executablePath": "/usr/bin/lli",
+        "arguments": ["$INPUT"],
+        "output": "gazprea.out",
+        "usesRuntime": true,
+        "usesInStr": true,
         "allowError": true
       }
     ] 
   }
 }
+

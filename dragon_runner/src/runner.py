@@ -217,7 +217,7 @@ class ToolChainRunner():
         make absolute path from output file in step
         """
         current_dir = os.getcwd()
-        output_file = os.path.join(current_dir, step.output) if step.output else None
+        output_file = os.path.abspath(os.path.join(current_dir, step.output)) if step.output else None
         return output_file
     
     def resolve_command(self, step: Step, params: MagicParams) -> Command:

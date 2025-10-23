@@ -85,7 +85,6 @@ class ConfigAPI:
     
     def run_test(self):
         data = request.get_json(silent=True) or {}
-        toolchain_name: str = data.get('toolchain_name', "")
         exe_name: str = data.get('exe_name', "")
         test_stdin: Optional[bytes] = b64_to_bytes(data.get('stdin', ""))
         test_contents: Optional[str] = b64_to_str(data.get('test_contents', ""))
@@ -96,49 +95,49 @@ class ConfigAPI:
                 "status": "error",
                 "message": "Failed to decode stdin and/or test contents in request."
             }), 500
-
-        try: 
-            # Find toolchain and executable
+        
+        try:
+            import time
             exe = next((e for e in self.config.executables if e.id == exe_name), 
-                      self.config.executables[0])
-            tc = next((x for x in self.config.toolchains if x.name == toolchain_name), 
-                     self.config.toolchains[0]) 
-            tc_runner = ToolChainRunner(tc, timeout=5)
-
-            # Create temporary file for runtime supplied test
-            with NamedTemporaryFile(mode='w+', delete=True, suffix='.test') as temp:
+                      self.config.executables[0]) 
+            with NamedTemporaryFile(mode='w+', delete=True, suffix='.test', dir='/tmp') as temp:
                 temp.write(test_contents)
                 temp.flush()
                 temp.seek(0) 
-                test = TestFile(temp.name)
-                test.set_input_stream(test_stdin)
-
-                app.logger.info(f"Running test: {test.stem} with toolchain: {toolchain_name}")
-                tr: TestResult = tc_runner.run(test, exe) 
+                compile_step = subprocess.run(["/usr/bin/gazc", temp.name, "/tmp/gazprea.out"], 
+                                               capture_output=True)
+                if compile_step.returncode != 0:
+                    return jsonify({
+                        "config": self.name,
+                        "test": temp.name,
+                        "results": {
+                            "passed": False,
+                            "exit_status": compile_step.returncode,
+                            "stdout": bytes_to_b64(b''),
+                            "stderr": bytes_to_b64(compile_step.stderr),
+                            "time": 0,
+                            "expected_output": bytes_to_b64(b''),
+                        }
+                    })
                 
-                cmd = tr.command_history[-1] if tr.command_history else None 
-                if cmd and cmd.subprocess:
-                    stdout = bytes_to_b64(cmd.subprocess.stdout)
-                    stderr = bytes_to_b64(cmd.subprocess.stderr)
-                    exit_status = cmd.exit_status
-                else:
-                    stdout = ""
-                    stderr = bytes_to_b64(b'Internal Error: Likely an issue with the server.')
-                    exit_status = -1
-                
+                start = time.time()
+                run_step = subprocess.run(["lli", "/tmp/gazprea.out"], 
+                                           capture_output=True,
+                                           input=test_stdin,
+                                           env={**os.environ, "LD_PRELOAD": "/usr/lib/libgazrt.so"})
+                elapsed = time.time() - start 
                 return jsonify({
                     "config": self.name,
-                    "test": test.stem,
+                    "test": temp.name,
                     "results": {
-                        "passed": tr.did_pass,
-                        "exit_status": exit_status,
-                        "stdout": stdout,
-                        "stderr": stderr,
-                        "time": str(tr.time),
-                        "expected_output": str(test.expected_out),
+                        "passed": run_step.returncode == 0,
+                        "exit_status": run_step.returncode,
+                        "stdout": bytes_to_b64(run_step.stdout),
+                        "stderr": bytes_to_b64(run_step.stderr),
+                        "time": elapsed,
+                        "expected_output": bytes_to_b64(b''),
                     }
                 })
-                
         except subprocess.TimeoutExpired:
             app.logger.error("Test execution timed out")
             return jsonify({
