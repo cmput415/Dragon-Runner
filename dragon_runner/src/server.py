@@ -1,4 +1,5 @@
 import os
+import sys
 import subprocess
 import shutil
 from typing import                      List, Dict, Any, Optional
@@ -15,12 +16,13 @@ from flask import                       Blueprint, Flask, request, jsonify, curr
 from flask_cors import                  CORS
 
 SERVER_MODE = os.environ.get("DR_SERVER_MODE", "DEBUG").upper()
-STATIC_DIR = os.environ.get("DR_STATIC_DIR", "")
+STATIC_DIR = os.environ.get("DR_STATIC_DIR", ".")
+SERVER_TIMEOUT = float(os.environ.get("DR_SERVER_TIMEOUT", "2.0"))
 IS_PRODUCTION = (SERVER_MODE == "PROD")
 
-if STATIC_DIR == "" or not os.path.exists(STATIC_DIR):
-    print("Must supply a static directory to serve.", file=sys.stderr)
-    exit(1)
+if not os.path.exists(STATIC_DIR):
+    print(f"Warning: Static directory '{STATIC_DIR}' does not exist, using current directory", file=sys.stderr)
+    STATIC_DIR = "."
 
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path='')
 CORS(app)
@@ -85,27 +87,25 @@ class ConfigAPI:
     
     def run_test(self):
         data = request.get_json(silent=True) or {}
-        exe_name: str = data.get('exe_name', "")
         test_stdin: Optional[bytes] = b64_to_bytes(data.get('stdin', ""))
         test_contents: Optional[str] = b64_to_str(data.get('test_contents', ""))
-    
+
         if test_stdin is None or test_contents is None:
             app.logger.error(f"Test received stdin: {test_stdin} and contents {test_contents}")
             return jsonify({
                 "status": "error",
                 "message": "Failed to decode stdin and/or test contents in request."
             }), 500
-        
+
         try:
-            import time
-            exe = next((e for e in self.config.executables if e.id == exe_name), 
-                      self.config.executables[0]) 
+            import time 
             with NamedTemporaryFile(mode='w+', delete=True, suffix='.test', dir='/tmp') as temp:
                 temp.write(test_contents)
                 temp.flush()
                 temp.seek(0) 
-                compile_step = subprocess.run(["/usr/bin/gazc", temp.name, "/tmp/gazprea.out"], 
-                                               capture_output=True)
+                compile_step = subprocess.run(["/usr/bin/gazc", temp.name, "/tmp/gazprea.out"],
+                                               capture_output=True,
+                                               timeout=SERVER_TIMEOUT)
                 if compile_step.returncode != 0:
                     return jsonify({
                         "config": self.name,
@@ -121,9 +121,10 @@ class ConfigAPI:
                     })
                 
                 start = time.time()
-                run_step = subprocess.run(["lli", "/tmp/gazprea.out"], 
+                run_step = subprocess.run(["lli", "/tmp/gazprea.out"],
                                            capture_output=True,
                                            input=test_stdin,
+                                           timeout=SERVER_TIMEOUT,
                                            env={**os.environ, "LD_PRELOAD": "/usr/lib/libgazrt.so"})
                 elapsed = time.time() - start 
                 return jsonify({
@@ -141,9 +142,17 @@ class ConfigAPI:
         except subprocess.TimeoutExpired:
             app.logger.error("Test execution timed out")
             return jsonify({
-                "status": "error",
-                "message": "Test execution timed out"
-            }), 408
+                "config": self.name,
+                "test": "timeout",
+                "results": {
+                    "passed": False,
+                    "exit_status": -1,
+                    "stdout": bytes_to_b64(b''),
+                    "stderr": bytes_to_b64(b'Timeout'),
+                    "time": SERVER_TIMEOUT,
+                    "expected_output": bytes_to_b64(b''),
+                }
+            })
         except Exception as e:
             app.logger.error(f"Error running test: {str(e)}")
             return jsonify({
