@@ -28,6 +28,7 @@ class RunnerArgs(NamedTuple):
     output: str = ""
     failure_log: str = ""
     debug_package: str = ""
+    package_filter: str = ""
     timeout: float = 2.0
     time: bool = False
     verbosity: int = 0
@@ -53,6 +54,7 @@ def parse_runner_args(argv_skip: int=1) -> RunnerArgs:
     parser.add_argument("--timeout", type=float, default=2.0)
     parser.add_argument("--verify", action="store_true")
     parser.add_argument("--debug-package", default="")
+    parser.add_argument("-p", "--package", dest="package_filter", default="", help="Filter packages by glob pattern (case insensitive)")
     parser.add_argument("-t", "--time", action="store_true")
     parser.add_argument("-v", "--verbosity", action="count", default=0)
     parser.add_argument("-s", "--show-testcase", action="store_true")

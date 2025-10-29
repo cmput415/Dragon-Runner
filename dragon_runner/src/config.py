@@ -163,11 +163,12 @@ class Config:
     """
     An in memory representation of the JSON configuration file which directs the tester. 
     """
-    def __init__(self, config_path: str, config_data: Dict, debug_package: Optional[str]):
+    def __init__(self, config_path: str, config_data: Dict, debug_package: Optional[str], package_filter: str = ""):
         self.name               = Path(config_path).stem
         self.config_path        = os.path.abspath(config_path)
         self.config_data        = config_data
         self.debug_package      = debug_package
+        self.package_filter     = package_filter
         self.test_dir           = resolve_relative(config_data['testDir'],
                                                    os.path.abspath(config_path))
         self.executables        = self.parse_executables(config_data['testedExecutablePaths'],
@@ -269,4 +270,6 @@ def load_config(config_path: str, args: Optional[RunnerArgs]=None) -> Optional[C
         log("Config Error: Failed to parse config: ", config_path)
         return None
 
-    return Config(config_path, config_data, args.debug_package if args else None)
+    debug_package = args.debug_package if args else None
+    package_filter = args.package_filter if args else ""
+    return Config(config_path, config_data, debug_package, package_filter)
