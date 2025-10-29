@@ -1,4 +1,5 @@
 import csv
+import fnmatch
 from colorama                   import Fore
 from typing                     import Any, List, Dict, Optional, Set
 from dragon_runner.src.cli      import RunnerArgs
@@ -71,6 +72,10 @@ class TestHarness:
                     pkg_test_count = 0
                     log(f"Entering package {pkg.name}", indent=2)
                     for spkg in pkg.subpackages:
+                        # Glob pattern match against package_filter using subpackage path
+                        if self.config.package_filter:
+                            if not fnmatch.fnmatch(spkg.path.lower(), self.config.package_filter.lower()):
+                                continue
                         log(f"Entering subpackage {spkg.name}", indent=3)
                         counters = {"pass_count": 0, "test_count": 0}
                         self.pre_subpackage_hook(spkg)
