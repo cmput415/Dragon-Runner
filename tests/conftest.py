@@ -17,11 +17,14 @@ def create_cli_args(**kwargs) -> RunnerArgs:
         output     = kwargs.get('output_file', None),
         failure_log     = kwargs.get('failure_log', None),
         debug_package   = kwargs.get('debug_package', None),
+        package_filter  = kwargs.get('package_filter', None),
         mode            = kwargs.get('mode', None),
         timeout         = kwargs.get('timeout', 5),
         time            = kwargs.get('time', None),
         verbosity       = kwargs.get('verbosity', None),
         verify          = kwargs.get('verify', None),
+        show_testcase   = kwargs.get('show_testcase', None),
+        fast_fail       = kwargs.get('fast_fail', None),
     )
 
 @pytest.fixture(scope="session")
