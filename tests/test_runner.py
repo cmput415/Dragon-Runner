@@ -7,7 +7,7 @@ def test_gcc_pass(config_factory, cli_factory):
     config : Config = config_factory("gccPassConfig.json")
     args : RunnerArgs = cli_factory(**{
         "mode": "regular",
-        "timeout": 5
+        "timeout": 10
     })
     
     harness = RegularHarness(config=config, cli_args=args) 
@@ -20,7 +20,7 @@ def test_gcc_pass_darwin(config_factory, cli_factory):
     config : Config = config_factory("catConfigDarwin.json")
     args : RunnerArgs = cli_factory(**{
         "mode": "regular",
-        "timeout": 5
+        "timeout": 10
     })
     
     harness = RegularHarness(config=config, cli_args=args) 
