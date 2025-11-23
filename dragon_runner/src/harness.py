@@ -192,26 +192,33 @@ class TournamentHarness(TestHarness):
         """
         Give full feedback to a defender for all the tests they failed.
         """
-        def trim_bytes(data: bytes, max_bytes: int = 512) -> bytes:
+        def trim_bytes(data: bytes, max_bytes: int = 1024) -> bytes:
             trimmed = data[:max_bytes]
             if len(data) > max_bytes:
                 trimmed += b"\n... (output trimmed to %d bytes)" % max_bytes
             return trimmed
+        
+        if result.did_pass:
+            return
 
         with open(file, 'a+') as feedback_file:
-            if not result.did_pass:
-                test_contents = file_to_str(result.test.path)
-                exp_out = trim_bytes(x) if isinstance(x := result.test.expected_out, bytes) else ""
-                gen_out = trim_bytes(x) if isinstance(x := result.gen_output, bytes) else ""               
-                feedback_string = (
-                  "="*80+'\n'
-                  f"Test: {result.test.file}\n"
-                  f"\nTest Contents: {test_contents.strip() if test_contents else ''}\n"
-                  f"\nExpected Output: {exp_out}\n"
-                  f"\nGenerated Output: {gen_out}\n"
-                )
+            test_contents = result.test.pretty_print()
+            exp_out = trim_bytes(x) if isinstance(x := result.test.expected_out, bytes) else ""
+            gen_out = trim_bytes(x) if isinstance(x := result.gen_output, bytes) else ""
 
-                feedback_file.write(feedback_string)
+            print(result.test.file)
+            print("Gen Out: ", gen_out)
+            print("Exp Out: ", exp_out)
+
+            feedback_string = (
+              "="*80+'\n'
+              f"Test: {result.test.file}"
+              f"\nTest Contents:\n{test_contents}\n"
+              f"\nExpected Output: {exp_out}\n"
+              f"Generated Output: {gen_out}\n"
+            )
+
+            feedback_file.write(feedback_string)
 
 class MemoryCheckHarness(TestHarness):
     

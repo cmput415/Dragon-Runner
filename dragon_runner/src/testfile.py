@@ -76,11 +76,12 @@ class TestFile(Verifiable):
             return inline_contents
 
         elif file_contents: 
+            print("READING FILE CONTENTS")
             if isinstance(file_contents, TestFileError):
                 return file_contents
 
             file_str = file_contents.decode()
-            
+ 
             full_path = os.path.join(os.path.dirname(self.path), file_str)
             if not os.path.exists(full_path):
                 return TestFileError(f"Failed to locate path supplied to {file_directive}\n\tTest:{self.path}\n\tPath:{full_path}\n")
@@ -88,7 +89,8 @@ class TestFile(Verifiable):
             file_bytes = file_to_bytes(full_path)
             if file_bytes is None:
                 return TestFileError(f"Failed to convert file {full_path} to bytes")
- 
+            
+            print("FILE_BYTES:", file_bytes)
             return file_bytes 
         else:
             return b''
@@ -175,7 +177,10 @@ class TestFile(Verifiable):
             return f"Error reading file {self.path}:"
         
         # query size of border to draw for user
-        term_width = os.get_terminal_size().columns if hasattr(os, 'get_terminal_size') else 80
+        try:
+            term_width = os.get_terminal_size().columns if hasattr(os, 'get_terminal_size') else 80
+        except OSError:
+            term_width = 80
         content_width = min(term_width - 10, 100) 
         
         # ascii border characters
