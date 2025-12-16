@@ -39,9 +39,11 @@ class TestHarness:
     def post_executable_hook(self):
         """Hook to run after iterating through an executable"""
         if self.failures != []:
-            log(f"Failure Summary: ({len(self.failures)} tests)") 
-            for result in self.failures:
-                result.log()
+            pass
+            # todo: enable this with a flag
+            # log(f"Failure Summary: ({len(self.failures)} tests)") 
+            # for result in self.failures:
+            #     result.log()
         self.failures = []
     
     def post_run_hook(self):
@@ -205,11 +207,6 @@ class TournamentHarness(TestHarness):
             test_contents = result.test.pretty_print()
             exp_out = trim_bytes(x) if isinstance(x := result.test.expected_out, bytes) else ""
             gen_out = trim_bytes(x) if isinstance(x := result.gen_output, bytes) else ""
-
-            print(result.test.file)
-            print("Gen Out: ", gen_out)
-            print("Exp Out: ", exp_out)
-
             feedback_string = (
               "="*80+'\n'
               f"Test: {result.test.file}"
