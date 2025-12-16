@@ -3,89 +3,120 @@ import subprocess
 import argparse
 from datetime import datetime
 from pathlib import Path
+from typing import List
+from dragon_runner.scripts.base import Script
 
-def get_commit_at_time(repo_path, checkout_time):
-    result = subprocess.run(
-        ['git', 'rev-list', '-1', f'--before={checkout_time}', 'HEAD'],
-        cwd=repo_path,
-        capture_output=True,
-        text=True
-    )
-    if result.returncode != 0:
-        return None
-    return result.stdout.strip()
 
-def get_commit_time(repo_path, commit_hash):
-    result = subprocess.run(
-        ['git', 'show', '-s', '--format=%ci', commit_hash],
-        cwd=repo_path,
-        capture_output=True,
-        text=True
-    )
-    if result.returncode != 0:
-        return None
-    return result.stdout.strip()
+class CheckoutScript(Script):
 
-def checkout_commit(repo_path, commit_hash):
-    result = subprocess.run(
-        ['git', 'checkout', commit_hash],
-        cwd=repo_path,
-        capture_output=True,
-        text=True
-    )
-    return result.returncode == 0
+    @classmethod
+    def name(cls) -> str:
+        return "checkout"
 
-def process_repositories(submissions_dir: Path, checkout_time: str):
-    for submission_dir in sorted(submissions_dir.iterdir()):
-        if not submission_dir.is_dir():
-            continue
-        
-        git_dir = submission_dir / '.git'
-        if not git_dir.exists():
-            print(f"\nSkipping {submission_dir.name} - not a git repository")
-            continue 
-        print(f"\nProcessing: {submission_dir.name}")
-        
-        commit_hash = get_commit_at_time(submission_dir, checkout_time) 
-        if not commit_hash:
-            print(f"  No commits found before {checkout_time}")
-            continue
-        
-        commit_time = get_commit_time(submission_dir, commit_hash) 
-        if checkout_commit(submission_dir, commit_hash):
-            print(f"  Checked out to: {commit_hash[:8]}")
-            print(f"  Commit time: {commit_time}")
-        else:
-            print(f"  Failed to checkout {commit_hash[:8]}")
+    @classmethod
+    def description(cls) -> str:
+        return "Checkout git repositories to the latest commit before a specified time"
 
-def validate_checkout_time(time_str):
-    try:
-        datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S')
-        return True
-    except ValueError:
-        return False
+    @classmethod
+    def get_parser(cls) -> argparse.ArgumentParser:
+        parser = argparse.ArgumentParser(
+            prog="checkout",
+            description="Checkout student git repositories to a specific commit time"
+        )
+        parser.add_argument('submission_dir',
+                          type=Path,
+                          help='Directory of repositories to checkout')
+        parser.add_argument('checkout_time',
+                          help='Checkout time in format: "YYYY-MM-DD HH:MM:SS"')
+        return parser
 
-def checkout():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('submission_dir')
-    parser.add_argument('checkout_time', help='Format: "YYYY-MM-DD HH:MM:SS"')
-    args = parser.parse_args()
-    
-    sub = Path(args.submission_dir)
-    
-    if not sub.exists():
-        print("Submission directory does not exist...")
-        sys.exit(1)
-    
-    if not validate_checkout_time(args.checkout_time):
-        print('Invalid checkout_time format. Use: "YYYY-MM-DD HH:MM:SS"')
-        sys.exit(1)
-    
-    print(f"Using submission dir: {sub}")
-    print(f"Checking out to latest commit before: {args.checkout_time}")
-    
-    process_repositories(sub, args.checkout_time)
+    @classmethod
+    def get_commit_at_time(cls, repo_path, checkout_time):
+        result = subprocess.run(
+            ['git', 'rev-list', '-1', f'--before={checkout_time}', 'HEAD'],
+            cwd=repo_path,
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            return None
+        return result.stdout.strip()
+
+    @classmethod
+    def get_commit_time(cls, repo_path, commit_hash):
+        result = subprocess.run(
+            ['git', 'show', '-s', '--format=%ci', commit_hash],
+            cwd=repo_path,
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            return None
+        return result.stdout.strip()
+
+    @classmethod
+    def checkout_commit(cls, repo_path, commit_hash):
+        result = subprocess.run(
+            ['git', 'checkout', commit_hash],
+            cwd=repo_path,
+            capture_output=True,
+            text=True
+        )
+        return result.returncode == 0
+
+    @classmethod
+    def process_repositories(cls, submissions_dir: Path, checkout_time: str):
+        for submission_dir in sorted(submissions_dir.iterdir()):
+            if not submission_dir.is_dir():
+                continue
+
+            git_dir = submission_dir / '.git'
+            if not git_dir.exists():
+                print(f"\nSkipping {submission_dir.name} - not a git repository")
+                continue
+            print(f"\nProcessing: {submission_dir.name}")
+
+            commit_hash = cls.get_commit_at_time(submission_dir, checkout_time)
+            if not commit_hash:
+                print(f"  No commits found before {checkout_time}")
+                continue
+
+            commit_time = cls.get_commit_time(submission_dir, commit_hash)
+            if cls.checkout_commit(submission_dir, commit_hash):
+                print(f"  Checked out to: {commit_hash[:8]}")
+                print(f"  Commit time: {commit_time}")
+            else:
+                print(f"  Failed to checkout {commit_hash[:8]}")
+
+    @classmethod
+    def validate_checkout_time(cls, time_str):
+        try:
+            datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S')
+            return True
+        except ValueError:
+            return False
+
+    @classmethod
+    def main(cls, args: List[str]) -> int:
+        parser = cls.get_parser()
+        parsed_args = parser.parse_args(args)
+
+        sub = Path(parsed_args.submission_dir)
+
+        if not sub.exists():
+            print("Submission directory does not exist...")
+            return 1
+
+        if not cls.validate_checkout_time(parsed_args.checkout_time):
+            print('Invalid checkout_time format. Use: "YYYY-MM-DD HH:MM:SS"')
+            return 1
+
+        print(f"Using submission dir: {sub}")
+        print(f"Checking out to latest commit before: {parsed_args.checkout_time}")
+
+        cls.process_repositories(sub, parsed_args.checkout_time)
+        return 0
 
 if __name__ == "__main__":
-    checkout()
+    sys.exit(CheckoutScript.main(sys.argv[1:]))
 

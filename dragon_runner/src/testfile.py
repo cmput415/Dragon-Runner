@@ -76,7 +76,6 @@ class TestFile(Verifiable):
             return inline_contents
 
         elif file_contents: 
-            print("READING FILE CONTENTS")
             if isinstance(file_contents, TestFileError):
                 return file_contents
 
@@ -90,7 +89,6 @@ class TestFile(Verifiable):
             if file_bytes is None:
                 return TestFileError(f"Failed to convert file {full_path} to bytes")
             
-            print("FILE_BYTES:", file_bytes)
             return file_bytes 
         else:
             return b''

@@ -38,8 +38,7 @@ class RunnerArgs(NamedTuple):
 
 class ScriptArgs(NamedTuple):
     mode: Mode
-    script_file: str
-    script_args: List[str] = []
+    args: List[str] = []
 
 class ServerArgs(NamedTuple):
     mode: Mode
@@ -73,19 +72,6 @@ def parse_runner_args(argv_skip: int=1) -> RunnerArgs:
     
     return RunnerArgs(**args_dict)
 
-def parse_script_args() -> ScriptArgs:
-    if len(sys.argv) == 2:
-        print("Script file required")
-        sys.exit(1)
-    elif len(sys.argv) < 3:
-        print("Usage: dragon-runner script <script_file> [script_args...]")
-        sys.exit(1)
-        
-    return ScriptArgs(
-        mode=Mode.SCRIPT,
-        script_file=sys.argv[2],
-        script_args=sys.argv[3:]
-    )
 
 def parse_server_args() -> ServerArgs:
     parser = argparse.ArgumentParser(description="Server mode")
@@ -115,7 +101,7 @@ def parse_cli_args() -> Any:
         if first_arg == Mode.SERVE.value:
             return parse_server_args()
         elif first_arg == Mode.SCRIPT.value:
-            return parse_script_args()
+            return ScriptArgs(mode=Mode.SCRIPT, args=sys.argv[2:])
         else:
             # For runner modes
             args = parse_runner_args(argv_skip=2)
