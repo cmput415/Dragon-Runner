@@ -235,11 +235,6 @@ class MemoryCheckHarness(TestHarness):
                 indent=4)
         self.leak_tests = []
         self.test_count = 0 # reset for each executable
-        
-        if self.failures != []:
-            log(f"Failure Summary: ({len(self.failures)} tests)") 
-            for result in self.failures:
-                result.log()
 
     def process_test_result(self, test_result: TestResult, context: Dict[str, Any]):
         """
@@ -260,9 +255,7 @@ class MemoryCheckHarness(TestHarness):
      
         # track passes as usual
         if test_result.did_pass:
-            context["pass_count"] += 1
-        else:
-            self.failures.append(test_result) 
+            context["pass_count"] += 1 
        
 class PerformanceTestingHarness(TestHarness):
     
