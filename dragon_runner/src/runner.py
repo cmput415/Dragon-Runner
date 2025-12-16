@@ -146,8 +146,12 @@ class ToolChainRunner():
         generated does not imply the test will fail. Instead we identify the relevent
         components of the error message using regular expressions and perform a lenient diff.
         """
-        produced_str = produced.decode('utf-8').strip() if produced else None
-        expected_str = expected.decode('utf-8').strip() if expected else None
+        try:
+            produced_str = produced.decode('utf-8').strip() if produced else None
+            expected_str = expected.decode('utf-8').strip() if expected else None
+        except UnicodeDecodeError as unicode_error:
+            tr.did_pass = False
+            return
         
         # An error test must be UTF-8 decodable.
         if produced_str is None or expected_str is None:
@@ -178,7 +182,15 @@ class ToolChainRunner():
             prod_error, prod_line = extract_components(produced_str)
             exp_error, exp_line = extract_components(expected_str)
             
+            if prod_error and prod_error.group(1) == "MainError" and \
+               exp_error and exp_error.group(1) == "MainError":
+                # hack in this case because spec doesn't define what line to throw MainError on.
+                tr.did_pass = True
+                return
+
             if prod_error and exp_error and prod_line and exp_line:
+                
+                
                 tr.did_pass = (prod_line.group(1) == exp_line.group(1))
             else:
                 tr.did_pass = False

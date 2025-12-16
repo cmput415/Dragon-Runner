@@ -52,7 +52,7 @@ class Loader:
             return 1
 
         module = self.script_modules[args[0]]
-        cmd = [sys.executable, "-m", module] + args
+        cmd = [sys.executable, "-m", module] + args[1:]
         try:
             result = subprocess.run(cmd, check=False)
             return result.returncode

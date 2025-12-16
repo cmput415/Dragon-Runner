@@ -42,8 +42,7 @@ class GradePerfScript(Script):
         parser.add_argument(
             "perf_csv",
             type=Path,
-            nargs="+",
-            help="Path to one or more csv files generated from grade mode"
+            help="Path to csv file generated from grade mode"
         )
         parser.add_argument(
             "output_csv",
@@ -61,7 +60,7 @@ class GradePerfScript(Script):
         with open(args[0], "r") as perf_csv:
             reader = csv.reader(perf_csv)
             headers = next(reader)
-            test_data = list(reader)
+            test_data = [row for row in reader if row and any(row)]
 
         raw_times = np.array([[float(x) for x in row[1:]] for row in test_data])
 
@@ -74,6 +73,12 @@ class GradePerfScript(Script):
 
         print(headers[1:])
         print(total_scores)
+
+        # Write results to output CSV
+        with open(args[1], "w") as output_csv:
+            writer = csv.writer(output_csv)
+            writer.writerow(headers[1:])
+            writer.writerow(total_scores)
 
     @classmethod
     def main(cls, args: List[str]) -> int:
