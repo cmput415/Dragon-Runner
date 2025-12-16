@@ -81,7 +81,7 @@ class TestFile(Verifiable):
 
             file_str = file_contents.decode()
  
-            full_path = os.path.join(os.path.dirname(self.path), file_str)
+            full_path = os.path.join(os.path.dirname(self.path), file_str.strip())
             if not os.path.exists(full_path):
                 return TestFileError(f"Failed to locate path supplied to {file_directive}\n\tTest:{self.path}\n\tPath:{full_path}\n")
             
