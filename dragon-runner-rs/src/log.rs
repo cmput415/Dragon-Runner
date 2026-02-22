@@ -1,32 +1,35 @@
 use std::env;
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU32, Ordering};
 
-static LOGGER: OnceLock<Logger> = OnceLock::new();
+static DEBUG_LEVEL: AtomicU32 = AtomicU32::new(u32::MAX);
 
-struct Logger {
-    debug_level: u32,
-}
-
-impl Logger {
-    fn new() -> Self {
-        let debug_level = env::var("DRAGON_RUNNER_DEBUG")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(0);
-        Self { debug_level }
+fn debug_level() -> u32 {
+    let cached = DEBUG_LEVEL.load(Ordering::Relaxed);
+    if cached != u32::MAX {
+        return cached;
     }
+    let level = env::var("DRAGON_RUNNER_DEBUG")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
+    DEBUG_LEVEL.store(level, Ordering::Relaxed);
+    level
 }
 
-fn get_logger() -> &'static Logger {
-    LOGGER.get_or_init(Logger::new)
+/// Re-read DRAGON_RUNNER_DEBUG from the environment.
+/// Call after setting the env var (e.g. from CLI parsing).
+pub fn refresh_debug_level() {
+    let level = env::var("DRAGON_RUNNER_DEBUG")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
+    DEBUG_LEVEL.store(level, Ordering::Relaxed);
 }
 
 /// Log a message at a given verbosity level with indentation.
 pub fn log(level: u32, indent: usize, msg: &str) {
-    let logger = get_logger();
-    if logger.debug_level >= level {
-        let prefix = " ".repeat(indent);
-        println!("{prefix}{msg}");
+    if debug_level() >= level {
+        println!("{:indent$}{msg}", "", indent = indent);
     }
 }
 
@@ -39,6 +42,6 @@ pub fn log_multiline(content: &str, level: u32, indent: usize) {
 
 /// Log a delimiter line.
 pub fn log_delimiter(title: &str, level: u32, indent: usize) {
-    let delimiter = "-".repeat(20);
-    log(level, indent, &format!("{delimiter} {title} {delimiter}"));
+    let delim = "-".repeat(20);
+    log(level, indent, &format!("{delim} {title} {delim}"));
 }

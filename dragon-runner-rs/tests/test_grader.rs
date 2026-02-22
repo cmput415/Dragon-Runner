@@ -2,7 +2,7 @@ use std::path::Path;
 
 use dragon_runner_rs::cli::{Mode, RunnerArgs};
 use dragon_runner_rs::config::load_config;
-use dragon_runner_rs::harness::{TestHarness, TournamentHarness};
+use dragon_runner_rs::harness::TournamentHarness;
 
 fn configs_dir() -> std::path::PathBuf {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -29,8 +29,8 @@ fn test_grader_config() {
         ..Default::default()
     };
 
-    let mut harness = TournamentHarness::new(config, args);
-    harness.run();
+    let mut harness = TournamentHarness::new();
+    harness.run(&config, &args);
 
     assert!(
         Path::new(failure_log).exists(),

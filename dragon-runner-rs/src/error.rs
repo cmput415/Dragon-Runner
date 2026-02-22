@@ -1,58 +1,48 @@
 use std::fmt;
+use thiserror::Error;
 
-#[derive(Debug, Clone)]
-pub enum Error {
+#[derive(Debug, Clone, Error)]
+pub enum DragonError {
+    #[error("Config Error: {0}")]
     Config(String),
+    #[error("Testfile Error: {0}")]
     TestFile(String),
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::Config(msg) => write!(f, "Config Error: {msg}"),
-            Error::TestFile(msg) => write!(f, "Testfile Error: {msg}"),
-        }
-    }
-}
-
+/// Collect validation errors from config, toolchains, test files, etc.
+/// Just a thin newtype over Vec so we can impl Display.
 #[derive(Debug, Clone, Default)]
-pub struct ErrorCollection {
-    pub errors: Vec<Error>,
-}
+pub struct Errors(pub Vec<DragonError>);
 
-impl ErrorCollection {
+impl Errors {
     pub fn new() -> Self {
-        Self { errors: Vec::new() }
+        Self(Vec::new())
     }
 
     pub fn has_errors(&self) -> bool {
-        !self.errors.is_empty()
+        !self.0.is_empty()
     }
 
-    pub fn add(&mut self, error: Error) {
-        self.errors.push(error);
+    pub fn push(&mut self, error: DragonError) {
+        self.0.push(error);
     }
 
-    pub fn extend(&mut self, other: &ErrorCollection) {
-        self.errors.extend(other.errors.iter().cloned());
-    }
-
-    pub fn extend_errors(&mut self, errors: &[Error]) {
-        self.errors.extend(errors.iter().cloned());
+    pub fn extend(&mut self, other: &Errors) {
+        self.0.extend_from_slice(&other.0);
     }
 
     pub fn len(&self) -> usize {
-        self.errors.len()
+        self.0.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.errors.is_empty()
+        self.0.is_empty()
     }
 }
 
-impl fmt::Display for ErrorCollection {
+impl fmt::Display for Errors {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (i, err) in self.errors.iter().enumerate() {
+        for (i, err) in self.0.iter().enumerate() {
             if i > 0 {
                 writeln!(f)?;
             }
@@ -63,5 +53,5 @@ impl fmt::Display for ErrorCollection {
 }
 
 pub trait Verifiable {
-    fn verify(&self) -> ErrorCollection;
+    fn verify(&self) -> Errors;
 }

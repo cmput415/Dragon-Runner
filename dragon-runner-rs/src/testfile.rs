@@ -2,7 +2,7 @@ use std::fs;
 use std::io::{self, BufRead};
 use std::path::Path;
 
-use crate::error::{Error, ErrorCollection, Verifiable};
+use crate::error::{DragonError, Errors, Verifiable};
 use crate::util::{file_to_bytes, str_to_bytes};
 
 /// Represents a single test case file with parsed directives.
@@ -40,40 +40,18 @@ impl DirectiveResult {
 impl TestFile {
     pub fn new(test_path: &str) -> Self {
         let path_obj = Path::new(test_path);
-        let stem = path_obj
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .into_owned();
+        let stem = path_obj.file_stem().unwrap_or_default().to_string_lossy().into_owned();
         let extension = path_obj
             .extension()
             .map(|e| format!(".{}", e.to_string_lossy()))
             .unwrap_or_default();
-        let file = format!("{}{}", stem, extension);
+        let file = format!("{stem}{extension}");
         let comment_syntax = "//".to_string();
 
-        let expected_out = Self::get_content_static(
-            test_path,
-            &comment_syntax,
-            "CHECK:",
-            "CHECK_FILE:",
-        );
-        let input_stream = Self::get_content_static(
-            test_path,
-            &comment_syntax,
-            "INPUT:",
-            "INPUT_FILE:",
-        );
+        let expected_out = Self::resolve_directive(test_path, &comment_syntax, "CHECK:", "CHECK_FILE:");
+        let input_stream = Self::resolve_directive(test_path, &comment_syntax, "INPUT:", "INPUT_FILE:");
 
-        Self {
-            path: test_path.to_string(),
-            stem,
-            extension,
-            file,
-            comment_syntax,
-            expected_out,
-            input_stream,
-        }
+        Self { path: test_path.into(), stem, extension, file, comment_syntax, expected_out, input_stream }
     }
 
     pub fn get_expected_out(&self) -> &[u8] {
@@ -84,160 +62,116 @@ impl TestFile {
         self.input_stream.as_bytes()
     }
 
-    /// Generic method to get content based on inline and file directives.
-    fn get_content_static(
+    /// Resolve inline vs file directives into final byte content.
+    fn resolve_directive(
         test_path: &str,
         comment_syntax: &str,
-        inline_directive: &str,
-        file_directive: &str,
+        inline_dir: &str,
+        file_dir: &str,
     ) -> DirectiveResult {
-        let inline_contents = Self::get_directive_contents(test_path, comment_syntax, inline_directive);
-        let file_contents = Self::get_directive_contents(test_path, comment_syntax, file_directive);
+        let inline = Self::parse_directive(test_path, comment_syntax, inline_dir);
+        let file_ref = Self::parse_directive(test_path, comment_syntax, file_dir);
 
-        match (&inline_contents, &file_contents) {
-            // Both directives present — conflict
+        match (inline, file_ref) {
             (Some(Ok(_)), Some(Ok(_))) => DirectiveResult::Err(format!(
-                "Directive Conflict for test {}: Supplied both {} and {}",
-                Path::new(test_path)
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy(),
-                inline_directive,
-                file_directive,
+                "Directive Conflict for test {}: Supplied both {inline_dir} and {file_dir}",
+                Path::new(test_path).file_name().unwrap_or_default().to_string_lossy(),
             )),
 
-            // Only inline directive
-            (Some(Ok(bytes)), _) => DirectiveResult::Ok(bytes.clone()),
-            (Some(Err(e)), _) => DirectiveResult::Err(e.clone()),
+            (Some(Ok(bytes)), _) => DirectiveResult::Ok(bytes),
+            (Some(Err(e)), _) => DirectiveResult::Err(e),
 
-            // Only file directive — read referenced file
-            (None, Some(Ok(file_ref_bytes))) => {
-                let file_str = String::from_utf8_lossy(file_ref_bytes).trim().to_string();
-                let parent = Path::new(test_path).parent().unwrap_or(Path::new(""));
-                let full_path = parent.join(&file_str);
+            (None, Some(Ok(ref_bytes))) => Self::read_referenced_file(test_path, file_dir, &ref_bytes),
+            (None, Some(Err(e))) => DirectiveResult::Err(e),
 
-                if !full_path.exists() {
-                    return DirectiveResult::Err(format!(
-                        "Failed to locate path supplied to {}\n\tTest:{}\n\tPath:{}\n",
-                        file_directive,
-                        test_path,
-                        full_path.display(),
-                    ));
-                }
-
-                match file_to_bytes(&full_path.to_string_lossy()) {
-                    Some(bytes) => DirectiveResult::Ok(bytes),
-                    None => DirectiveResult::Err(format!(
-                        "Failed to convert file {} to bytes",
-                        full_path.display()
-                    )),
-                }
-            }
-            (None, Some(Err(e))) => DirectiveResult::Err(e.clone()),
-
-            // Neither directive — empty
             (None, None) => DirectiveResult::Ok(Vec::new()),
         }
     }
 
-    /// Parse directive contents from the test file.
-    /// Returns None if no directive found, Some(Ok(bytes)) for content,
-    /// or Some(Err(msg)) on parse error.
-    fn get_directive_contents(
+    /// Given file-reference bytes from a FILE directive, resolve and read the target file.
+    fn read_referenced_file(test_path: &str, directive: &str, ref_bytes: &[u8]) -> DirectiveResult {
+        let file_str = String::from_utf8_lossy(ref_bytes).trim().to_string();
+        let parent = Path::new(test_path).parent().unwrap_or(Path::new(""));
+        let full_path = parent.join(&file_str);
+
+        if !full_path.exists() {
+            return DirectiveResult::Err(format!(
+                "Failed to locate path supplied to {directive}\n\tTest:{test_path}\n\tPath:{}\n",
+                full_path.display(),
+            ));
+        }
+
+        file_to_bytes(&full_path.to_string_lossy())
+            .map(DirectiveResult::Ok)
+            .unwrap_or_else(|| DirectiveResult::Err(format!(
+                "Failed to convert file {} to bytes", full_path.display()
+            )))
+    }
+
+    /// Scan a test file for lines matching `// DIRECTIVE:value` and collect the values.
+    /// Returns None if no matches found.
+    fn parse_directive(
         test_path: &str,
         comment_syntax: &str,
-        directive_prefix: &str,
+        directive: &str,
     ) -> Option<Result<Vec<u8>, String>> {
         let file = match fs::File::open(test_path) {
             Ok(f) => f,
-            Err(_) => {
-                return Some(Err(format!(
-                    "Unkown error occured while parsing testfile: {}",
-                    test_path
-                )));
-            }
+            Err(_) => return Some(Err(format!(
+                "Unknown error occurred while parsing testfile: {test_path}"
+            ))),
         };
 
-        let reader = io::BufReader::new(file);
         let mut contents: Vec<u8> = Vec::new();
-        let mut first_match = true;
+        let mut found_any = false;
 
-        for line_result in reader.lines() {
-            let line = match line_result {
+        for line in io::BufReader::new(file).lines() {
+            let line = match line {
                 Ok(l) => l,
-                Err(_) => {
-                    return Some(Err(format!(
-                        "Unkown error occured while parsing testfile: {}",
-                        test_path
-                    )));
-                }
+                Err(_) => return Some(Err(format!(
+                    "Unknown error occurred while parsing testfile: {test_path}"
+                ))),
             };
 
-            let comment_index = match line.find(comment_syntax) {
-                Some(i) => i,
-                None => continue,
-            };
-            let directive_index = match line.find(directive_prefix) {
-                Some(i) => i,
-                None => continue,
-            };
-
-            // Comment must appear before directive
-            if comment_index > directive_index {
-                continue;
+            match (line.find(comment_syntax), line.find(directive)) {
+                (Some(c), Some(d)) if c <= d => {}
+                _ => continue,
             }
 
-            // Extract the right-hand side after the directive
-            let rhs = match line.split_once(directive_prefix) {
+            let rhs = match line.split_once(directive) {
                 Some((_, rhs)) => rhs,
                 None => continue,
             };
 
-            let rhs_bytes = str_to_bytes(rhs, true);
-
-            if !first_match {
+            if found_any {
                 contents.push(b'\n');
             }
-            contents.extend_from_slice(&rhs_bytes);
-            first_match = false;
+            contents.extend_from_slice(&str_to_bytes(rhs, true));
+            found_any = true;
         }
 
-        if first_match {
-            // No matches found
-            None
-        } else {
-            Some(Ok(contents))
-        }
+        found_any.then(|| Ok(contents))
     }
 
     /// Check if a path is a valid test file (not hidden, not .out/.ins extension).
-    pub fn is_test(test_path: &Path) -> bool {
-        if !test_path.is_file() {
-            return false;
-        }
-        let name = test_path
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy();
-        if name.starts_with('.') {
-            return false;
-        }
-        let ext = test_path
-            .extension()
-            .unwrap_or_default()
-            .to_string_lossy();
-        ext != "out" && ext != "ins"
+    pub fn is_test(path: &Path) -> bool {
+        path.is_file()
+            && !path.file_name().unwrap_or_default().to_string_lossy().starts_with('.')
+            && !matches!(
+                path.extension().and_then(|e| e.to_str()),
+                Some("out" | "ins")
+            )
     }
 }
 
 impl Verifiable for TestFile {
-    fn verify(&self) -> ErrorCollection {
-        let mut ec = ErrorCollection::new();
+    fn verify(&self) -> Errors {
+        let mut ec = Errors::new();
         if let DirectiveResult::Err(msg) = &self.expected_out {
-            ec.add(Error::TestFile(msg.clone()));
+            ec.push(DragonError::TestFile(msg.clone()));
         }
         if let DirectiveResult::Err(msg) = &self.input_stream {
-            ec.add(Error::TestFile(msg.clone()));
+            ec.push(DragonError::TestFile(msg.clone()));
         }
         ec
     }

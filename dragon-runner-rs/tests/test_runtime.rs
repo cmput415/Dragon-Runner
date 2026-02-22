@@ -20,9 +20,9 @@ fn tests_dir() -> std::path::PathBuf {
 
 fn run_tests_for_config(config: &Config, expected_result: bool) {
     for exe in &config.executables {
-        exe.source_env();
         for tc in &config.toolchains {
-            let runner = ToolChainRunner::new(tc.clone(), 3.0);
+            let runner = ToolChainRunner::new(tc.clone(), 3.0)
+                .with_env(exe.runtime_env());
             for pkg in &config.packages {
                 for spkg in &pkg.subpackages {
                     for test in &spkg.tests {

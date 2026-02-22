@@ -31,7 +31,6 @@ fn main() {
             0,
             &format!("Parsed {} below:", cli_args.config_file),
         );
-        // TODO: config Display impl for pretty printing
         log(
             0,
             0,
@@ -63,22 +62,10 @@ fn main() {
     config.log_test_info();
 
     let success = match cli_args.mode {
-        Mode::Regular => {
-            let mut harness = RegularHarness::new(config, cli_args);
-            harness.run()
-        }
-        Mode::Tournament => {
-            let mut harness = TournamentHarness::new(config, cli_args);
-            harness.run()
-        }
-        Mode::Memcheck => {
-            let mut harness = MemoryCheckHarness::new(config, cli_args);
-            harness.run()
-        }
-        Mode::Perf => {
-            let mut harness = PerformanceTestingHarness::new(config, cli_args);
-            harness.run()
-        }
+        Mode::Regular => RegularHarness::new().run(&config, &cli_args),
+        Mode::Tournament => TournamentHarness::new().run(&config, &cli_args),
+        Mode::Memcheck => MemoryCheckHarness::new().run(&config, &cli_args),
+        Mode::Perf => PerformanceTestingHarness::new().run(&config, &cli_args),
     };
 
     std::process::exit(if success { 0 } else { 1 });

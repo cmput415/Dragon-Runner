@@ -184,8 +184,9 @@ pub fn parse_cli_args() -> RunnerArgs {
 
     let args = RunnerArgs::from_flags(mode, flags);
 
-    // Set debug environment variable
+    // Set debug environment variable and refresh the logger
     std::env::set_var("DRAGON_RUNNER_DEBUG", args.verbosity.to_string());
+    crate::log::refresh_debug_level();
 
     args
 }

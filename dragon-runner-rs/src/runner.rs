@@ -1,7 +1,9 @@
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::Path;
 use std::process;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use regex::Regex;
@@ -60,7 +62,7 @@ impl CommandResult {
 
 /// Result of running a complete test case through a toolchain.
 pub struct TestResult {
-    pub test: TestFile,
+    pub test: Arc<TestFile>,
     pub did_pass: bool,
     pub did_timeout: bool,
     pub error_test: bool,
@@ -72,7 +74,7 @@ pub struct TestResult {
 }
 
 impl TestResult {
-    pub fn new(test: TestFile) -> Self {
+    pub fn new(test: Arc<TestFile>) -> Self {
         Self {
             test,
             did_pass: false,
@@ -91,6 +93,8 @@ impl TestResult {
 pub struct ToolChainRunner {
     pub tc: ToolChain,
     pub timeout: f64,
+    /// Extra environment variables to inject into spawned subprocesses (e.g. runtime lib paths).
+    pub extra_env: HashMap<String, String>,
     reserved_exit_codes: Vec<i32>,
     runtime_errors: Vec<&'static str>,
 }
@@ -100,16 +104,22 @@ impl ToolChainRunner {
         Self {
             tc,
             timeout,
+            extra_env: HashMap::new(),
             reserved_exit_codes: vec![VALGRIND_EXIT_CODE],
             runtime_errors: vec!["SizeError", "IndexError", "MathError", "StrideError"],
         }
     }
 
+    pub fn with_env(mut self, env: HashMap<String, String>) -> Self {
+        self.extra_env = env;
+        self
+    }
+
     /// Run each step of the toolchain for a given test and executable.
-    pub fn run(&self, test: &TestFile, exe: &Executable) -> TestResult {
+    pub fn run(&self, test: &Arc<TestFile>, exe: &Executable) -> TestResult {
         let mut input_file = test.path.clone();
         let expected = test.get_expected_out().to_vec();
-        let mut tr = TestResult::new(test.clone());
+        let mut tr = TestResult::new(Arc::clone(test));
         let tc_len = self.tc.len();
 
         for (index, step) in self.tc.iter().enumerate() {
@@ -208,13 +218,13 @@ impl ToolChainRunner {
         let mut cr = CommandResult::new(&command.cmd);
         let start = Instant::now();
 
-        // Use subprocess::run with timeout, mirroring the Python approach
-        let result = process::Command::new(&command.args[0])
-            .args(&command.args[1..])
+        let mut cmd = process::Command::new(&command.args[0]);
+        cmd.args(&command.args[1..])
             .stdin(process::Stdio::piped())
             .stdout(process::Stdio::piped())
             .stderr(process::Stdio::piped())
-            .spawn();
+            .envs(&self.extra_env);
+        let result = cmd.spawn();
 
         match result {
             Ok(mut child) => {
@@ -323,7 +333,10 @@ impl ToolChainRunner {
                     .or_else(|| caps.get(2))
                     .map(|m| m.as_str())
                     .unwrap_or("");
-                if let Ok(val) = env::var(var_name) {
+                // Check runner's extra_env first, then fall back to process env
+                let val = self.extra_env.get(var_name).cloned()
+                    .or_else(|| env::var(var_name).ok());
+                if let Some(val) = val {
                     *arg = arg
                         .replace(&format!("${var_name}"), &val)
                         .replace(&format!("${{{var_name}}}"), &val);

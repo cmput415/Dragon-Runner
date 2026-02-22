@@ -20,9 +20,9 @@ fn create_config(name: &str) -> Config {
 /// Run all tests for a config and assert they match expected_result.
 fn run_tests_for_config(config: &Config, expected_result: bool) {
     for exe in &config.executables {
-        exe.source_env();
         for tc in &config.toolchains {
-            let runner = ToolChainRunner::new(tc.clone(), 10.0);
+            let runner = ToolChainRunner::new(tc.clone(), 10.0)
+                .with_env(exe.runtime_env());
             for pkg in &config.packages {
                 for spkg in &pkg.subpackages {
                     for test in &spkg.tests {

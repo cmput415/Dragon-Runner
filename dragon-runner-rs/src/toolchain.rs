@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::error::{Error, ErrorCollection, Verifiable};
+use crate::error::{DragonError, Errors, Verifiable};
 
 /// A single step in a toolchain (e.g., compile, link, run).
 #[derive(Debug, Clone)]
@@ -17,63 +17,36 @@ pub struct Step {
 impl Step {
     pub fn from_json(data: &serde_json::Value) -> Self {
         Self {
-            name: data
-                .get("stepName")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string(),
-            exe_path: data
-                .get("executablePath")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string(),
+            name: data["stepName"].as_str().unwrap_or("").into(),
+            exe_path: data["executablePath"].as_str().unwrap_or("").into(),
             arguments: data
                 .get("arguments")
                 .and_then(|v| v.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(String::from))
-                        .collect()
-                })
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(Into::into)).collect())
                 .unwrap_or_default(),
-            output: data
-                .get("output")
-                .and_then(|v| v.as_str())
-                .map(String::from),
-            allow_error: data
-                .get("allowError")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false),
-            uses_ins: data
-                .get("usesInStr")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false),
-            uses_runtime: data
-                .get("usesRuntime")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false),
+            output: data.get("output").and_then(|v| v.as_str()).map(Into::into),
+            allow_error: data["allowError"].as_bool().unwrap_or(false),
+            uses_ins: data["usesInStr"].as_bool().unwrap_or(false),
+            uses_runtime: data["usesRuntime"].as_bool().unwrap_or(false),
         }
     }
 }
 
 impl Verifiable for Step {
-    fn verify(&self) -> ErrorCollection {
-        let mut errors = ErrorCollection::new();
+    fn verify(&self) -> Errors {
+        let mut errors = Errors::new();
         if self.name.is_empty() {
-            errors.add(Error::Config(format!(
-                "Missing required filed 'stepName' in Step {}",
-                self.name
+            errors.push(DragonError::Config(format!(
+                "Missing required field 'stepName' in Step {}", self.name
             )));
         }
         if self.exe_path.is_empty() {
-            errors.add(Error::Config(format!(
-                "Missing required field 'exe_path' in Step: {}",
-                self.name
+            errors.push(DragonError::Config(format!(
+                "Missing required field 'exe_path' in Step: {}", self.name
             )));
         } else if !self.exe_path.starts_with('$') && !Path::new(&self.exe_path).exists() {
-            errors.add(Error::Config(format!(
-                "Cannot find exe_path '{}' in Step: {}",
-                self.exe_path, self.name
+            errors.push(DragonError::Config(format!(
+                "Cannot find exe_path '{}' in Step: {}", self.exe_path, self.name
             )));
         }
         errors
@@ -89,15 +62,18 @@ pub struct ToolChain {
 
 impl ToolChain {
     pub fn new(name: &str, steps_data: &[serde_json::Value]) -> Self {
-        let steps = steps_data.iter().map(Step::from_json).collect();
         Self {
-            name: name.to_string(),
-            steps,
+            name: name.into(),
+            steps: steps_data.iter().map(Step::from_json).collect(),
         }
     }
 
     pub fn len(&self) -> usize {
         self.steps.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.steps.is_empty()
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, Step> {
@@ -106,11 +82,10 @@ impl ToolChain {
 }
 
 impl Verifiable for ToolChain {
-    fn verify(&self) -> ErrorCollection {
-        let mut errors = ErrorCollection::new();
-        for step in &self.steps {
-            errors.extend(&step.verify());
-        }
-        errors
+    fn verify(&self) -> Errors {
+        self.steps.iter().fold(Errors::new(), |mut acc, step| {
+            acc.extend(&step.verify());
+            acc
+        })
     }
 }
