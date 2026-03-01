@@ -1,14 +1,13 @@
-use std::path::PathBuf;
+use std::path::Path;
 
+use crate::config::Executable;
 use crate::error::{DragonError, Validate};
 
 /// A single step in a toolchain (e.g., compile, link, run).
 #[derive(Debug, Clone)]
 pub struct Step {
-    pub name: String,
-    pub exe_path: PathBuf,
-    pub arguments: Vec<String>,
-    pub output: Option<PathBuf>,
+    pub exe_raw: String,
+    pub args: Vec<String>,
     pub allow_error: bool,
     pub uses_ins: bool,
     pub uses_runtime: bool,
@@ -17,17 +16,31 @@ pub struct Step {
 impl Step {
     pub fn from_json(data: &serde_json::Value) -> Self {
         Self {
-            name: data["stepName"].as_str().unwrap_or("").into(),
-            exe_path: PathBuf::from(data["executablePath"].as_str().unwrap_or("")),
-            arguments: data
-                .get("arguments")
+            exe_raw: data["exe"].as_str().unwrap_or("").into(),
+            args: data
+                .get("args")
                 .and_then(|v| v.as_array())
                 .map(|arr| arr.iter().filter_map(|v| v.as_str().map(Into::into)).collect())
                 .unwrap_or_default(),
-            output: data.get("output").and_then(|v| v.as_str()).map(PathBuf::from),
             allow_error: data["allowError"].as_bool().unwrap_or(false),
             uses_ins: data["usesInStr"].as_bool().unwrap_or(false),
             uses_runtime: data["usesRuntime"].as_bool().unwrap_or(false),
+        }
+    }
+
+    /// Derive a human-readable step name from the raw exe string and the executable.
+    pub fn display_name(&self, exe: &Executable) -> String {
+        match self.exe_raw.as_str() {
+            "$EXE" => exe.id.clone(),
+            "$INPUT" => "run".to_string(),
+            other => {
+                // Use filename component for paths, bare name as-is
+                Path::new(other)
+                    .file_name()
+                    .unwrap_or(other.as_ref())
+                    .to_string_lossy()
+                    .into_owned()
+            }
         }
     }
 }
@@ -35,19 +48,18 @@ impl Step {
 impl Validate for Step {
     fn validate(&self) -> Vec<DragonError> {
         let mut errors = Vec::new();
-        if self.name.is_empty() {
-            errors.push(DragonError::Config(format!(
-                "Missing required field 'stepName' in Step {}", self.name
-            )));
-        }
-        if self.exe_path.as_os_str().is_empty() {
-            errors.push(DragonError::Config(format!(
-                "Missing required field 'exe_path' in Step: {}", self.name
-            )));
-        } else if !self.exe_path.to_string_lossy().starts_with('$') && !self.exe_path.exists() {
-            errors.push(DragonError::Config(format!(
-                "Cannot find exe_path '{}' in Step: {}", self.exe_path.display(), self.name
-            )));
+        if self.exe_raw.is_empty() {
+            errors.push(DragonError::Config(
+                "Missing required field 'exe' in Step".into(),
+            ));
+        } else if !self.exe_raw.starts_with('$') && self.exe_raw.contains('/') {
+            // Only check existence for paths (containing /), not bare names resolved via $PATH
+            if !Path::new(&self.exe_raw).exists() {
+                errors.push(DragonError::Config(format!(
+                    "Cannot find exe '{}' in Step",
+                    self.exe_raw
+                )));
+            }
         }
         errors
     }

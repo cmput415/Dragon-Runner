@@ -38,6 +38,17 @@ pub fn make_tmp_file(content: &[u8]) -> Option<(PathBuf, tempfile::TempPath)> {
     Some((path_buf, path))
 }
 
+/// Create an empty temporary file with execute permissions.
+/// Returns (path_buf, handle). Caller must keep the handle alive — deleted on drop.
+pub fn make_empty_tmp_file() -> Option<(PathBuf, tempfile::TempPath)> {
+    let tmp = tempfile::NamedTempFile::new().ok()?;
+    let path = tmp.into_temp_path();
+    let perms = fs::Permissions::from_mode(0o700);
+    fs::set_permissions(&path, perms).ok()?;
+    let path_buf = path.to_path_buf();
+    Some((path_buf, path))
+}
+
 /// Truncate bytes in the middle if they exceed max_bytes.
 pub fn truncated_bytes(data: &[u8], max_bytes: usize) -> Vec<u8> {
     if data.len() <= max_bytes {

@@ -10,30 +10,37 @@
   "toolchains": {
     "vcalc-llc": [
       {
-        "stepName": "vcalc",
-        "executablePath": "$EXE",
-        "arguments": ["$INPUT", "$OUTPUT"],
-        "output": "vcalc.ll"
-      }, 
-      {
-        "stepName": "llc",
-        "executablePath": "/home/justin/install/llvm/llvm-18/bin/llc",
-        "arguments": ["-filetype=obj", "-relocation-model=pic", "$INPUT", "-o", "$OUTPUT"],
-        "output": "vcalc.o"
+        "exe": "$EXE",
+        "args": [
+          "$INPUT",
+          "$OUTPUT"
+        ]
       },
       {
-        "stepName": "clang",
-        "executablePath": "/usr/bin/clang",
-        "arguments": ["$INPUT", "-o", "$OUTPUT", "-L$RT_PATH", "-l$RT_LIB"],
-        "output": "vcalc"
+        "exe": "/home/justin/install/llvm/llvm-18/bin/llc",
+        "args": [
+          "-filetype=obj",
+          "-relocation-model=pic",
+          "$INPUT",
+          "-o",
+          "$OUTPUT"
+        ]
       },
       {
-        "stepName": "run",
-        "executablePath": "$INPUT",
-        "arguments": [],
+        "exe": "/usr/bin/clang",
+        "args": [
+          "$INPUT",
+          "-o",
+          "$OUTPUT",
+          "-L$RT_PATH",
+          "-l$RT_LIB"
+        ]
+      },
+      {
+        "exe": "$INPUT",
         "usesInStr": true,
         "usesRuntime": true
       }
-    ] 
+    ]
   }
 }

@@ -9,20 +9,22 @@
   "toolchains": {
     "vcalc-lli": [
       {
-        "stepName": "vcalc",
-        "executablePath": "$EXE",
-        "arguments": ["$INPUT", "$OUTPUT"],
-        "output": "/tmp/vcalc.ll",
+        "exe": "$EXE",
+        "args": [
+          "$INPUT",
+          "$OUTPUT"
+        ],
         "allowError": true
       },
       {
-        "stepName": "lli",
-        "executablePath": "/path/to/lli",
-        "arguments": [ "$INPUT" ],
+        "exe": "/path/to/lli",
+        "args": [
+          "$INPUT"
+        ],
         "usesInStr": true,
         "usesRuntime": true,
         "allowError": true
       }
-    ] 
+    ]
   }
 }

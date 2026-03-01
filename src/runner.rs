@@ -20,7 +20,7 @@ static ERROR_LINE_RE: LazyLock<Regex> =
 use crate::config::Executable;
 use crate::testfile::TestFile;
 use crate::toolchain::{Step, ToolChain};
-use crate::util::make_tmp_file;
+use crate::util::{make_tmp_file, make_empty_tmp_file};
 
 /// Reserved exit code for valgrind leak detection.
 pub const VALGRIND_EXIT_CODE: i32 = 111;
@@ -233,12 +233,18 @@ impl<'a> ToolChainRunner<'a> {
             Vec::new()
         };
 
-        let output_file = self.resolve_output_file(step);
+        let output_resolved = self.resolve_output_file(step);
+        let output_path = output_resolved.as_ref().map(|(p, _)| p.clone());
         let magic = MagicParams {
             exe_path: exe.exe_path.display().to_string(),
             input_file: state.input_file.display().to_string(),
-            output_file: output_file.as_ref().map(|p| p.display().to_string()),
+            output_file: output_path.as_ref().map(|p| p.display().to_string()),
         };
+
+        // Keep temp handle alive for the duration of the step
+        if let Some((_, handle)) = output_resolved {
+            state.tmp_handles.push(handle);
+        }
 
         let mut command = self.resolve_command(step, &magic);
 
@@ -255,7 +261,7 @@ impl<'a> ToolChainRunner<'a> {
         if cr.timed_out {
             state.command_history.push(cr);
             return ControlFlow::Break(TestResult::timeout(
-                test, state.command_history, &step.name, self.timeout,
+                test, state.command_history, &step.display_name(exe), self.timeout,
             ));
         }
 
@@ -283,12 +289,12 @@ impl<'a> ToolChainRunner<'a> {
                 && self.check_error_test(&stderr, test.get_expected_out());
             return ControlFlow::Break(TestResult::error(
                 test, state.command_history, stderr,
-                &step.name, did_pass, state.memory_leak,
+                &step.display_name(exe), did_pass, state.memory_leak,
             ));
         }
 
         if last_step {
-            let final_output = match output_file {
+            let final_output = match output_path {
                 Some(ref p) if p.exists() => fs::read(p).unwrap_or_default(),
                 Some(_) => return ControlFlow::Break(TestResult::finished(
                     test, state.command_history, Vec::new(), step_time, state.memory_leak,
@@ -301,7 +307,7 @@ impl<'a> ToolChainRunner<'a> {
         }
 
         // Not the last step — continue the pipeline
-        state.input_file = output_file.unwrap_or_else(|| {
+        state.input_file = output_path.unwrap_or_else(|| {
             match make_tmp_file(&stdout) {
                 Some((path, handle)) => {
                     state.tmp_handles.push(handle);
@@ -393,24 +399,22 @@ impl<'a> ToolChainRunner<'a> {
         cr
     }
 
-    fn resolve_output_file(&self, step: &Step) -> Option<PathBuf> {
-        step.output.as_ref().map(|output| {
-            if output.is_absolute() {
-                output.clone()
-            } else {
-                env::current_dir().unwrap_or_default().join(output)
-            }
-        })
+    fn resolve_output_file(&self, step: &Step) -> Option<(PathBuf, tempfile::TempPath)> {
+        if step.args.iter().any(|a| a.contains("$OUTPUT")) {
+            make_empty_tmp_file()
+        } else {
+            None
+        }
     }
 
     fn resolve_command(&self, step: &Step, params: &MagicParams) -> ResolvedCommand {
-        let mut args = vec![step.exe_path.display().to_string()];
-        args.extend(step.arguments.iter().cloned());
+        let mut args = vec![step.exe_raw.clone()];
+        args.extend(step.args.iter().cloned());
         let mut command = ResolvedCommand::new(args);
         self.replace_magic_args(&mut command, params);
         self.replace_env_vars(&mut command);
-        // Make exe path absolute if relative
-        if !command.args.is_empty() && !Path::new(&command.args[0]).is_absolute() {
+        // Only resolve paths containing '/' — bare names (e.g. "gcc") use $PATH lookup
+        if !command.args.is_empty() && command.args[0].contains('/') && !Path::new(&command.args[0]).is_absolute() {
             if let Ok(abs) = fs::canonicalize(&command.args[0]) {
                 command.args[0] = abs.to_string_lossy().into_owned();
             } else if let Ok(cwd) = env::current_dir() {

@@ -7,25 +7,25 @@
   "toolchains": {
     "LLVM": [
       {
-        "stepName": "compile",
-        "executablePath": "$EXE",
-        "arguments": ["$INPUT", "-o", "$OUTPUT"],
-        "output": "prog.o",
-        "allowError": true 
+        "exe": "$EXE",
+        "args": [
+          "$INPUT",
+          "-o",
+          "$OUTPUT"
+        ],
+        "allowError": true
       },
       {
-	"stepName": "valgrind",
-        "executablePath": "/usr/bin/valgrind",
-        "arguments": [
-	  "--leak-check=full",
-	  "--error-exitcode=111",
-	  "--log-file=/dev/null",
-	  "$INPUT"
-	],
+        "exe": "/usr/bin/valgrind",
+        "args": [
+          "--leak-check=full",
+          "--error-exitcode=111",
+          "--log-file=/dev/null",
+          "$INPUT"
+        ],
         "usesInStr": true,
         "allowError": true
       }
-    ] 
+    ]
   }
 }
-

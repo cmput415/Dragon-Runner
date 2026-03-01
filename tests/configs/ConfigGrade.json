@@ -10,35 +10,36 @@
   "toolchains": {
     "LLVM": [
       {
-        "stepName": "compile",
-        "executablePath": "$EXE",
-        "arguments": ["$INPUT", "-o", "$OUTPUT"],
-        "output": "test.o",
-        "allowError": true 
+        "exe": "$EXE",
+        "args": [
+          "$INPUT",
+          "-o",
+          "$OUTPUT"
+        ],
+        "allowError": true
       },
       {
-        "stepName": "run",
-        "executablePath": "$INPUT",
-        "arguments": [],
+        "exe": "$INPUT",
         "usesInStr": true,
         "allowError": true
       }
     ],
     "LLVM-opt": [
       {
-        "stepName": "compile",
-        "executablePath": "$EXE",
-        "arguments": ["$INPUT", "-O3", "-o", "$OUTPUT"],
-        "output": "test.o",
-        "allowError": true 
+        "exe": "$EXE",
+        "args": [
+          "$INPUT",
+          "-O3",
+          "-o",
+          "$OUTPUT"
+        ],
+        "allowError": true
       },
       {
-        "stepName": "run",
-        "executablePath": "$INPUT",
-        "arguments": [],
+        "exe": "$INPUT",
         "usesInStr": true,
         "allowError": true
       }
-    ] 
+    ]
   }
 }
