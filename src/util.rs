@@ -5,11 +5,12 @@ use std::os::unix::fs::PermissionsExt;
 
 /// Resolve a relative path against an absolute path.
 /// If abs_path points to a file, resolve relative to its parent directory.
-pub fn resolve_relative(relative_dir: &Path, abs_path: &Path) -> PathBuf {
-    let base = if abs_path.is_file() {
-        abs_path.parent().unwrap_or(abs_path)
+pub fn resolve_relative(relative_dir: &str, abs_path: &str) -> PathBuf {
+    let abs = Path::new(abs_path);
+    let base = if abs.is_file() {
+        abs.parent().unwrap_or(abs)
     } else {
-        abs_path
+        abs
     };
     base.join(relative_dir)
 }
@@ -28,14 +29,14 @@ pub fn str_to_bytes(s: &str, chop_newline: bool) -> Vec<u8> {
 /// Create a temporary file with the given content and execute permissions.
 /// Returns (path_string, handle). The caller must keep the handle alive
 /// for as long as the temp file is needed — it is deleted on drop.
-pub fn make_tmp_file(content: &[u8]) -> Option<(PathBuf, tempfile::TempPath)> {
+pub fn make_tmp_file(content: &[u8]) -> Option<(String, tempfile::TempPath)> {
     let mut tmp = tempfile::NamedTempFile::new().ok()?;
     tmp.write_all(content).ok()?;
     let path = tmp.into_temp_path();
     let perms = fs::Permissions::from_mode(0o700);
     fs::set_permissions(&path, perms).ok()?;
-    let path_buf = path.to_path_buf();
-    Some((path_buf, path))
+    let path_str = path.to_string_lossy().into_owned();
+    Some((path_str, path))
 }
 
 /// Truncate bytes in the middle if they exceed max_bytes.
