@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::error::{DragonError, Errors, Verifiable};
+use crate::error::{DragonError, Validate};
 
 /// A single step in a toolchain (e.g., compile, link, run).
 #[derive(Debug, Clone)]
@@ -32,9 +32,9 @@ impl Step {
     }
 }
 
-impl Verifiable for Step {
-    fn verify(&self) -> Errors {
-        let mut errors = Errors::new();
+impl Validate for Step {
+    fn validate(&self) -> Vec<DragonError> {
+        let mut errors = Vec::new();
         if self.name.is_empty() {
             errors.push(DragonError::Config(format!(
                 "Missing required field 'stepName' in Step {}", self.name
@@ -81,11 +81,8 @@ impl ToolChain {
     }
 }
 
-impl Verifiable for ToolChain {
-    fn verify(&self) -> Errors {
-        self.steps.iter().fold(Errors::new(), |mut acc, step| {
-            acc.extend(&step.verify());
-            acc
-        })
+impl Validate for ToolChain {
+    fn validate(&self) -> Vec<DragonError> {
+        self.steps.iter().flat_map(|s| s.validate()).collect()
     }
 }

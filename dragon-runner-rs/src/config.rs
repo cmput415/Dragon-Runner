@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::cli::RunnerArgs;
-use crate::error::{DragonError, Errors, Verifiable};
+use crate::error::{DragonError, Validate};
 use crate::log::log;
 use crate::testfile::TestFile;
 use crate::toolchain::ToolChain;
@@ -53,12 +53,9 @@ impl SubPackage {
     }
 }
 
-impl Verifiable for SubPackage {
-    fn verify(&self) -> Errors {
-        self.tests.iter().fold(Errors::new(), |mut acc, t| {
-            acc.extend(&t.verify());
-            acc
-        })
+impl Validate for SubPackage {
+    fn validate(&self) -> Vec<DragonError> {
+        self.tests.iter().flat_map(|t| t.validate()).collect()
     }
 }
 
@@ -132,12 +129,9 @@ impl Package {
     }
 }
 
-impl Verifiable for Package {
-    fn verify(&self) -> Errors {
-        self.subpackages.iter().fold(Errors::new(), |mut acc, spkg| {
-            acc.extend(&spkg.verify());
-            acc
-        })
+impl Validate for Package {
+    fn validate(&self) -> Vec<DragonError> {
+        self.subpackages.iter().flat_map(|s| s.validate()).collect()
     }
 }
 
@@ -183,9 +177,9 @@ impl Executable {
     }
 }
 
-impl Verifiable for Executable {
-    fn verify(&self) -> Errors {
-        let mut errors = Errors::new();
+impl Validate for Executable {
+    fn validate(&self) -> Vec<DragonError> {
+        let mut errors = Vec::new();
         if !Path::new(&self.exe_path).exists() {
             errors.push(DragonError::Config(format!(
                 "Cannot find binary file: {} in Executable: {}", self.exe_path, self.id
@@ -215,7 +209,7 @@ pub struct Config {
     pub toolchains: Vec<ToolChain>,
     pub packages: Vec<Package>,
     pub package_filter: String,
-    pub error_collection: Errors,
+    pub errors: Vec<DragonError>,
 }
 
 impl Config {
@@ -258,9 +252,9 @@ impl Config {
             toolchains,
             packages,
             package_filter: package_filter.into(),
-            error_collection: Errors::new(),
+            errors: Vec::new(),
         };
-        cfg.error_collection = cfg.collect_errors();
+        cfg.errors = cfg.collect_errors();
         cfg
     }
 
@@ -326,20 +320,19 @@ impl Config {
             .collect()
     }
 
-    fn collect_errors(&self) -> Errors {
-        let mut ec = Errors::new();
+    fn collect_errors(&self) -> Vec<DragonError> {
+        let mut errors = Vec::new();
         if !Path::new(&self.test_dir).exists() {
-            ec.push(DragonError::Config(format!(
+            errors.push(DragonError::Config(format!(
                 "Cannot find test directory: {}", self.test_dir
             )));
         }
-        for item in self.executables.iter().map(|e| e.verify())
-            .chain(self.toolchains.iter().map(|t| t.verify()))
-            .chain(self.packages.iter().map(|p| p.verify()))
-        {
-            ec.extend(&item);
-        }
-        ec
+        errors.extend(
+            self.executables.iter().flat_map(|e| e.validate())
+                .chain(self.toolchains.iter().flat_map(|t| t.validate()))
+                .chain(self.packages.iter().flat_map(|p| p.validate()))
+        );
+        errors
     }
 
     pub fn log_test_info(&self) {

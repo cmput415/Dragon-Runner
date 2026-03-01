@@ -2,7 +2,7 @@ use std::fs;
 use std::io::{self, BufRead};
 use std::path::Path;
 
-use crate::error::{DragonError, Errors, Verifiable};
+use crate::error::{DragonError, Validate};
 use crate::util::{file_to_bytes, str_to_bytes};
 
 /// Represents a single test case file with parsed directives.
@@ -164,15 +164,15 @@ impl TestFile {
     }
 }
 
-impl Verifiable for TestFile {
-    fn verify(&self) -> Errors {
-        let mut ec = Errors::new();
+impl Validate for TestFile {
+    fn validate(&self) -> Vec<DragonError> {
+        let mut errors = Vec::new();
         if let DirectiveResult::Err(msg) = &self.expected_out {
-            ec.push(DragonError::TestFile(msg.clone()));
+            errors.push(DragonError::TestFile(msg.clone()));
         }
         if let DirectiveResult::Err(msg) = &self.input_stream {
-            ec.push(DragonError::TestFile(msg.clone()));
+            errors.push(DragonError::TestFile(msg.clone()));
         }
-        ec
+        errors
     }
 }
