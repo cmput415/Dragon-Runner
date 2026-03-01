@@ -1,34 +1,15 @@
-use std::env;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-static DEBUG_LEVEL: AtomicU32 = AtomicU32::new(u32::MAX);
+static DEBUG_LEVEL: AtomicU32 = AtomicU32::new(0);
 
-fn debug_level() -> u32 {
-    let cached = DEBUG_LEVEL.load(Ordering::Relaxed);
-    if cached != u32::MAX {
-        return cached;
-    }
-    let level = env::var("DRAGON_RUNNER_DEBUG")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(0);
-    DEBUG_LEVEL.store(level, Ordering::Relaxed);
-    level
-}
-
-/// Re-read DRAGON_RUNNER_DEBUG from the environment.
-/// Call after setting the env var (e.g. from CLI parsing).
-pub fn refresh_debug_level() {
-    let level = env::var("DRAGON_RUNNER_DEBUG")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(0);
+/// Set the global debug/verbosity level.
+pub fn set_debug_level(level: u32) {
     DEBUG_LEVEL.store(level, Ordering::Relaxed);
 }
 
 /// Log a message at a given verbosity level with indentation.
 pub fn log(level: u32, indent: usize, msg: &str) {
-    if debug_level() >= level {
+    if DEBUG_LEVEL.load(Ordering::Relaxed) >= level {
         println!("{:indent$}{msg}", "", indent = indent);
     }
 }

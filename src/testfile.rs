@@ -3,7 +3,7 @@ use std::io::{self, BufRead};
 use std::path::Path;
 
 use crate::error::{DragonError, Validate};
-use crate::util::{file_to_bytes, str_to_bytes};
+use crate::util::str_to_bytes;
 
 /// Represents a single test case file with parsed directives.
 #[derive(Debug, Clone)]
@@ -101,10 +101,10 @@ impl TestFile {
             ));
         }
 
-        file_to_bytes(&full_path.to_string_lossy())
+        fs::read(&full_path)
             .map(DirectiveResult::Ok)
-            .unwrap_or_else(|| DirectiveResult::Err(format!(
-                "Failed to convert file {} to bytes", full_path.display()
+            .unwrap_or_else(|_| DirectiveResult::Err(format!(
+                "Failed to read file {}", full_path.display()
             )))
     }
 

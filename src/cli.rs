@@ -201,9 +201,7 @@ pub fn parse_cli_args() -> CliAction {
 
             let args = RunnerArgs::from_flags(mode, flags);
 
-            // Set debug environment variable and refresh the logger
-            std::env::set_var("DRAGON_RUNNER_DEBUG", args.verbosity.to_string());
-            crate::log::refresh_debug_level();
+            crate::log::set_debug_level(args.verbosity);
 
             CliAction::Run(args)
         }

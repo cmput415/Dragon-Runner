@@ -19,10 +19,13 @@ static ERROR_LINE_RE: LazyLock<Regex> =
 use crate::config::Executable;
 use crate::testfile::TestFile;
 use crate::toolchain::{Step, ToolChain};
-use crate::util::{file_to_bytes, make_tmp_file};
+use crate::util::make_tmp_file;
 
 /// Reserved exit code for valgrind leak detection.
 pub const VALGRIND_EXIT_CODE: i32 = 111;
+
+const RESERVED_EXIT_CODES: &[i32] = &[VALGRIND_EXIT_CODE];
+const RUNTIME_ERRORS: &[&str] = &["SizeError", "IndexError", "MathError", "StrideError"];
 
 /// Magic parameter values substituted into toolchain step arguments.
 pub struct MagicParams {
@@ -102,8 +105,6 @@ pub struct ToolChainRunner {
     pub timeout: f64,
     /// Extra environment variables to inject into spawned subprocesses (e.g. runtime lib paths).
     pub extra_env: HashMap<String, String>,
-    reserved_exit_codes: Vec<i32>,
-    runtime_errors: Vec<&'static str>,
 }
 
 impl ToolChainRunner {
@@ -112,8 +113,6 @@ impl ToolChainRunner {
             tc,
             timeout,
             extra_env: HashMap::new(),
-            reserved_exit_codes: vec![VALGRIND_EXIT_CODE],
-            runtime_errors: vec!["SizeError", "IndexError", "MathError", "StrideError"],
         }
     }
 
@@ -169,14 +168,14 @@ impl ToolChainRunner {
             let step_time = (cr.time * 10000.0).round() / 10000.0;
 
             // Check reserved exit codes (e.g., valgrind)
-            if self.reserved_exit_codes.contains(&cr.exit_status) {
+            if RESERVED_EXIT_CODES.contains(&cr.exit_status) {
                 if cr.exit_status == VALGRIND_EXIT_CODE {
                     tr.memory_leak = true;
                 }
             }
 
             if cr.exit_status != 0
-                && !self.reserved_exit_codes.contains(&cr.exit_status)
+                && !RESERVED_EXIT_CODES.contains(&cr.exit_status)
             {
                 tr.gen_output = Some(stderr.clone());
                 tr.failing_step = Some(step.name.clone());
@@ -198,7 +197,7 @@ impl ToolChainRunner {
                         tr.did_pass = false;
                         return tr;
                     }
-                    file_to_bytes(out_path).unwrap_or_default()
+                    fs::read(out_path).unwrap_or_default()
                 } else {
                     stdout
                 };
@@ -372,13 +371,11 @@ impl ToolChainRunner {
             return;
         }
 
-        let rt_error = self
-            .runtime_errors
+        let rt_error = RUNTIME_ERRORS
             .iter()
             .find(|e| expected_str.contains(**e))
             .copied();
-        let did_raise_rt = self
-            .runtime_errors
+        let did_raise_rt = RUNTIME_ERRORS
             .iter()
             .any(|e| produced_str.contains(e));
 

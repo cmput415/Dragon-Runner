@@ -25,15 +25,6 @@ pub fn str_to_bytes(s: &str, chop_newline: bool) -> Vec<u8> {
     s.as_bytes().to_vec()
 }
 
-/// Read a file as bytes, returning None on error.
-pub fn file_to_bytes(path: &str) -> Option<Vec<u8>> {
-    fs::read(path).ok()
-}
-
-/// Read a file as a UTF-8 string, returning None on error.
-pub fn file_to_str(path: &str) -> Option<String> {
-    fs::read_to_string(path).ok()
-}
 
 /// Create a temporary file with the given content and execute permissions.
 /// Returns the path to the temp file, or None on error.
@@ -65,7 +56,3 @@ pub fn truncated_bytes(data: &[u8], max_bytes: usize) -> Vec<u8> {
     result
 }
 
-/// Convert bytes to string with lossy UTF-8 fallback.
-pub fn bytes_to_str(data: &[u8]) -> String {
-    String::from_utf8_lossy(data).into_owned()
-}
