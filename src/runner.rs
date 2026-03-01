@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::fs;
+use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::{Arc, LazyLock};
@@ -26,6 +27,14 @@ pub const VALGRIND_EXIT_CODE: i32 = 111;
 
 const RESERVED_EXIT_CODES: &[i32] = &[VALGRIND_EXIT_CODE];
 const RUNTIME_ERRORS: &[&str] = &["SizeError", "IndexError", "MathError", "StrideError"];
+
+/// State threaded between pipeline steps during a toolchain run.
+struct PipelineState {
+    input_file: PathBuf,
+    tmp_handles: Vec<tempfile::TempPath>,
+    command_history: Vec<CommandResult>,
+    memory_leak: bool,
+}
 
 /// Magic parameter values substituted into toolchain step arguments.
 pub struct MagicParams {
@@ -82,17 +91,78 @@ pub struct TestResult {
 }
 
 impl TestResult {
-    pub fn new(test: Arc<TestFile>) -> Self {
+    fn finished(
+        test: &Arc<TestFile>,
+        history: Vec<CommandResult>,
+        output: Vec<u8>,
+        time: f64,
+        memory_leak: bool,
+    ) -> Self {
+        let expected = test.get_expected_out();
         Self {
-            test,
+            did_pass: output == expected,
+            test: Arc::clone(test),
+            did_timeout: false,
+            error_test: false,
+            memory_leak,
+            command_history: history,
+            gen_output: Some(output),
+            time: Some(time),
+            failing_step: None,
+        }
+    }
+
+    fn timeout(
+        test: &Arc<TestFile>,
+        history: Vec<CommandResult>,
+        step_name: &str,
+        timeout: f64,
+    ) -> Self {
+        Self {
+            test: Arc::clone(test),
+            did_pass: false,
+            did_timeout: true,
+            error_test: false,
+            memory_leak: false,
+            command_history: history,
+            gen_output: None,
+            time: Some(timeout),
+            failing_step: Some(step_name.to_string()),
+        }
+    }
+
+    fn fail(test: &Arc<TestFile>, history: Vec<CommandResult>, failing_step: Option<String>) -> Self {
+        Self {
+            test: Arc::clone(test),
             did_pass: false,
             did_timeout: false,
             error_test: false,
             memory_leak: false,
-            command_history: Vec::new(),
+            command_history: history,
             gen_output: None,
             time: None,
-            failing_step: None,
+            failing_step,
+        }
+    }
+
+    fn error(
+        test: &Arc<TestFile>,
+        history: Vec<CommandResult>,
+        stderr: Vec<u8>,
+        step_name: &str,
+        did_pass: bool,
+        memory_leak: bool,
+    ) -> Self {
+        Self {
+            test: Arc::clone(test),
+            did_pass,
+            did_timeout: false,
+            error_test: true,
+            memory_leak,
+            command_history: history,
+            gen_output: Some(stderr),
+            time: None,
+            failing_step: Some(step_name.to_string()),
         }
     }
 }
@@ -131,142 +201,137 @@ impl<'a> ToolChainRunner<'a> {
 
     /// Run each step of the toolchain for a given test and executable.
     pub fn run(&self, test: &Arc<TestFile>, exe: &Executable) -> TestResult {
-        let mut input_file = test.path.clone();
-        let expected = test.get_expected_out().to_vec();
-        let mut tr = TestResult::new(Arc::clone(test));
         let tc_len = self.tc.len();
-        // Keep temp file handles alive until the run completes.
-        let mut _tmp_handles: Vec<tempfile::TempPath> = Vec::new();
-        
-        // NOTE: This is super imperative. The logic is complex, and requires a thorough analsis.
-        // I have a hunch it can be simplified. 
-        for (index, step) in self.tc.iter().enumerate() {
-            let last_step = index == tc_len - 1;
+        let init = PipelineState {
+            input_file: test.path.clone(),
+            tmp_handles: Vec::new(),
+            command_history: Vec::new(),
+            memory_leak: false,
+        };
 
-            // Note: there must be some more rustic way to construct the empty vec from false...?
-            let input_stream = if step.uses_ins {
-                test.get_input_stream().to_vec()
-            } else {
-                Vec::new()
-            };
+        let result = self.tc.iter().enumerate().try_fold(init, |state, (index, step)| {
+            self.run_step(state, step, index == tc_len - 1, test, exe)
+        });
 
-            let output_file = self.resolve_output_file(step);
-            let magic = MagicParams {
-                exe_path: exe.exe_path.display().to_string(),
-                input_file: input_file.display().to_string(),
-                output_file: output_file.as_ref().map(|p| p.display().to_string()),
-            };
+        match result {
+            ControlFlow::Break(tr) => tr,
+            ControlFlow::Continue(_) => panic!("Toolchain reached undefined conditions"),
+        }
+    }
 
-            let mut command = self.resolve_command(step, &magic);
+    fn run_step(
+        &self,
+        mut state: PipelineState,
+        step: &Step,
+        last_step: bool,
+        test: &Arc<TestFile>,
+        exe: &Executable,
+    ) -> ControlFlow<TestResult, PipelineState> {
+        let input_stream = if step.uses_ins {
+            test.get_input_stream().to_vec()
+        } else {
+            Vec::new()
+        };
 
-            // In memcheck mode, wrap the last step with valgrind
-            if self.memcheck && last_step {
-                // Check that valgrind is installed
-                let valgrind_check = process::Command::new(VALGRIND_BIN)
-                    .arg("--version")
-                    .stdout(process::Stdio::null())
-                    .stderr(process::Stdio::null())
-                    .status();
-                match valgrind_check {
-                    Ok(s) if s.success() => {
-                        // Prepend valgrind flags before the existing command
-                        let mut wrapped = vec![
-                            VALGRIND_BIN.to_string(),
-                            "--leak-check=full".to_string(),
-                            format!("--error-exitcode={VALGRIND_EXIT_CODE}"),
-                            "--log-file=/dev/null".to_string(),
-                        ];
-                        wrapped.extend(command.args);
-                        command.args = wrapped;
-                    }
-                    _ => {
-                        tr.did_pass = false;
-                        tr.failing_step = Some("memcheck: valgrind not found".to_string());
-                        return tr;
-                    }
-                }
-            }
+        let output_file = self.resolve_output_file(step);
+        let magic = MagicParams {
+            exe_path: exe.exe_path.display().to_string(),
+            input_file: state.input_file.display().to_string(),
+            output_file: output_file.as_ref().map(|p| p.display().to_string()),
+        };
 
-            let cr = self.run_command(&command, &input_stream);
+        let mut command = self.resolve_command(step, &magic);
 
-            // Check timeout
-            if cr.timed_out {
-                tr.did_pass = false;
-                tr.did_timeout = true;
-                tr.failing_step = Some(step.name.clone());
-                tr.time = Some(self.timeout);
-                tr.command_history.push(cr);
-                return tr;
-            }
-
-            // Check if OS failed to exec
-            if cr.exit_status == -1 {
-                tr.did_pass = false;
-                tr.command_history.push(cr);
-                return tr;
-            }
-
-            let stdout = cr.stdout.clone();
-            let stderr = cr.stderr.clone();
-            let step_time = (cr.time * 10000.0).round() / 10000.0;
-
-            // Check reserved exit codes (e.g., valgrind)
-            if RESERVED_EXIT_CODES.contains(&cr.exit_status) {
-                if cr.exit_status == VALGRIND_EXIT_CODE {
-                    tr.memory_leak = true;
-                }
-            }
-
-            if cr.exit_status != 0
-                && !RESERVED_EXIT_CODES.contains(&cr.exit_status)
-            {
-                tr.gen_output = Some(stderr.clone());
-                tr.failing_step = Some(step.name.clone());
-                tr.error_test = true;
-
-                if step.allow_error {
-                    self.handle_error_test(&mut tr, &stderr, &expected);
-                    tr.command_history.push(cr);
-                    return tr;
-                } else {
-                    tr.did_pass = false;
-                    tr.command_history.push(cr);
-                    return tr;
-                }
-            } else if last_step {
-                let final_stdout = if let Some(ref out_path) = output_file {
-                    if !out_path.exists() {
-                        tr.command_history.push(cr);
-                        tr.did_pass = false;
-                        return tr;
-                    }
-                    fs::read(out_path).unwrap_or_default()
-                } else {
-                    stdout
-                };
-
-                tr.time = Some(step_time);
-                tr.gen_output = Some(final_stdout.clone());
-                tr.did_pass = final_stdout == expected;
-                tr.command_history.push(cr);
-                return tr;
-            } else {
-                // Set up next step's input
-                input_file = output_file.unwrap_or_else(|| {
-                    match make_tmp_file(&stdout) {
-                        Some((path, handle)) => {
-                            _tmp_handles.push(handle);
-                            path
-                        }
-                        None => PathBuf::new(),
-                    }
-                });
-                tr.command_history.push(cr);
-            }
+        // In memcheck mode, wrap the last step with valgrind
+        if self.memcheck && last_step && !self.wrap_valgrind(&mut command) {
+            return ControlFlow::Break(TestResult::fail(
+                test, state.command_history,
+                Some("memcheck: valgrind not found".to_string()),
+            ));
         }
 
-        // Unreachable for well-defined toolchains
-        panic!("Toolchain reached undefined conditions during execution.");
+        let cr = self.run_command(&command, &input_stream);
+
+        if cr.timed_out {
+            state.command_history.push(cr);
+            return ControlFlow::Break(TestResult::timeout(
+                test, state.command_history, &step.name, self.timeout,
+            ));
+        }
+
+        if cr.exit_status == -1 {
+            state.command_history.push(cr);
+            return ControlFlow::Break(TestResult::fail(
+                test, state.command_history, None,
+            ));
+        }
+
+        let stdout = cr.stdout.clone();
+        let stderr = cr.stderr.clone();
+        let step_time = (cr.time * 10000.0).round() / 10000.0;
+
+        let exit_status = cr.exit_status;
+
+        if exit_status == VALGRIND_EXIT_CODE {
+            state.memory_leak = true;
+        }
+
+        state.command_history.push(cr);
+
+        if exit_status != 0 && !RESERVED_EXIT_CODES.contains(&exit_status) {
+            let did_pass = step.allow_error
+                && self.check_error_test(&stderr, test.get_expected_out());
+            return ControlFlow::Break(TestResult::error(
+                test, state.command_history, stderr,
+                &step.name, did_pass, state.memory_leak,
+            ));
+        }
+
+        if last_step {
+            let final_output = match output_file {
+                Some(ref p) if p.exists() => fs::read(p).unwrap_or_default(),
+                Some(_) => return ControlFlow::Break(TestResult::finished(
+                    test, state.command_history, Vec::new(), step_time, state.memory_leak,
+                )),
+                None => stdout,
+            };
+            return ControlFlow::Break(TestResult::finished(
+                test, state.command_history, final_output, step_time, state.memory_leak,
+            ));
+        }
+
+        // Not the last step — continue the pipeline
+        state.input_file = output_file.unwrap_or_else(|| {
+            match make_tmp_file(&stdout) {
+                Some((path, handle)) => {
+                    state.tmp_handles.push(handle);
+                    path
+                }
+                None => PathBuf::new(),
+            }
+        });
+        ControlFlow::Continue(state)
+    }
+
+    /// Prepend valgrind flags to command. Returns false if valgrind is not installed.
+    fn wrap_valgrind(&self, command: &mut ResolvedCommand) -> bool {
+        let ok = process::Command::new(VALGRIND_BIN)
+            .arg("--version")
+            .stdout(process::Stdio::null())
+            .stderr(process::Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success());
+        if ok {
+            let mut wrapped = vec![
+                VALGRIND_BIN.to_string(),
+                "--leak-check=full".to_string(),
+                format!("--error-exitcode={VALGRIND_EXIT_CODE}"),
+                "--log-file=/dev/null".to_string(),
+            ];
+            wrapped.append(&mut command.args);
+            command.args = wrapped;
+        }
+        ok
     }
 
     fn run_command(&self, command: &ResolvedCommand, stdin: &[u8]) -> CommandResult {
@@ -391,25 +456,18 @@ impl<'a> ToolChainRunner<'a> {
         }
     }
 
-    fn handle_error_test(&self, tr: &mut TestResult, produced: &[u8], expected: &[u8]) {
+    fn check_error_test(&self, produced: &[u8], expected: &[u8]) -> bool {
         let produced_str = match std::str::from_utf8(produced) {
-            Ok(s) => s.trim().to_string(),
-            Err(_) => {
-                tr.did_pass = false;
-                return;
-            }
+            Ok(s) => s.trim(),
+            Err(_) => return false,
         };
         let expected_str = match std::str::from_utf8(expected) {
-            Ok(s) => s.trim().to_string(),
-            Err(_) => {
-                tr.did_pass = false;
-                return;
-            }
+            Ok(s) => s.trim(),
+            Err(_) => return false,
         };
 
         if produced_str.is_empty() || expected_str.is_empty() {
-            tr.did_pass = false;
-            return;
+            return false;
         }
 
         let rt_error = RUNTIME_ERRORS
@@ -424,32 +482,30 @@ impl<'a> ToolChainRunner<'a> {
             if let Some(rt_err) = rt_error {
                 let pattern = format!(r"{}(\s+on\s+Line\s+\d+)?(:.+)?", rt_err);
                 let re = Regex::new(&pattern).unwrap();
-                tr.did_pass = re.is_match(&produced_str) && re.is_match(&expected_str);
+                re.is_match(produced_str) && re.is_match(expected_str)
             } else {
-                tr.did_pass = false;
+                false
             }
         } else {
-            let prod_error = ERROR_KIND_RE.captures(&produced_str);
-            let exp_error = ERROR_KIND_RE.captures(&expected_str);
-            let prod_line = ERROR_LINE_RE.captures(&produced_str);
-            let exp_line = ERROR_LINE_RE.captures(&expected_str);
+            let prod_error = ERROR_KIND_RE.captures(produced_str);
+            let exp_error = ERROR_KIND_RE.captures(expected_str);
+            let prod_line = ERROR_LINE_RE.captures(produced_str);
+            let exp_line = ERROR_LINE_RE.captures(expected_str);
 
             // MainError hack
             if let (Some(ref pe), Some(ref ee)) = (&prod_error, &exp_error) {
                 if pe.get(1).map(|m| m.as_str()) == Some("MainError")
                     && ee.get(1).map(|m| m.as_str()) == Some("MainError")
                 {
-                    tr.did_pass = true;
-                    return;
+                    return true;
                 }
             }
 
-            if prod_error.is_some() && exp_error.is_some() && prod_line.is_some() && exp_line.is_some()
-            {
-                tr.did_pass = prod_line.unwrap().get(1).map(|m| m.as_str())
-                    == exp_line.unwrap().get(1).map(|m| m.as_str());
-            } else {
-                tr.did_pass = false;
+            match (prod_error, exp_error, prod_line, exp_line) {
+                (Some(_), Some(_), Some(pl), Some(el)) => {
+                    pl.get(1).map(|m| m.as_str()) == el.get(1).map(|m| m.as_str())
+                }
+                _ => false,
             }
         }
     }
