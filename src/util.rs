@@ -27,18 +27,16 @@ pub fn str_to_bytes(s: &str, chop_newline: bool) -> Vec<u8> {
 
 
 /// Create a temporary file with the given content and execute permissions.
-/// Returns the path to the temp file, or None on error.
-pub fn make_tmp_file(content: &[u8]) -> Option<String> {
+/// Returns (path_string, handle). The caller must keep the handle alive
+/// for as long as the temp file is needed — it is deleted on drop.
+pub fn make_tmp_file(content: &[u8]) -> Option<(String, tempfile::TempPath)> {
     let mut tmp = tempfile::NamedTempFile::new().ok()?;
     tmp.write_all(content).ok()?;
     let path = tmp.into_temp_path();
-    // Set execute permissions
     let perms = fs::Permissions::from_mode(0o700);
     fs::set_permissions(&path, perms).ok()?;
-    let path_str = path.to_string_lossy().to_string();
-    // Leak the temp path so it persists (matches Python behavior)
-    std::mem::forget(path);
-    path_str.into()
+    let path_str = path.to_string_lossy().into_owned();
+    Some((path_str, path))
 }
 
 /// Truncate bytes in the middle if they exceed max_bytes.

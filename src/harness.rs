@@ -32,6 +32,12 @@ pub trait TestHarness {
     fn iterate(&mut self, config: &Config, cli_args: &RunnerArgs) {
         self.pre_run_hook();
 
+        let filter_pat = if config.package_filter.is_empty() {
+            None
+        } else {
+            glob::Pattern::new(&config.package_filter.to_lowercase()).ok()
+        };
+
         for exe in &config.executables {
             self.pre_executable_hook(&exe.id);
             log(0, 0, &format!("Running executable: {}", exe.id));
@@ -40,7 +46,7 @@ pub trait TestHarness {
             let mut exe_total = 0;
 
             for tc in &config.toolchains {
-                let runner = ToolChainRunner::new(tc.clone(), cli_args.timeout)
+                let runner = ToolChainRunner::new(tc, cli_args.timeout)
                     .with_env(exe_env.clone())
                     .with_memcheck(cli_args.mode == Mode::Memcheck);
                 log(0, 1, &format!("Running Toolchain: {}", tc.name));
@@ -53,11 +59,9 @@ pub trait TestHarness {
                     log(0, 2, &format!("Entering package {}", pkg.name));
 
                     for spkg in &pkg.subpackages {
-                        if !config.package_filter.is_empty() {
-                            if let Ok(pat) = glob::Pattern::new(&config.package_filter.to_lowercase()) {
-                                if !pat.matches(&spkg.path.to_lowercase()) {
-                                    continue;
-                                }
+                        if let Some(ref pat) = filter_pat {
+                            if !pat.matches(&spkg.path.to_lowercase()) {
+                                continue;
                             }
                         }
 
@@ -111,13 +115,12 @@ pub trait TestHarness {
 // ---------------------------------------------------------------------------
 
 pub struct RegularHarness {
-    pub failures: Vec<TestResult>,
     pub passed: bool,
 }
 
 impl RegularHarness {
     pub fn new() -> Self {
-        Self { failures: Vec::new(), passed: true }
+        Self { passed: true }
     }
 }
 
@@ -135,13 +138,8 @@ impl TestHarness for RegularHarness {
             let tag = if result.error_test { "[E-FAIL] " } else { "[FAIL] " };
             log(0, indent, &format!("{}{}", tag.red(), test_name));
             self.passed = false;
-            self.failures.push(result);
         }
         counters.test_count += 1;
-    }
-
-    fn post_executable_hook(&mut self) {
-        self.failures.clear();
     }
 }
 
@@ -206,7 +204,7 @@ impl TournamentHarness {
             println!("\nToolchain: {}", tc.name);
 
             for def_exe in &defending_exes {
-                let runner = ToolChainRunner::new(tc.clone(), cli_args.timeout)
+                let runner = ToolChainRunner::new(tc, cli_args.timeout)
                     .with_env(def_exe.runtime_env());
                 let feedback_file = format!("{}-{}feedback.txt", def_exe.id, tc.name);
                 let mut row_cells: Vec<String> = vec![def_exe.id.clone()];
@@ -307,7 +305,6 @@ pub struct PerformanceTestingHarness {
     pub cur_col: Vec<String>,
     pub testfile_col: Vec<String>,
     pub first_exec: bool,
-    pub failures: Vec<TestResult>,
 }
 
 impl PerformanceTestingHarness {
@@ -318,7 +315,6 @@ impl PerformanceTestingHarness {
             cur_col: Vec::new(),
             testfile_col: vec!["Test".into()],
             first_exec: true,
-            failures: Vec::new(),
         }
     }
 }
@@ -339,7 +335,6 @@ impl TestHarness for PerformanceTestingHarness {
             self.cur_col.push(result.time.map(|t| format!("{t:.4}")).unwrap_or_default());
         } else {
             self.cur_col.push(format!("{:.4}", cli_args.timeout));
-            self.failures.push(result);
         }
         counters.test_count += 1;
     }
