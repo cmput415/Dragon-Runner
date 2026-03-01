@@ -3,11 +3,18 @@ use std::env;
 use std::fs;
 use std::path::Path;
 use std::process;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
 use regex::Regex;
 use wait_timeout::ChildExt;
+
+static ENV_VAR_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\$(\w+)|\$\{(\w+)\}").unwrap());
+static ERROR_KIND_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)(\w+Error)").unwrap());
+static ERROR_LINE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)on\s+Line\s+(\d+)").unwrap());
 
 use crate::config::Executable;
 use crate::testfile::TestFile;
@@ -324,10 +331,9 @@ impl ToolChainRunner {
     }
 
     fn replace_env_vars(&self, command: &mut Command) {
-        let re = Regex::new(r"\$(\w+)|\$\{(\w+)\}").unwrap();
         for arg in command.args.iter_mut() {
             let original = arg.clone();
-            for caps in re.captures_iter(&original) {
+            for caps in ENV_VAR_RE.captures_iter(&original) {
                 let var_name = caps
                     .get(1)
                     .or_else(|| caps.get(2))
@@ -385,13 +391,10 @@ impl ToolChainRunner {
                 tr.did_pass = false;
             }
         } else {
-            let error_re = Regex::new(r"(?i)(\w+Error)").unwrap();
-            let line_re = Regex::new(r"(?i)on\s+Line\s+(\d+)").unwrap();
-
-            let prod_error = error_re.captures(&produced_str);
-            let exp_error = error_re.captures(&expected_str);
-            let prod_line = line_re.captures(&produced_str);
-            let exp_line = line_re.captures(&expected_str);
+            let prod_error = ERROR_KIND_RE.captures(&produced_str);
+            let exp_error = ERROR_KIND_RE.captures(&expected_str);
+            let prod_line = ERROR_LINE_RE.captures(&produced_str);
+            let exp_line = ERROR_LINE_RE.captures(&expected_str);
 
             // MainError hack
             if let (Some(ref pe), Some(ref ee)) = (&prod_error, &exp_error) {
