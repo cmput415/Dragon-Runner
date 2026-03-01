@@ -5,6 +5,9 @@ use std::path::Path;
 use crate::error::{DragonError, Validate};
 use crate::util::str_to_bytes;
 
+/// Result of parsing a directive — either successfully read bytes, or an error message.
+pub type DirectiveResult = Result<Vec<u8>, String>;
+
 /// Represents a single test case file with parsed directives.
 #[derive(Debug, Clone)]
 pub struct TestFile {
@@ -15,26 +18,6 @@ pub struct TestFile {
     pub comment_syntax: String,
     pub expected_out: DirectiveResult,
     pub input_stream: DirectiveResult,
-}
-
-/// Result of parsing a directive — either successfully read bytes, or an error message.
-#[derive(Debug, Clone)]
-pub enum DirectiveResult {
-    Ok(Vec<u8>),
-    Err(String),
-}
-
-impl DirectiveResult {
-    pub fn as_bytes(&self) -> &[u8] {
-        match self {
-            DirectiveResult::Ok(bytes) => bytes,
-            DirectiveResult::Err(_) => b"",
-        }
-    }
-
-    pub fn is_err(&self) -> bool {
-        matches!(self, DirectiveResult::Err(_))
-    }
 }
 
 impl TestFile {
@@ -55,11 +38,11 @@ impl TestFile {
     }
 
     pub fn get_expected_out(&self) -> &[u8] {
-        self.expected_out.as_bytes()
+        self.expected_out.as_deref().unwrap_or(b"")
     }
 
     pub fn get_input_stream(&self) -> &[u8] {
-        self.input_stream.as_bytes()
+        self.input_stream.as_deref().unwrap_or(b"")
     }
 
     /// Resolve inline vs file directives into final byte content.
@@ -73,18 +56,18 @@ impl TestFile {
         let file_ref = Self::parse_directive(test_path, comment_syntax, file_dir);
 
         match (inline, file_ref) {
-            (Some(Ok(_)), Some(Ok(_))) => DirectiveResult::Err(format!(
+            (Some(Ok(_)), Some(Ok(_))) => Err(format!(
                 "Directive Conflict for test {}: Supplied both {inline_dir} and {file_dir}",
                 Path::new(test_path).file_name().unwrap_or_default().to_string_lossy(),
             )),
 
-            (Some(Ok(bytes)), _) => DirectiveResult::Ok(bytes),
-            (Some(Err(e)), _) => DirectiveResult::Err(e),
+            (Some(Ok(bytes)), _) => Ok(bytes),
+            (Some(Err(e)), _) => Err(e),
 
             (None, Some(Ok(ref_bytes))) => Self::read_referenced_file(test_path, file_dir, &ref_bytes),
-            (None, Some(Err(e))) => DirectiveResult::Err(e),
+            (None, Some(Err(e))) => Err(e),
 
-            (None, None) => DirectiveResult::Ok(Vec::new()),
+            (None, None) => Ok(Vec::new()),
         }
     }
 
@@ -95,17 +78,14 @@ impl TestFile {
         let full_path = parent.join(&file_str);
 
         if !full_path.exists() {
-            return DirectiveResult::Err(format!(
+            return Err(format!(
                 "Failed to locate path supplied to {directive}\n\tTest:{test_path}\n\tPath:{}\n",
                 full_path.display(),
             ));
         }
 
         fs::read(&full_path)
-            .map(DirectiveResult::Ok)
-            .unwrap_or_else(|_| DirectiveResult::Err(format!(
-                "Failed to read file {}", full_path.display()
-            )))
+            .map_err(|_| format!("Failed to read file {}", full_path.display()))
     }
 
     /// Scan a test file for lines matching `// DIRECTIVE:value` and collect the values.
@@ -114,7 +94,7 @@ impl TestFile {
         test_path: &str,
         comment_syntax: &str,
         directive: &str,
-    ) -> Option<Result<Vec<u8>, String>> {
+    ) -> Option<DirectiveResult> {
         let file = match fs::File::open(test_path) {
             Ok(f) => f,
             Err(_) => return Some(Err(format!(
@@ -167,10 +147,10 @@ impl TestFile {
 impl Validate for TestFile {
     fn validate(&self) -> Vec<DragonError> {
         let mut errors = Vec::new();
-        if let DirectiveResult::Err(msg) = &self.expected_out {
+        if let Err(msg) = &self.expected_out {
             errors.push(DragonError::TestFile(msg.clone()));
         }
-        if let DirectiveResult::Err(msg) = &self.input_stream {
+        if let Err(msg) = &self.input_stream {
             errors.push(DragonError::TestFile(msg.clone()));
         }
         errors

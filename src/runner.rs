@@ -35,15 +35,13 @@ pub struct MagicParams {
 }
 
 /// A resolved command ready to execute.
-pub struct Command {
+pub struct ResolvedCommand {
     pub args: Vec<String>,
-    pub cmd: String,
 }
 
-impl Command {
+impl ResolvedCommand {
     pub fn new(args: Vec<String>) -> Self {
-        let cmd = args.first().cloned().unwrap_or_default();
-        Self { args, cmd }
+        Self { args }
     }
 }
 
@@ -99,12 +97,16 @@ impl TestResult {
     }
 }
 
+const VALGRIND_BIN: &str = "valgrind";
+
 /// Runs a toolchain against a test file and executable.
 pub struct ToolChainRunner {
     pub tc: ToolChain,
     pub timeout: f64,
     /// Extra environment variables to inject into spawned subprocesses (e.g. runtime lib paths).
     pub extra_env: HashMap<String, String>,
+    /// When true, automatically wrap the last toolchain step with valgrind.
+    pub memcheck: bool,
 }
 
 impl ToolChainRunner {
@@ -113,11 +115,17 @@ impl ToolChainRunner {
             tc,
             timeout,
             extra_env: HashMap::new(),
+            memcheck: false,
         }
     }
 
     pub fn with_env(mut self, env: HashMap<String, String>) -> Self {
         self.extra_env = env;
+        self
+    }
+
+    pub fn with_memcheck(mut self, memcheck: bool) -> Self {
+        self.memcheck = memcheck;
         self
     }
 
@@ -143,7 +151,36 @@ impl ToolChainRunner {
                 output_file: output_file.clone(),
             };
 
-            let command = self.resolve_command(step, &magic);
+            let mut command = self.resolve_command(step, &magic);
+
+            // In memcheck mode, wrap the last step with valgrind
+            if self.memcheck && last_step {
+                // Check that valgrind is installed
+                let valgrind_check = process::Command::new(VALGRIND_BIN)
+                    .arg("--version")
+                    .stdout(process::Stdio::null())
+                    .stderr(process::Stdio::null())
+                    .status();
+                match valgrind_check {
+                    Ok(s) if s.success() => {
+                        // Prepend valgrind flags before the existing command
+                        let mut wrapped = vec![
+                            VALGRIND_BIN.to_string(),
+                            "--leak-check=full".to_string(),
+                            format!("--error-exitcode={VALGRIND_EXIT_CODE}"),
+                            "--log-file=/dev/null".to_string(),
+                        ];
+                        wrapped.extend(command.args);
+                        command.args = wrapped;
+                    }
+                    _ => {
+                        tr.did_pass = false;
+                        tr.failing_step = Some("memcheck: valgrind not found".to_string());
+                        return tr;
+                    }
+                }
+            }
+
             let cr = self.run_command(&command, &input_stream);
 
             // Check timeout
@@ -220,8 +257,8 @@ impl ToolChainRunner {
         panic!("Toolchain reached undefined conditions during execution.");
     }
 
-    fn run_command(&self, command: &Command, stdin: &[u8]) -> CommandResult {
-        let mut cr = CommandResult::new(&command.cmd);
+    fn run_command(&self, command: &ResolvedCommand, stdin: &[u8]) -> CommandResult {
+        let mut cr = CommandResult::new(&command.args[0]);
         let start = Instant::now();
 
         let mut cmd = process::Command::new(&command.args[0]);
@@ -293,10 +330,10 @@ impl ToolChainRunner {
         })
     }
 
-    fn resolve_command(&self, step: &Step, params: &MagicParams) -> Command {
+    fn resolve_command(&self, step: &Step, params: &MagicParams) -> ResolvedCommand {
         let mut args = vec![step.exe_path.clone()];
         args.extend(step.arguments.iter().cloned());
-        let mut command = Command::new(args);
+        let mut command = ResolvedCommand::new(args);
         self.replace_magic_args(&mut command, params);
         self.replace_env_vars(&mut command);
         // Make exe path absolute if relative
@@ -308,11 +345,10 @@ impl ToolChainRunner {
                 command.args[0] = abs.to_string_lossy().into_owned();
             }
         }
-        command.cmd = command.args[0].clone();
         command
     }
 
-    fn replace_magic_args(&self, command: &mut Command, params: &MagicParams) {
+    fn replace_magic_args(&self, command: &mut ResolvedCommand, params: &MagicParams) {
         for arg in command.args.iter_mut() {
             if arg.contains("$EXE") {
                 *arg = arg.replace("$EXE", &params.exe_path);
@@ -324,12 +360,9 @@ impl ToolChainRunner {
                 }
             }
         }
-        if let Some(first) = command.args.first() {
-            command.cmd = first.clone();
-        }
     }
 
-    fn replace_env_vars(&self, command: &mut Command) {
+    fn replace_env_vars(&self, command: &mut ResolvedCommand) {
         for arg in command.args.iter_mut() {
             let original = arg.clone();
             for caps in ENV_VAR_RE.captures_iter(&original) {
@@ -504,6 +537,71 @@ mod tests {
         let config = create_config("gccFailConfig.json");
         assert!(config.errors.is_empty(), "config errors: {:?}", config.errors);
         run_tests_for_config(&config, false);
+    }
+
+    /// Memcheck on clean C programs (gccPassConfig) — no leaks expected.
+    #[test]
+    fn test_memcheck_clean_programs() {
+        let config = create_config("gccPassConfig.json");
+        assert!(config.errors.is_empty(), "config errors: {:?}", config.errors);
+        for exe in &config.executables {
+            for tc in &config.toolchains {
+                let runner = ToolChainRunner::new(tc.clone(), 10.0)
+                    .with_env(exe.runtime_env())
+                    .with_memcheck(true);
+                for pkg in &config.packages {
+                    for spkg in &pkg.subpackages {
+                        for test in &spkg.tests {
+                            let result = runner.run(test, exe);
+                            assert!(
+                                result.did_pass,
+                                "Clean test {} should pass with memcheck",
+                                test.file,
+                            );
+                            assert!(
+                                !result.memory_leak,
+                                "Clean test {} should not have memory leak",
+                                test.file,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Memcheck on MemoryLeaks package — leaky programs should be flagged.
+    #[test]
+    fn test_memcheck_detects_leaks() {
+        let config = create_config("gccMemcheckConfig.json");
+        assert!(config.errors.is_empty(), "config errors: {:?}", config.errors);
+        for exe in &config.executables {
+            for tc in &config.toolchains {
+                let runner = ToolChainRunner::new(tc.clone(), 10.0)
+                    .with_env(exe.runtime_env())
+                    .with_memcheck(true);
+                for pkg in &config.packages {
+                    for spkg in &pkg.subpackages {
+                        for test in &spkg.tests {
+                            let result = runner.run(test, exe);
+                            if test.path.contains("leaky") {
+                                assert!(
+                                    result.memory_leak,
+                                    "Leaky test {} should be detected as memory leak",
+                                    test.file,
+                                );
+                            } else if test.path.contains("safe") && test.file.contains("001_safe") {
+                                assert!(
+                                    !result.memory_leak,
+                                    "Safe test {} should not have memory leak",
+                                    test.file,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #[test]

@@ -2,8 +2,9 @@ use std::fmt;
 
 use clap::{Args, Parser, Subcommand};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Mode {
+    #[default]
     Regular,
     Tournament,
     Perf,
@@ -21,9 +22,13 @@ impl fmt::Display for Mode {
     }
 }
 
-/// Shared flags available in all modes.
-#[derive(Args, Debug, Clone)]
-pub struct CommonFlags {
+/// Shared flags available in all modes (also used as the runtime args type).
+#[derive(Args, Debug, Clone, Default)]
+pub struct RunnerArgs {
+    /// Set by the subcommand, not by clap.
+    #[arg(skip)]
+    pub mode: Mode,
+
     /// Path to the JSON configuration file
     pub config_file: String,
 
@@ -81,22 +86,22 @@ pub enum Commands {
     /// Run in regular mode (default)
     Regular {
         #[command(flatten)]
-        flags: CommonFlags,
+        flags: RunnerArgs,
     },
     /// Run in tournament/grading mode
     Tournament {
         #[command(flatten)]
-        flags: CommonFlags,
+        flags: RunnerArgs,
     },
     /// Run performance tests
     Perf {
         #[command(flatten)]
-        flags: CommonFlags,
+        flags: RunnerArgs,
     },
     /// Run with memory checking (valgrind)
     Memcheck {
         #[command(flatten)]
-        flags: CommonFlags,
+        flags: RunnerArgs,
     },
     /// Run a grading script
     Script {
@@ -104,60 +109,6 @@ pub enum Commands {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
-}
-
-#[derive(Debug, Clone)]
-pub struct RunnerArgs {
-    pub mode: Mode,
-    pub config_file: String,
-    pub output: String,
-    pub failure_log: String,
-    pub debug_package: String,
-    pub package_filter: String,
-    pub timeout: f64,
-    pub time: bool,
-    pub verbosity: u32,
-    pub verify: bool,
-    pub show_testcase: bool,
-    pub fast_fail: bool,
-}
-
-impl Default for RunnerArgs {
-    fn default() -> Self {
-        Self {
-            mode: Mode::Regular,
-            config_file: String::new(),
-            output: String::new(),
-            failure_log: String::new(),
-            debug_package: String::new(),
-            package_filter: String::new(),
-            timeout: 2.0,
-            time: false,
-            verbosity: 0,
-            verify: false,
-            show_testcase: false,
-            fast_fail: false,
-        }
-    }
-}
-
-impl RunnerArgs {
-    fn from_flags(mode: Mode, flags: CommonFlags) -> Self {
-        Self {
-            mode,
-            config_file: flags.config_file,
-            output: flags.output,
-            failure_log: flags.failure_log,
-            debug_package: flags.debug_package,
-            package_filter: flags.package_filter,
-            timeout: flags.timeout,
-            time: flags.time,
-            verbosity: flags.verbosity as u32,
-            verify: flags.verify,
-            show_testcase: flags.show_testcase,
-            fast_fail: flags.fast_fail,
-        }
-    }
 }
 
 /// Result of parsing CLI arguments — either a runner mode or a script invocation.
@@ -191,17 +142,16 @@ pub fn parse_cli_args() -> CliAction {
     match cli.command {
         Commands::Script { args } => CliAction::Script(args),
         commands => {
-            let (mode, flags) = match commands {
+            let (mode, mut args) = match commands {
                 Commands::Regular { flags } => (Mode::Regular, flags),
                 Commands::Tournament { flags } => (Mode::Tournament, flags),
                 Commands::Perf { flags } => (Mode::Perf, flags),
                 Commands::Memcheck { flags } => (Mode::Memcheck, flags),
                 Commands::Script { .. } => unreachable!(),
             };
+            args.mode = mode;
 
-            let args = RunnerArgs::from_flags(mode, flags);
-
-            crate::log::set_debug_level(args.verbosity);
+            crate::log::set_debug_level(args.verbosity as u32);
 
             CliAction::Run(args)
         }
