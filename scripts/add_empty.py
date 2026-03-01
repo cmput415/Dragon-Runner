@@ -12,6 +12,7 @@ import string
 from pathlib import Path
 from typing import List
 from base import Script
+from key import Key
 
 
 class AddEmptyScript(Script):
@@ -30,42 +31,22 @@ class AddEmptyScript(Script):
             prog="add_empty",
             description="Add empty test cases to test packages"
         )
-        parser.add_argument("key_file", type=Path, help="Key file which has a line for each (SID, GH_Username) pair")
+        parser.add_argument("key_file", type=Path, help="Path to CSV key file")
         parser.add_argument("search_path", type=Path, help="Path to search for test files")
         parser.add_argument("empty_content", type=str, help="Empty content to write into files")
         return parser
 
     @staticmethod
-    def load_key(key_path):
-        config = {}
-        with open(key_path) as key_file:
-            for line in key_file.readlines():
-                sid, gh_username = line.strip().split(' ')
-                print("SID: ", sid, "\tGH Username: ", gh_username)
-                config[sid] = gh_username
-        print("Config Loaded...")
-        return config
-
-    @staticmethod
-    def count_files_with_exclusions(directory: Path, excluded_extensions: list) -> int:
-        count = 0
-        for path in directory.rglob('*'):
-            if path.is_file():
-                if path.suffix.lower() not in excluded_extensions:
-                    count += 1
-        return count
-
-    @staticmethod
     def add_empty(key_file: Path, search_path: Path, empty_content: str):
-        config = AddEmptyScript.load_key(key_file)
+        key = Key(key_file)
 
         if not search_path.is_dir():
-            error = "Could not create test directory."
-            print(error)
+            print("Could not find search directory.")
             return 1
 
         all_fine = True
-        for (sid, gh_user) in config.items():
+        for rec in key.iter_students():
+            sid = rec.sid
             all_matches = list(search_path.rglob(sid))
             if len(all_matches) == 0:
                 print(f"Can not find a directory matching: {sid} in {search_path.name}")
@@ -90,14 +71,14 @@ class AddEmptyScript(Script):
 
             all_fine = False
             while test_count < 5:
-                suffix= ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+                suffix = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
                 file_path = sid_test_dir / f"TA_empty_{test_count+1}_{suffix}.in"
                 file_path.write_text(empty_content)
                 test_count += 1
                 print(f"{sid} - Writing an empty file: {file_path.name}...")
 
         if all_fine:
-            print("All students submited at least five testcases!")
+            print("All students submitted at least five testcases!")
 
     @classmethod
     def main(cls, args: List[str]) -> int:

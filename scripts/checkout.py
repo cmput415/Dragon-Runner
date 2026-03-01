@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 from base import Script
+from key import Key
 
 
 class CheckoutScript(Script):
@@ -28,6 +29,8 @@ class CheckoutScript(Script):
                           help='Directory of repositories to checkout')
         parser.add_argument('checkout_time',
                           help='Checkout time in format: "YYYY-MM-DD HH:MM:SS"')
+        parser.add_argument("--key", type=Path, default=None, help="Path to CSV key file")
+        parser.add_argument("--assignment", type=str, default=None, help="Assignment column name from key file")
         return parser
 
     @classmethod
@@ -65,9 +68,17 @@ class CheckoutScript(Script):
         return result.returncode == 0
 
     @classmethod
-    def process_repositories(cls, submissions_dir: Path, checkout_time: str):
+    def process_repositories(cls, submissions_dir: Path, checkout_time: str, key_path=None, assignment=None):
+        valid_repos = None
+        if key_path and assignment:
+            key = Key(key_path)
+            valid_repos = set(key.iter_repos(assignment))
+
         for submission_dir in sorted(submissions_dir.iterdir()):
             if not submission_dir.is_dir():
+                continue
+
+            if valid_repos is not None and not any(repo in submission_dir.name for repo in valid_repos):
                 continue
 
             git_dir = submission_dir / '.git'
@@ -114,7 +125,8 @@ class CheckoutScript(Script):
         print(f"Using submission dir: {sub}")
         print(f"Checking out to latest commit before: {parsed_args.checkout_time}")
 
-        cls.process_repositories(sub, parsed_args.checkout_time)
+        cls.process_repositories(sub, parsed_args.checkout_time,
+                                  parsed_args.key, parsed_args.assignment)
         return 0
 
 if __name__ == "__main__":

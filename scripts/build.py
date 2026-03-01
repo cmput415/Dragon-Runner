@@ -15,6 +15,7 @@ import argparse
 from pathlib import Path
 from typing import List
 from base import Script
+from key import Key
 
 
 class BuildScript(Script):
@@ -37,14 +38,21 @@ class BuildScript(Script):
         parser.add_argument("log_file", type=Path, help="Path to log file")
         parser.add_argument("dir_prefix", type=str, help="Prefix common to all directories to be built")
         parser.add_argument("n", type=int, default=2, help="n_threads")
+        parser.add_argument("--key", type=Path, default=None, help="Path to CSV key file")
+        parser.add_argument("--assignment", type=str, default=None, help="Assignment column name from key file")
         return parser
 
     @classmethod
-    def build(cls, start_dir, log_path, dir_prefix, n_threads="2"):
+    def build(cls, start_dir, log_path, dir_prefix, n_threads="2", key_path=None, assignment=None):
         root_path = Path(start_dir).absolute()
         log_path = Path(log_path).absolute()
 
         directories = [d for d in root_path.iterdir() if d.is_dir() and (dir_prefix in d.name) and d.name != '.']
+
+        if key_path and assignment:
+            key = Key(key_path)
+            valid_repos = set(key.iter_repos(assignment))
+            directories = [d for d in directories if any(repo in d.name for repo in valid_repos)]
 
         print("Directories to build:")
         for d in directories:
@@ -96,7 +104,8 @@ class BuildScript(Script):
         parser = cls.get_parser()
         parsed_args = parser.parse_args(args)
         parsed_args.log_file.unlink(missing_ok=True)
-        cls.build(parsed_args.start_dir, parsed_args.log_file, parsed_args.dir_prefix, str(parsed_args.n))
+        cls.build(parsed_args.start_dir, parsed_args.log_file, parsed_args.dir_prefix,
+                  str(parsed_args.n), parsed_args.key, parsed_args.assignment)
         return 0
 
 if __name__ == '__main__':

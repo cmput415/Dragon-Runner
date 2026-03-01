@@ -1,33 +1,72 @@
-from typing import Tuple
+import csv
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator
+from typing import Dict, Iterator, List, Optional
+
+
+@dataclass
+class StudentRecord:
+    sid: str
+    ccid: str
+    github_id: str
+    repos: Dict[str, str] = field(default_factory=dict)  # assignment -> repo name
+
 
 class Key:
     def __init__(self, key_path: Path):
         self.key_path = key_path
-        self.sid_repo_suffix_map = {}
+        self._records: List[StudentRecord] = []
+        self._by_sid: Dict[str, StudentRecord] = {}
+        self._by_ccid: Dict[str, StudentRecord] = {}
+        self._by_github: Dict[str, StudentRecord] = {}
+        self.assignments: List[str] = []
 
-        with open(key_path) as key_file:
-            for line in key_file.readlines():
-                sids, repo_suffix = line.strip().split(' ')
-                sid_list = sids.strip().split(',')
-                for sid in sid_list:
-                    self.sid_repo_suffix_map[sid] = repo_suffix
+        with open(key_path, newline='') as f:
+            reader = csv.DictReader(f)
+            headers = reader.fieldnames or []
+            if len(headers) < 3:
+                raise ValueError(f"Key file must have at least SID,CCID,GitHubID columns, got: {headers}")
 
-    def __str__(self):
-        s = ""
-        for k, v in self.sid_repo_suffix_map.items():
-            s += (f"{k}\t{v}")
-        return s
+            self.assignments = headers[3:]
 
-    def get_repo_for_sid(self, sid):
-        return self.sid_repo_suffix_map[sid]
+            for row in reader:
+                vals = list(row.values())
+                sid, ccid, github_id = vals[0].strip(), vals[1].strip(), vals[2].strip()
+                repos = {}
+                for i, assignment in enumerate(self.assignments):
+                    val = vals[3 + i].strip() if vals[3 + i] else ""
+                    if val:
+                        repos[assignment] = val
 
-    def iter_sids(self) -> Iterator[str]:
-        return iter(self.sid_repo_suffix_map.keys())
+                rec = StudentRecord(sid=sid, ccid=ccid, github_id=github_id, repos=repos)
+                self._records.append(rec)
+                self._by_sid[sid] = rec
+                self._by_ccid[ccid] = rec
+                self._by_github[github_id] = rec
 
-    def iter_repos(self) -> Iterator[str]:
-        return iter(set(self.sid_repo_suffix_map.values()))
+    def get(self, identifier: str) -> Optional[StudentRecord]:
+        """Lookup by any of SID, CCID, or GitHubID."""
+        return self._by_sid.get(identifier) or self._by_ccid.get(identifier) or self._by_github.get(identifier)
 
-    def iter_both(self) -> Iterator[Tuple[str, str]]:
-        return iter(self.sid_repo_suffix_map.items())
+    def iter_students(self) -> Iterator[StudentRecord]:
+        return iter(self._records)
+
+    def iter_repos(self, assignment: str) -> Iterator[str]:
+        """Unique repo names for an assignment."""
+        seen = set()
+        for rec in self._records:
+            repo = rec.repos.get(assignment)
+            if repo and repo not in seen:
+                seen.add(repo)
+                yield repo
+
+    def students_for_repo(self, assignment: str, repo: str) -> List[StudentRecord]:
+        """Team members sharing a repo for an assignment."""
+        return [rec for rec in self._records if rec.repos.get(assignment) == repo]
+
+    def get_repo(self, identifier: str, assignment: str) -> Optional[str]:
+        """Repo for a student + assignment."""
+        rec = self.get(identifier)
+        if rec is None:
+            return None
+        return rec.repos.get(assignment)

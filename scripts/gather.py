@@ -12,6 +12,7 @@ import argparse
 from pathlib import Path
 from typing import List
 from base import Script
+from key import Key
 
 
 class GatherScript(Script):
@@ -30,60 +31,50 @@ class GatherScript(Script):
             prog="gather",
             description="Gather all the testfiles in student directories"
         )
-        parser.add_argument("key_file", type=Path, help="Key file which has a line for each (SID, GH_Username) pair")
+        parser.add_argument("key_file", type=Path, help="Path to CSV key file")
         parser.add_argument("search_path", type=Path, help="Path to search for test files")
-        parser.add_argument("project_name", type=Path, help="Path to search for test files")
+        parser.add_argument("--assignment", type=str, required=True,
+            help="Assignment column name from key file (e.g. A1)")
         return parser
 
     @staticmethod
-    def load_key(key_path: Path):
-        config = {}
-        with open(key_path) as key_file:
-            for line in key_file.readlines():
-                sid, gh_username = line.strip().split(' ')
-                print("SID: ", sid, "\tGH Username: ", gh_username)
-                config[sid] = gh_username
-        return config
-
-    @staticmethod
     def gather(key_file: Path,
-           search_path: str,
-           project_name: str,
+           search_path: Path,
+           assignment: str,
            output_dir: str = "submitted-testfiles"):
-        is_rt = True
-        config = GatherScript.load_key(key_file)
+
+        key = Key(key_file)
         search_dir = Path(search_path)
-        project_name = str(project_name).strip()
 
         if not search_dir.is_dir():
-            error = "Could not create test directory."
-            print(error)
+            print("Could not find search directory.")
             return 1
 
-        directories = [d for d in search_dir.iterdir() if d.is_dir() and str(project_name) in d.name]
-        for (sid, gh_user) in config.items():
-            print("Finding submission for: ", gh_user)
+        directories = [d for d in search_dir.iterdir() if d.is_dir()]
+        for rec in key.iter_students():
+            repo = rec.repos.get(assignment)
+            if not repo:
+                print(f"No repo for {rec.sid} in assignment {assignment}, skipping")
+                continue
+
+            print(f"Finding submission for: {rec.ccid} (repo: {repo})")
             for d in directories:
-                if gh_user in str(d):
-                    if is_rt:
-                        suffix = '-'.join(gh_user.split('-')[1:])
-                        expected_test_dir = d / "tests" / "testfiles" / suffix
-                    else:
-                        expected_test_dir = d / "tests" / "testfiles" / sid
+                if repo in d.name:
+                    expected_test_dir = d / "tests" / "testfiles" / rec.sid
 
                     if expected_test_dir.is_dir():
-                        print(f"-- Found properly formatted testfiles for {sid}")
-                        shutil.copytree(expected_test_dir, (Path(output_dir) / sid), dirs_exist_ok=True)
+                        print(f"-- Found properly formatted testfiles for {rec.sid}")
+                        shutil.copytree(expected_test_dir, (Path(output_dir) / rec.sid), dirs_exist_ok=True)
                         break
                     else:
-                        print(f"-- Could NOT find testfiles for {sid}")
+                        print(f"-- Could NOT find testfiles for {rec.sid}")
                         exit(1)
 
     @classmethod
     def main(cls, args: List[str]) -> int:
         parser = cls.get_parser()
         parsed_args = parser.parse_args(args)
-        cls.gather(parsed_args.key_file, parsed_args.search_path, parsed_args.project_name)
+        cls.gather(parsed_args.key_file, parsed_args.search_path, parsed_args.assignment)
         return 0
 
 if __name__ == '__main__':
