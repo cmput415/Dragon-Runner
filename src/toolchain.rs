@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::PathBuf;
 
 use crate::error::{DragonError, Validate};
 
@@ -6,9 +6,9 @@ use crate::error::{DragonError, Validate};
 #[derive(Debug, Clone)]
 pub struct Step {
     pub name: String,
-    pub exe_path: String,
+    pub exe_path: PathBuf,
     pub arguments: Vec<String>,
-    pub output: Option<String>,
+    pub output: Option<PathBuf>,
     pub allow_error: bool,
     pub uses_ins: bool,
     pub uses_runtime: bool,
@@ -18,13 +18,13 @@ impl Step {
     pub fn from_json(data: &serde_json::Value) -> Self {
         Self {
             name: data["stepName"].as_str().unwrap_or("").into(),
-            exe_path: data["executablePath"].as_str().unwrap_or("").into(),
+            exe_path: PathBuf::from(data["executablePath"].as_str().unwrap_or("")),
             arguments: data
                 .get("arguments")
                 .and_then(|v| v.as_array())
                 .map(|arr| arr.iter().filter_map(|v| v.as_str().map(Into::into)).collect())
                 .unwrap_or_default(),
-            output: data.get("output").and_then(|v| v.as_str()).map(Into::into),
+            output: data.get("output").and_then(|v| v.as_str()).map(PathBuf::from),
             allow_error: data["allowError"].as_bool().unwrap_or(false),
             uses_ins: data["usesInStr"].as_bool().unwrap_or(false),
             uses_runtime: data["usesRuntime"].as_bool().unwrap_or(false),
@@ -40,13 +40,13 @@ impl Validate for Step {
                 "Missing required field 'stepName' in Step {}", self.name
             )));
         }
-        if self.exe_path.is_empty() {
+        if self.exe_path.as_os_str().is_empty() {
             errors.push(DragonError::Config(format!(
                 "Missing required field 'exe_path' in Step: {}", self.name
             )));
-        } else if !self.exe_path.starts_with('$') && !Path::new(&self.exe_path).exists() {
+        } else if !self.exe_path.to_string_lossy().starts_with('$') && !self.exe_path.exists() {
             errors.push(DragonError::Config(format!(
-                "Cannot find exe_path '{}' in Step: {}", self.exe_path, self.name
+                "Cannot find exe_path '{}' in Step: {}", self.exe_path.display(), self.name
             )));
         }
         errors

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
@@ -137,9 +137,13 @@ impl<'a> ToolChainRunner<'a> {
         let tc_len = self.tc.len();
         // Keep temp file handles alive until the run completes.
         let mut _tmp_handles: Vec<tempfile::TempPath> = Vec::new();
-
+        
+        // NOTE: This is super imperative. The logic is complex, and requires a thorough analsis.
+        // I have a hunch it can be simplified. 
         for (index, step) in self.tc.iter().enumerate() {
             let last_step = index == tc_len - 1;
+
+            // Note: there must be some more rustic way to construct the empty vec from false...?
             let input_stream = if step.uses_ins {
                 test.get_input_stream().to_vec()
             } else {
@@ -148,9 +152,9 @@ impl<'a> ToolChainRunner<'a> {
 
             let output_file = self.resolve_output_file(step);
             let magic = MagicParams {
-                exe_path: exe.exe_path.clone(),
-                input_file: input_file.clone(),
-                output_file: output_file.clone(),
+                exe_path: exe.exe_path.display().to_string(),
+                input_file: input_file.display().to_string(),
+                output_file: output_file.as_ref().map(|p| p.display().to_string()),
             };
 
             let mut command = self.resolve_command(step, &magic);
@@ -231,7 +235,7 @@ impl<'a> ToolChainRunner<'a> {
                 }
             } else if last_step {
                 let final_stdout = if let Some(ref out_path) = output_file {
-                    if !Path::new(out_path).exists() {
+                    if !out_path.exists() {
                         tr.command_history.push(cr);
                         tr.did_pass = false;
                         return tr;
@@ -254,7 +258,7 @@ impl<'a> ToolChainRunner<'a> {
                             _tmp_handles.push(handle);
                             path
                         }
-                        None => String::new(),
+                        None => PathBuf::new(),
                     }
                 });
                 tr.command_history.push(cr);
@@ -324,22 +328,18 @@ impl<'a> ToolChainRunner<'a> {
         cr
     }
 
-    fn resolve_output_file(&self, step: &Step) -> Option<String> {
+    fn resolve_output_file(&self, step: &Step) -> Option<PathBuf> {
         step.output.as_ref().map(|output| {
-            let cwd = env::current_dir()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .into_owned();
-            if Path::new(output).is_absolute() {
+            if output.is_absolute() {
                 output.clone()
             } else {
-                Path::new(&cwd).join(output).to_string_lossy().into_owned()
+                env::current_dir().unwrap_or_default().join(output)
             }
         })
     }
 
     fn resolve_command(&self, step: &Step, params: &MagicParams) -> ResolvedCommand {
-        let mut args = vec![step.exe_path.clone()];
+        let mut args = vec![step.exe_path.display().to_string()];
         args.extend(step.arguments.iter().cloned());
         let mut command = ResolvedCommand::new(args);
         self.replace_magic_args(&mut command, params);
@@ -467,8 +467,8 @@ mod tests {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests").join("configs")
     }
 
-    fn config_path(name: &str) -> String {
-        configs_dir().join(name).to_string_lossy().into_owned()
+    fn config_path(name: &str) -> PathBuf {
+        configs_dir().join(name)
     }
 
     fn create_config(name: &str) -> Config {
@@ -559,13 +559,13 @@ mod tests {
                     for spkg in &pkg.subpackages {
                         for test in &spkg.tests {
                             let result = runner.run(test, exe);
-                            if test.path.contains("leaky") {
+                            if test.path.to_string_lossy().contains("leaky") {
                                 assert!(
                                     result.memory_leak,
                                     "Leaky test {} should be detected as memory leak",
                                     test.file,
                                 );
-                            } else if test.path.contains("safe") && test.file.contains("001_safe") {
+                            } else if test.path.to_string_lossy().contains("safe") && test.file.contains("001_safe") {
                                 assert!(
                                     !result.memory_leak,
                                     "Safe test {} should not have memory leak",

@@ -18,21 +18,21 @@ use crate::util::resolve_relative;
 /// Represents a set of tests in a directory.
 #[derive(Debug, Clone)]
 pub struct SubPackage {
-    pub path: String,
+    pub path: PathBuf,
     pub name: String,
     pub depth: usize,
     pub tests: Vec<Arc<TestFile>>,
 }
 
 impl SubPackage {
-    pub fn new(path: &str, depth: usize) -> Self {
-        let name = Path::new(path)
+    pub fn new(path: &Path, depth: usize) -> Self {
+        let name = path
             .file_name()
             .unwrap_or_default()
             .to_string_lossy()
             .into_owned();
 
-        let tests = if Path::new(path).is_dir() {
+        let tests = if path.is_dir() {
             Self::gather_tests(path)
         } else {
             vec![Arc::new(TestFile::new(path))]
@@ -41,13 +41,13 @@ impl SubPackage {
         Self { path: path.into(), name, depth, tests }
     }
 
-    fn gather_tests(dir: &str) -> Vec<Arc<TestFile>> {
+    fn gather_tests(dir: &Path) -> Vec<Arc<TestFile>> {
         let mut tests: Vec<Arc<TestFile>> = fs::read_dir(dir)
             .into_iter()
             .flatten()
             .filter_map(|e| e.ok())
             .filter(|e| TestFile::is_test(&e.path()))
-            .map(|e| Arc::new(TestFile::new(&e.path().to_string_lossy())))
+            .map(|e| Arc::new(TestFile::new(&e.path())))
             .collect();
         tests.sort_by(|a, b| a.file.cmp(&b.file));
         tests
@@ -67,15 +67,15 @@ impl Validate for SubPackage {
 /// Represents a single test package.
 #[derive(Debug, Clone)]
 pub struct Package {
-    pub path: String,
+    pub path: PathBuf,
     pub name: String,
     pub n_tests: usize,
     pub subpackages: Vec<SubPackage>,
 }
 
 impl Package {
-    pub fn new(path: &str) -> Self {
-        let name = Path::new(path)
+    pub fn new(path: &Path) -> Self {
+        let name = path
             .file_name()
             .unwrap_or_default()
             .to_string_lossy()
@@ -88,7 +88,7 @@ impl Package {
             subpackages: Vec::new(),
         };
 
-        if Path::new(path).is_dir() {
+        if path.is_dir() {
             pkg.gather_subpackages();
         } else {
             pkg.push_subpackage(SubPackage::new(path, 0));
@@ -113,16 +113,16 @@ impl Package {
         }
     }
 
-    fn collect_subpackages_recursive(dir: &str, depth: usize) -> Vec<SubPackage> {
+    fn collect_subpackages_recursive(dir: &Path, depth: usize) -> Vec<SubPackage> {
         fs::read_dir(dir)
             .into_iter()
             .flatten()
             .filter_map(|e| e.ok())
             .filter(|e| e.path().is_dir())
             .flat_map(|e| {
-                let path_str = e.path().to_string_lossy().into_owned();
-                let spkg = SubPackage::new(&path_str, depth);
-                let children = Self::collect_subpackages_recursive(&path_str, depth + 1);
+                let entry_path = e.path();
+                let spkg = SubPackage::new(&entry_path, depth);
+                let children = Self::collect_subpackages_recursive(&entry_path, depth + 1);
                 let head = if spkg.tests.is_empty() { None } else { Some(spkg) };
                 head.into_iter().chain(children)
             })
@@ -144,33 +144,33 @@ impl Validate for Package {
 #[derive(Debug, Clone)]
 pub struct Executable {
     pub id: String,
-    pub exe_path: String,
-    pub runtime: String,
+    pub exe_path: PathBuf,
+    pub runtime: PathBuf,
 }
 
 impl Executable {
-    pub fn new(id: &str, exe_path: &str, runtime: &str) -> Self {
-        Self { id: id.into(), exe_path: exe_path.into(), runtime: runtime.into() }
+    pub fn new(id: &str, exe_path: PathBuf, runtime: PathBuf) -> Self {
+        Self { id: id.into(), exe_path, runtime }
     }
 
     /// Build environment variables needed for runtime library injection.
     /// Returns an empty map if no runtime is configured.
     pub fn runtime_env(&self) -> HashMap<String, String> {
         let mut env = HashMap::new();
-        if self.runtime.is_empty() {
+        if self.runtime.as_os_str().is_empty() {
             return env;
         }
-        let rt = Path::new(&self.runtime);
-        let rt_dir = rt.parent().unwrap_or(Path::new("")).to_string_lossy().into_owned();
-        let rt_stem = rt.file_stem().unwrap_or_default().to_string_lossy();
+        let rt_dir = self.runtime.parent().unwrap_or(Path::new("")).display().to_string();
+        let rt_stem = self.runtime.file_stem().unwrap_or_default().to_string_lossy();
         let rt_lib = rt_stem.strip_prefix("lib").unwrap_or(&rt_stem).to_string();
+        let rt_str = self.runtime.display().to_string();
 
         if cfg!(target_os = "macos") {
             env.insert("DYLD_LIBRARY_PATH".into(), rt_dir.clone());
-            env.insert("DYLD_INSERT_LIBRARIES".into(), self.runtime.clone());
+            env.insert("DYLD_INSERT_LIBRARIES".into(), rt_str);
         } else {
             env.insert("LD_LIBRARY_PATH".into(), rt_dir.clone());
-            env.insert("LD_PRELOAD".into(), self.runtime.clone());
+            env.insert("LD_PRELOAD".into(), rt_str);
         }
         env.insert("RT_PATH".into(), rt_dir);
         env.insert("RT_LIB".into(), rt_lib);
@@ -181,14 +181,14 @@ impl Executable {
 impl Validate for Executable {
     fn validate(&self) -> Vec<DragonError> {
         let mut errors = Vec::new();
-        if !Path::new(&self.exe_path).exists() {
+        if !self.exe_path.exists() {
             errors.push(DragonError::Config(format!(
-                "Cannot find binary file: {} in Executable: {}", self.exe_path, self.id
+                "Cannot find binary file: {} in Executable: {}", self.exe_path.display(), self.id
             )));
         }
-        if !self.runtime.is_empty() && !Path::new(&self.runtime).exists() {
+        if !self.runtime.as_os_str().is_empty() && !self.runtime.exists() {
             errors.push(DragonError::Config(format!(
-                "Cannot find runtime file: {} in Executable: {}", self.runtime, self.id
+                "Cannot find runtime file: {} in Executable: {}", self.runtime.display(), self.id
             )));
         }
         errors
@@ -203,8 +203,8 @@ impl Validate for Executable {
 #[derive(Debug, Clone)]
 pub struct Config {
     pub name: String,
-    pub config_path: String,
-    pub test_dir: String,
+    pub config_path: PathBuf,
+    pub test_dir: PathBuf,
     pub executables: Vec<Executable>,
     pub solution_exe: Option<String>,
     pub toolchains: Vec<ToolChain>,
@@ -215,30 +215,27 @@ pub struct Config {
 
 impl Config {
     pub fn new(
-        config_path: &str,
+        config_path: &Path,
         config_data: &serde_json::Value,
         debug_package: Option<&str>,
         package_filter: &str,
     ) -> Self {
         let abs_config = fs::canonicalize(config_path)
-            .unwrap_or_else(|_| PathBuf::from(config_path));
-        let abs_config_str = abs_config.to_string_lossy().into_owned();
+            .unwrap_or_else(|_| config_path.to_path_buf());
 
-        let name = Path::new(config_path)
+        let name = config_path
             .file_stem()
             .unwrap_or_default()
             .to_string_lossy()
             .into_owned();
 
         let test_dir_rel = config_data["testDir"].as_str().unwrap_or("");
-        let test_dir = resolve_relative(test_dir_rel, &abs_config_str)
-            .to_string_lossy()
-            .into_owned();
+        let test_dir = resolve_relative(Path::new(test_dir_rel), &abs_config);
 
         let executables = Self::parse_executables(
             config_data.get("testedExecutablePaths"),
             config_data.get("runtimes"),
-            &abs_config_str,
+            &abs_config,
         );
         let solution_exe = config_data["solutionExecutable"].as_str().map(Into::into);
         let toolchains = Self::parse_toolchains(config_data.get("toolchains"));
@@ -246,7 +243,7 @@ impl Config {
 
         let mut cfg = Self {
             name,
-            config_path: abs_config_str,
+            config_path: abs_config,
             test_dir,
             executables,
             solution_exe,
@@ -262,7 +259,7 @@ impl Config {
     fn parse_executables(
         exe_data: Option<&serde_json::Value>,
         runtime_data: Option<&serde_json::Value>,
-        abs_config_path: &str,
+        abs_config_path: &Path,
     ) -> Vec<Executable> {
         let exe_map = match exe_data.and_then(|v| v.as_object()) {
             Some(m) => m,
@@ -274,23 +271,20 @@ impl Config {
             .iter()
             .map(|(id, path_val)| {
                 let exe_path = resolve_relative(
-                    path_val.as_str().unwrap_or(""),
+                    Path::new(path_val.as_str().unwrap_or("")),
                     abs_config_path,
-                ).to_string_lossy().into_owned();
+                );
 
                 let runtime = rt_map
                     .and_then(|rts| rts.get(id.as_str()))
                     .and_then(|v| v.as_str())
                     .map(|rt_path| {
-                        let resolved = resolve_relative(rt_path, abs_config_path);
-                        fs::canonicalize(&resolved)
-                            .unwrap_or(resolved)
-                            .to_string_lossy()
-                            .into_owned()
+                        let resolved = resolve_relative(Path::new(rt_path), abs_config_path);
+                        fs::canonicalize(&resolved).unwrap_or(resolved)
                     })
                     .unwrap_or_default();
 
-                Executable::new(id, &exe_path, &runtime)
+                Executable::new(id, exe_path, runtime)
             })
             .collect()
     }
@@ -308,24 +302,24 @@ impl Config {
             .unwrap_or_default()
     }
 
-    fn gather_packages(test_dir: &str, debug_package: Option<&str>) -> Vec<Package> {
+    fn gather_packages(test_dir: &Path, debug_package: Option<&str>) -> Vec<Package> {
         if let Some(pkg) = debug_package.filter(|p| !p.is_empty()) {
-            return vec![Package::new(pkg)];
+            return vec![Package::new(Path::new(pkg))];
         }
         fs::read_dir(test_dir)
             .into_iter()
             .flatten()
             .filter_map(|e| e.ok())
             .filter(|e| e.path().is_dir())
-            .map(|e| Package::new(&e.path().to_string_lossy()))
+            .map(|e| Package::new(&e.path()))
             .collect()
     }
 
     fn collect_errors(&self) -> Vec<DragonError> {
         let mut errors = Vec::new();
-        if !Path::new(&self.test_dir).exists() {
+        if !self.test_dir.exists() {
             errors.push(DragonError::Config(format!(
-                "Cannot find test directory: {}", self.test_dir
+                "Cannot find test directory: {}", self.test_dir.display()
             )));
         }
         errors.extend(
@@ -353,10 +347,10 @@ impl Config {
 impl fmt::Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Config: {}", self.name)?;
-        writeln!(f, "  testDir: {}", self.test_dir)?;
+        writeln!(f, "  testDir: {}", self.test_dir.display())?;
         writeln!(f, "  executables:")?;
         for exe in &self.executables {
-            writeln!(f, "    - {} ({})", exe.id, exe.exe_path)?;
+            writeln!(f, "    - {} ({})", exe.id, exe.exe_path.display())?;
         }
         writeln!(f, "  toolchains:")?;
         for tc in &self.toolchains {
@@ -371,18 +365,18 @@ impl fmt::Display for Config {
 }
 
 /// Load and parse a JSON configuration file.
-pub fn load_config(config_path: &str, args: Option<&RunnerArgs>) -> Option<Config> {
-    if !Path::new(config_path).exists() {
+pub fn load_config(config_path: &Path, args: Option<&RunnerArgs>) -> Option<Config> {
+    if !config_path.exists() {
         return None;
     }
 
     let content = fs::read_to_string(config_path).ok().or_else(|| {
-        log(0, 0, &format!("Config Error: Failed to parse config: {config_path}"));
+        log(0, 0, &format!("Config Error: Failed to parse config: {}", config_path.display()));
         None
     })?;
 
     let config_data: serde_json::Value = serde_json::from_str(&content).ok().or_else(|| {
-        log(0, 0, &format!("Config Error: Failed to parse config: {config_path}"));
+        log(0, 0, &format!("Config Error: Failed to parse config: {}", config_path.display()));
         None
     })?;
 
@@ -402,8 +396,8 @@ mod tests {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests").join("configs")
     }
 
-    fn config_path(name: &str) -> String {
-        configs_dir().join(name).to_string_lossy().into_owned()
+    fn config_path(name: &str) -> PathBuf {
+        configs_dir().join(name)
     }
 
     #[test]
@@ -412,9 +406,9 @@ mod tests {
         let config = load_config(&path, None).expect("config should load");
 
         assert!(
-            Path::new(&config.test_dir).exists(),
+            config.test_dir.exists(),
             "test_dir should exist: {}",
-            config.test_dir
+            config.test_dir.display()
         );
         assert!(!config.packages.is_empty(), "should have packages");
 
@@ -433,17 +427,17 @@ mod tests {
         let path = config_path("gccPassConfig.json");
         let config = load_config(&path, None).expect("config should load");
 
-        let all_subpackages: Vec<&str> = config
+        let all_subpackages: Vec<String> = config
             .packages
             .iter()
             .flat_map(|pkg| pkg.subpackages.iter())
-            .map(|spkg| spkg.path.as_str())
+            .map(|spkg| spkg.path.display().to_string())
             .collect();
 
         assert!(!all_subpackages.is_empty(), "should have subpackages");
 
         let filter_pattern = "*ErrorPass*";
-        let filtered: Vec<&&str> = all_subpackages
+        let filtered: Vec<&String> = all_subpackages
             .iter()
             .filter(|path| {
                 glob::Pattern::new(&filter_pattern.to_lowercase())
@@ -469,7 +463,7 @@ mod tests {
         let config = load_config(&path, None).expect("config should load");
 
         assert!(!config.errors.is_empty(), "should have errors for invalid dir");
-        assert!(!Path::new(&config.test_dir).exists(), "test_dir should not exist");
+        assert!(!config.test_dir.exists(), "test_dir should not exist");
     }
 
     #[test]
@@ -480,7 +474,7 @@ mod tests {
         assert!(!config.errors.is_empty(), "should have errors for invalid exe");
         assert_eq!(config.executables.len(), 1);
         assert!(
-            !Path::new(&config.executables[0].exe_path).exists(),
+            !config.executables[0].exe_path.exists(),
             "exe_path should not exist"
         );
     }

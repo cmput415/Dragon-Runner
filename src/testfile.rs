@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::{self, BufRead};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::error::{DragonError, Validate};
 use crate::util::str_to_bytes;
@@ -11,7 +11,7 @@ pub type DirectiveResult = Result<Vec<u8>, String>;
 /// Represents a single test case file with parsed directives.
 #[derive(Debug, Clone)]
 pub struct TestFile {
-    pub path: String,
+    pub path: PathBuf,
     pub stem: String,
     pub extension: String,
     pub file: String,
@@ -21,10 +21,9 @@ pub struct TestFile {
 }
 
 impl TestFile {
-    pub fn new(test_path: &str) -> Self {
-        let path_obj = Path::new(test_path);
-        let stem = path_obj.file_stem().unwrap_or_default().to_string_lossy().into_owned();
-        let extension = path_obj
+    pub fn new(test_path: &Path) -> Self {
+        let stem = test_path.file_stem().unwrap_or_default().to_string_lossy().into_owned();
+        let extension = test_path
             .extension()
             .map(|e| format!(".{}", e.to_string_lossy()))
             .unwrap_or_default();
@@ -47,7 +46,7 @@ impl TestFile {
 
     /// Resolve inline vs file directives into final byte content.
     fn resolve_directive(
-        test_path: &str,
+        test_path: &Path,
         comment_syntax: &str,
         inline_dir: &str,
         file_dir: &str,
@@ -58,7 +57,7 @@ impl TestFile {
         match (inline, file_ref) {
             (Some(Ok(_)), Some(Ok(_))) => Err(format!(
                 "Directive Conflict for test {}: Supplied both {inline_dir} and {file_dir}",
-                Path::new(test_path).file_name().unwrap_or_default().to_string_lossy(),
+                test_path.file_name().unwrap_or_default().to_string_lossy(),
             )),
 
             (Some(Ok(bytes)), _) => Ok(bytes),
@@ -72,14 +71,15 @@ impl TestFile {
     }
 
     /// Given file-reference bytes from a FILE directive, resolve and read the target file.
-    fn read_referenced_file(test_path: &str, directive: &str, ref_bytes: &[u8]) -> DirectiveResult {
+    fn read_referenced_file(test_path: &Path, directive: &str, ref_bytes: &[u8]) -> DirectiveResult {
         let file_str = String::from_utf8_lossy(ref_bytes).trim().to_string();
-        let parent = Path::new(test_path).parent().unwrap_or(Path::new(""));
+        let parent = test_path.parent().unwrap_or(Path::new(""));
         let full_path = parent.join(&file_str);
 
         if !full_path.exists() {
             return Err(format!(
-                "Failed to locate path supplied to {directive}\n\tTest:{test_path}\n\tPath:{}\n",
+                "Failed to locate path supplied to {directive}\n\tTest:{}\n\tPath:{}\n",
+                test_path.display(),
                 full_path.display(),
             ));
         }
@@ -91,14 +91,14 @@ impl TestFile {
     /// Scan a test file for lines matching `// DIRECTIVE:value` and collect the values.
     /// Returns None if no matches found.
     fn parse_directive(
-        test_path: &str,
+        test_path: &Path,
         comment_syntax: &str,
         directive: &str,
     ) -> Option<DirectiveResult> {
         let file = match fs::File::open(test_path) {
             Ok(f) => f,
             Err(_) => return Some(Err(format!(
-                "Unknown error occurred while parsing testfile: {test_path}"
+                "Unknown error occurred while parsing testfile: {}", test_path.display()
             ))),
         };
 
@@ -109,7 +109,7 @@ impl TestFile {
             let line = match line {
                 Ok(l) => l,
                 Err(_) => return Some(Err(format!(
-                    "Unknown error occurred while parsing testfile: {test_path}"
+                    "Unknown error occurred while parsing testfile: {}", test_path.display()
                 ))),
             };
 

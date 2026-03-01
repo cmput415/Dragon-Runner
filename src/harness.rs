@@ -60,7 +60,7 @@ pub trait TestHarness {
 
                     for spkg in &pkg.subpackages {
                         if let Some(ref pat) = filter_pat {
-                            if !pat.matches(&spkg.path.to_lowercase()) {
+                            if !pat.matches(&spkg.path.display().to_string().to_lowercase()) {
                                 continue;
                             }
                         }
@@ -177,7 +177,7 @@ impl TournamentHarness {
             "=".repeat(80), result.test.file);
     }
 
-    fn append_log(path: &str, line: &str) {
+    fn append_log(path: &std::path::Path, line: &str) {
         if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(path) {
             let _ = writeln!(f, "{line}");
         }
@@ -222,17 +222,17 @@ impl TournamentHarness {
                         if result.did_pass {
                             print!("{}", ".".green());
                             pass_count += 1;
-                            if is_solution && !failure_log.is_empty() {
-                                Self::append_log("pass_log.txt", &format!(
-                                    "{} {} {}", tc.name, a_pkg.name, result.test.path
+                            if is_solution && !failure_log.as_os_str().is_empty() {
+                                Self::append_log("pass_log.txt".as_ref(), &format!(
+                                    "{} {} {}", tc.name, a_pkg.name, result.test.path.display()
                                 ));
                             }
                         } else {
                             print!("{}", ".".red());
                             Self::log_failure_to_file(&feedback_file, &result);
-                            if is_solution && !failure_log.is_empty() {
+                            if is_solution && !failure_log.as_os_str().is_empty() {
                                 Self::append_log(failure_log, &format!(
-                                    "{} {} {}", tc.name, a_pkg.name, result.test.path
+                                    "{} {} {}", tc.name, a_pkg.name, result.test.path.display()
                                 ));
                             }
                         }
@@ -371,10 +371,9 @@ mod tests {
     use crate::config::load_config;
     use super::TournamentHarness;
 
-    fn config_path(name: &str) -> String {
+    fn config_path(name: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests").join("configs").join(name)
-            .to_string_lossy().into_owned()
     }
 
     #[test]
@@ -382,12 +381,12 @@ mod tests {
         let path = config_path("ConfigGrade.json");
         let config = load_config(&path, None).expect("config should load");
 
-        let failure_log = "Failures_rs.txt";
+        let failure_log = Path::new("Failures_rs.txt");
         let _ = std::fs::remove_file(failure_log);
 
         let args = RunnerArgs {
             mode: Mode::Tournament,
-            failure_log: failure_log.to_string(),
+            failure_log: failure_log.into(),
             timeout: 2.0,
             ..Default::default()
         };
@@ -396,7 +395,7 @@ mod tests {
         harness.run(&config, &args);
 
         assert!(
-            Path::new(failure_log).exists(),
+            failure_log.exists(),
             "failure log should have been created"
         );
 

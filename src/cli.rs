@@ -1,4 +1,5 @@
 use std::fmt;
+use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
 
@@ -30,11 +31,11 @@ pub struct RunnerArgs {
     pub mode: Mode,
 
     /// Path to the JSON configuration file
-    pub config_file: String,
+    pub config_file: PathBuf,
 
     /// Path to write failure log
     #[arg(long = "fail-log", default_value = "")]
-    pub failure_log: String,
+    pub failure_log: PathBuf,
 
     /// Timeout in seconds for each step
     #[arg(long, default_value_t = 2.0)]
@@ -66,7 +67,7 @@ pub struct RunnerArgs {
 
     /// Output file path
     #[arg(short = 'o', long = "output", default_value = "")]
-    pub output: String,
+    pub output: PathBuf,
 
     /// Stop on first failure
     #[arg(short = 'f', long = "fast-fail")]
