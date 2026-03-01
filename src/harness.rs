@@ -247,14 +247,6 @@ impl TournamentHarness {
     }
 }
 
-impl TestHarness for TournamentHarness {
-    fn run_passed(&self) -> bool { self.passed }
-
-    fn process_test_result(&mut self, _result: TestResult, _cli_args: &RunnerArgs, _counters: &mut SubPackageCounters) {
-        // Tournament uses its own tournament_iterate
-    }
-}
-
 // ---------------------------------------------------------------------------
 // MemoryCheckHarness
 // ---------------------------------------------------------------------------
@@ -368,5 +360,46 @@ impl TestHarness for PerformanceTestingHarness {
                 .collect();
             let _ = writeln!(f, "{}", row.join(","));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::{Path, PathBuf};
+
+    use crate::cli::{Mode, RunnerArgs};
+    use crate::config::load_config;
+    use super::TournamentHarness;
+
+    fn config_path(name: &str) -> String {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests").join("configs").join(name)
+            .to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn test_grader_config() {
+        let path = config_path("ConfigGrade.json");
+        let config = load_config(&path, None).expect("config should load");
+
+        let failure_log = "Failures_rs.txt";
+        let _ = std::fs::remove_file(failure_log);
+
+        let args = RunnerArgs {
+            mode: Mode::Tournament,
+            failure_log: failure_log.to_string(),
+            timeout: 2.0,
+            ..Default::default()
+        };
+
+        let mut harness = TournamentHarness::new();
+        harness.run(&config, &args);
+
+        assert!(
+            Path::new(failure_log).exists(),
+            "failure log should have been created"
+        );
+
+        let _ = std::fs::remove_file(failure_log);
     }
 }

@@ -448,3 +448,90 @@ pub fn precise_diff(produced: &[u8], expected: &[u8]) -> String {
         diff_bytes(produced, expected)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use crate::config::{load_config, Config};
+    use super::ToolChainRunner;
+
+    fn configs_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests").join("configs")
+    }
+
+    fn config_path(name: &str) -> String {
+        configs_dir().join(name).to_string_lossy().into_owned()
+    }
+
+    fn create_config(name: &str) -> Config {
+        let path = config_path(name);
+        load_config(&path, None).expect("config should load")
+    }
+
+    fn run_tests_for_config(config: &Config, expected_result: bool) {
+        for exe in &config.executables {
+            for tc in &config.toolchains {
+                let runner = ToolChainRunner::new(tc.clone(), 10.0)
+                    .with_env(exe.runtime_env());
+                for pkg in &config.packages {
+                    for spkg in &pkg.subpackages {
+                        for test in &spkg.tests {
+                            let result = runner.run(test, exe);
+                            assert_eq!(
+                                result.did_pass, expected_result,
+                                "Test {} expected {} but got {}",
+                                test.file,
+                                if expected_result { "PASS" } else { "FAIL" },
+                                if result.did_pass { "PASS" } else { "FAIL" },
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_gcc_pass() {
+        let config = create_config("gccPassConfig.json");
+        assert!(config.errors.is_empty(), "config errors: {:?}", config.errors);
+        run_tests_for_config(&config, true);
+    }
+
+    #[test]
+    fn test_gcc_fail() {
+        let config = create_config("gccFailConfig.json");
+        assert!(config.errors.is_empty(), "config errors: {:?}", config.errors);
+        run_tests_for_config(&config, false);
+    }
+
+    #[test]
+    fn test_runtime_gcc_toolchain() {
+        let tests_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
+        let compile_script = tests_dir.join("scripts/test-scripts/compile_lib.py");
+        let lib_src_dir = tests_dir.join("lib/src");
+        let lib_out_dir = tests_dir.join("lib");
+
+        assert!(compile_script.exists(), "missing compile_lib.py");
+
+        let expected_lib = tests_dir.join("lib/libfib.so");
+        if !expected_lib.exists() {
+            let status = std::process::Command::new("python3")
+                .args([
+                    compile_script.to_str().unwrap(),
+                    lib_src_dir.to_str().unwrap(),
+                    lib_out_dir.to_str().unwrap(),
+                ])
+                .status()
+                .expect("failed to run compile_lib.py");
+            assert!(status.success(), "shared object compilation failed");
+            assert!(expected_lib.exists(), "failed to create shared object");
+        }
+
+        let path = config_path("runtimeConfigLinux.json");
+        let config = load_config(&path, None).expect("config should load");
+        assert!(config.errors.is_empty(), "config errors: {:?}", config.errors);
+        run_tests_for_config(&config, true);
+    }
+}
