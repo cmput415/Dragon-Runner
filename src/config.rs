@@ -20,11 +20,12 @@ use crate::util::resolve_relative;
 pub struct SubPackage {
     pub path: String,
     pub name: String,
+    pub depth: usize,
     pub tests: Vec<Arc<TestFile>>,
 }
 
 impl SubPackage {
-    pub fn new(path: &str) -> Self {
+    pub fn new(path: &str, depth: usize) -> Self {
         let name = Path::new(path)
             .file_name()
             .unwrap_or_default()
@@ -37,7 +38,7 @@ impl SubPackage {
             vec![Arc::new(TestFile::new(path))]
         };
 
-        Self { path: path.into(), name, tests }
+        Self { path: path.into(), name, depth, tests }
     }
 
     fn gather_tests(dir: &str) -> Vec<Arc<TestFile>> {
@@ -90,7 +91,7 @@ impl Package {
         if Path::new(path).is_dir() {
             pkg.gather_subpackages();
         } else {
-            pkg.push_subpackage(SubPackage::new(path));
+            pkg.push_subpackage(SubPackage::new(path, 0));
         }
 
         pkg
@@ -102,17 +103,17 @@ impl Package {
     }
 
     fn gather_subpackages(&mut self) {
-        let top_level = SubPackage::new(&self.path);
+        let top_level = SubPackage::new(&self.path, 0);
         if !top_level.tests.is_empty() {
             self.push_subpackage(top_level);
         }
         let path = self.path.clone();
-        for spkg in Self::collect_subpackages_recursive(&path) {
+        for spkg in Self::collect_subpackages_recursive(&path, 1) {
             self.push_subpackage(spkg);
         }
     }
 
-    fn collect_subpackages_recursive(dir: &str) -> Vec<SubPackage> {
+    fn collect_subpackages_recursive(dir: &str, depth: usize) -> Vec<SubPackage> {
         fs::read_dir(dir)
             .into_iter()
             .flatten()
@@ -120,8 +121,8 @@ impl Package {
             .filter(|e| e.path().is_dir())
             .flat_map(|e| {
                 let path_str = e.path().to_string_lossy().into_owned();
-                let spkg = SubPackage::new(&path_str);
-                let children = Self::collect_subpackages_recursive(&path_str);
+                let spkg = SubPackage::new(&path_str, depth);
+                let children = Self::collect_subpackages_recursive(&path_str, depth + 1);
                 let head = if spkg.tests.is_empty() { None } else { Some(spkg) };
                 head.into_iter().chain(children)
             })

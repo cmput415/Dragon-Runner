@@ -3,7 +3,7 @@ use std::io::Write;
 
 use colored::Colorize;
 
-use crate::cli::RunnerArgs;
+use crate::cli::{Mode, RunnerArgs};
 use crate::config::{Config, Executable, Package};
 use crate::log::log;
 use crate::runner::{TestResult, ToolChainRunner};
@@ -12,6 +12,7 @@ use crate::runner::{TestResult, ToolChainRunner};
 pub struct SubPackageCounters {
     pub pass_count: usize,
     pub test_count: usize,
+    pub depth: usize,
 }
 
 /// Mutable hooks called during the default iteration.
@@ -40,7 +41,8 @@ pub trait TestHarness {
 
             for tc in &config.toolchains {
                 let runner = ToolChainRunner::new(tc.clone(), cli_args.timeout)
-                    .with_env(exe_env.clone());
+                    .with_env(exe_env.clone())
+                    .with_memcheck(cli_args.mode == Mode::Memcheck);
                 log(0, 1, &format!("Running Toolchain: {}", tc.name));
                 let mut tc_pass = 0;
                 let mut tc_total = 0;
@@ -59,8 +61,8 @@ pub trait TestHarness {
                             }
                         }
 
-                        log(0, 3, &format!("Entering subpackage {}", spkg.name));
-                        let mut counters = SubPackageCounters { pass_count: 0, test_count: 0 };
+                        log(0, 3 + spkg.depth, &format!("Entering subpackage {}", spkg.name));
+                        let mut counters = SubPackageCounters { pass_count: 0, test_count: 0, depth: spkg.depth };
                         self.pre_subpackage_hook(spkg);
 
                         for test in &spkg.tests {
@@ -76,7 +78,7 @@ pub trait TestHarness {
                         }
 
                         self.post_subpackage_hook(&counters);
-                        log(0, 3, &format!("Subpackage Passed:  {} / {}", counters.pass_count, counters.test_count));
+                        log(0, 3 + spkg.depth, &format!("Subpackage Passed:  {} / {}", counters.pass_count, counters.test_count));
                         pkg_pass += counters.pass_count;
                         pkg_total += counters.test_count;
                     }
@@ -123,14 +125,15 @@ impl TestHarness for RegularHarness {
     fn run_passed(&self) -> bool { self.passed }
 
     fn process_test_result(&mut self, result: TestResult, _cli_args: &RunnerArgs, counters: &mut SubPackageCounters) {
+        let indent = 4 + counters.depth;
         let test_name = &result.test.file;
         if result.did_pass {
             let tag = if result.error_test { "[E-PASS] " } else { "[PASS] " };
-            log(0, 4, &format!("{}{}", tag.green(), test_name));
+            log(0, indent, &format!("{}{}", tag.green(), test_name));
             counters.pass_count += 1;
         } else {
             let tag = if result.error_test { "[E-FAIL] " } else { "[FAIL] " };
-            log(0, 4, &format!("{}{}", tag.red(), test_name));
+            log(0, indent, &format!("{}{}", tag.red(), test_name));
             self.passed = false;
             self.failures.push(result);
         }
@@ -269,13 +272,14 @@ impl TestHarness for MemoryCheckHarness {
     fn process_test_result(&mut self, result: TestResult, _cli_args: &RunnerArgs, counters: &mut SubPackageCounters) {
         self.test_count += 1;
         counters.test_count += 1;
+        let indent = 4 + counters.depth;
 
         let test_name = &result.test.file;
         if result.did_pass {
-            log(0, 4, &format!("{}{}", "[PASS] ".green(), test_name));
+            log(0, indent, &format!("{}{}", "[PASS] ".green(), test_name));
             counters.pass_count += 1;
         } else {
-            log(0, 4, &format!("{}{}", "[FAIL] ".red(), test_name));
+            log(0, indent, &format!("{}{}", "[FAIL] ".red(), test_name));
         }
 
         if result.memory_leak {
@@ -327,10 +331,11 @@ impl TestHarness for PerformanceTestingHarness {
             self.testfile_col.push(result.test.file.clone());
         }
 
+        let indent = 4 + counters.depth;
         let test_name = &result.test.file;
         if result.did_pass {
             counters.pass_count += 1;
-            log(0, 4, &format!("{}{}", "[PASS] ".green(), test_name));
+            log(0, indent, &format!("{}{}", "[PASS] ".green(), test_name));
             self.cur_col.push(result.time.map(|t| format!("{t:.4}")).unwrap_or_default());
         } else {
             self.cur_col.push(format!("{:.4}", cli_args.timeout));
