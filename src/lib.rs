@@ -7,4 +7,5 @@ pub mod runner;
 pub mod script;
 pub mod testfile;
 pub mod toolchain;
+pub mod server;
 pub mod util;

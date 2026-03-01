@@ -110,12 +110,32 @@ pub enum Commands {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+    /// Start an HTTP server exposing the test runner API
+    Serve {
+        /// Path to the JSON configuration file
+        config_file: PathBuf,
+        /// Address to bind the server to
+        #[arg(long, default_value = "127.0.0.1:3000")]
+        bind: String,
+        /// Timeout in seconds for each step
+        #[arg(long, default_value_t = 2.0)]
+        timeout: f64,
+        /// Maximum number of concurrent test executions
+        #[arg(long, default_value_t = 4)]
+        max_concurrent: usize,
+    },
 }
 
-/// Result of parsing CLI arguments — either a runner mode or a script invocation.
+/// Result of parsing CLI arguments — either a runner mode, a script invocation, or a server.
 pub enum CliAction {
     Run(RunnerArgs),
     Script(Vec<String>),
+    Serve {
+        config_file: PathBuf,
+        bind: String,
+        timeout: f64,
+        max_concurrent: usize,
+    },
 }
 
 /// Parse CLI arguments into a CliAction.
@@ -128,7 +148,7 @@ pub fn parse_cli_args() -> CliAction {
 
     // If the user omits the mode subcommand, default to "regular".
     // Detect this by checking whether the second arg is a known subcommand.
-    let known_modes = ["regular", "tournament", "perf", "memcheck", "script"];
+    let known_modes = ["regular", "tournament", "perf", "memcheck", "script", "serve"];
     let args_to_parse = if raw_args.len() >= 2 && !known_modes.contains(&raw_args[1].as_str()) && !raw_args[1].starts_with('-') {
         // Insert "regular" as the subcommand
         let mut patched = vec![raw_args[0].clone(), "regular".to_string()];
@@ -142,13 +162,16 @@ pub fn parse_cli_args() -> CliAction {
 
     match cli.command {
         Commands::Script { args } => CliAction::Script(args),
+        Commands::Serve { config_file, bind, timeout, max_concurrent } => {
+            CliAction::Serve { config_file, bind, timeout, max_concurrent }
+        }
         commands => {
             let (mode, mut args) = match commands {
                 Commands::Regular { flags } => (Mode::Regular, flags),
                 Commands::Tournament { flags } => (Mode::Tournament, flags),
                 Commands::Perf { flags } => (Mode::Perf, flags),
                 Commands::Memcheck { flags } => (Mode::Memcheck, flags),
-                Commands::Script { .. } => unreachable!(),
+                Commands::Script { .. } | Commands::Serve { .. } => unreachable!(),
             };
             args.mode = mode;
 

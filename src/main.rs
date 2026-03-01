@@ -5,6 +5,7 @@ use dragon_runner_rs::config::load_config;
 use dragon_runner_rs::harness::*;
 use dragon_runner_rs::log::log;
 use dragon_runner_rs::script::run_script;
+use dragon_runner_rs::server;
 
 fn main() {
     let action = parse_cli_args();
@@ -12,6 +13,25 @@ fn main() {
     let cli_args = match action {
         CliAction::Script(args) => {
             std::process::exit(run_script(args));
+        }
+        CliAction::Serve { config_file, bind, timeout, max_concurrent } => {
+            let config = match load_config(&config_file, None) {
+                Some(c) => c,
+                None => {
+                    log(0, 0, &format!("Could not open config file: {}", config_file.display()));
+                    std::process::exit(1);
+                }
+            };
+            if !config.errors.is_empty() {
+                log(0, 0, &format!("Found Config {} error(s):", config.errors.len()));
+                for e in &config.errors {
+                    log(0, 0, &format!("{e}").red().to_string());
+                }
+                std::process::exit(1);
+            }
+            let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
+            rt.block_on(server::run_server(config, &bind, timeout, max_concurrent));
+            return;
         }
         CliAction::Run(args) => args,
     };
