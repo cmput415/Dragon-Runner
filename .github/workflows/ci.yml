@@ -8,25 +8,24 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3 
-      
+      - uses: actions/checkout@v4
+
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
- 
-      - name: Install dependencies
-        run: |
-          pip install .
 
-      - name: run config tests
-        run: pytest tests/test_config.py
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: run runner tests
-        run: pytest tests/test_runner.py
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
 
-      - name: run grade tests
-        run: pytest tests/test_grader.py
-      
-      - name: run runtime tests
-        run: pytest tests/test_runtime.py
+      - name: Run tests
+        run: ./tests/run_tests.sh
