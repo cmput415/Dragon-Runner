@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 static DEBUG_LEVEL: AtomicU32 = AtomicU32::new(0);
@@ -13,6 +14,7 @@ pub fn set_debug_level(level: u32) {
 pub fn log(level: u32, indent: usize, msg: &str) {
     if DEBUG_LEVEL.load(Ordering::Relaxed) >= level {
         println!("{:indent$}{msg}", "", indent = indent);
+        let _ = std::io::stdout().flush();
     }
 }
 
