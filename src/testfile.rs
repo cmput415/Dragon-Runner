@@ -59,13 +59,10 @@ impl TestFile {
                 "Directive Conflict for test {}: Supplied both {inline_dir} and {file_dir}",
                 test_path.file_name().unwrap_or_default().to_string_lossy(),
             )),
-
             (Some(Ok(bytes)), _) => Ok(bytes),
             (Some(Err(e)), _) => Err(e),
-
             (None, Some(Ok(ref_bytes))) => Self::read_referenced_file(test_path, file_dir, &ref_bytes),
             (None, Some(Err(e))) => Err(e),
-
             (None, None) => Ok(Vec::new()),
         }
     }
@@ -95,42 +92,36 @@ impl TestFile {
         comment_syntax: &str,
         directive: &str,
     ) -> Option<DirectiveResult> {
+        let err = || format!("Unknown error occurred while parsing testfile: {}", test_path.display());
+
         let file = match fs::File::open(test_path) {
             Ok(f) => f,
-            Err(_) => return Some(Err(format!(
-                "Unknown error occurred while parsing testfile: {}", test_path.display()
-            ))),
+            Err(_) => return Some(Err(err())),
         };
 
-        let mut contents: Vec<u8> = Vec::new();
-        let mut found_any = false;
+        let values: Result<Vec<Vec<u8>>, String> = io::BufReader::new(file)
+            .lines()
+            .map(|line| line.map_err(|_| err()))
+            .filter_map(|line| {
+                let line = match line {
+                    Ok(l) => l,
+                    Err(e) => return Some(Err(e)),
+                };
+                let comment_pos = line.find(comment_syntax)?;
+                let directive_pos = line.find(directive)?;
+                if comment_pos > directive_pos {
+                    return None;
+                }
+                let (_, rhs) = line.split_once(directive)?;
+                Some(Ok(str_to_bytes(rhs, true)))
+            })
+            .collect();
 
-        for line in io::BufReader::new(file).lines() {
-            let line = match line {
-                Ok(l) => l,
-                Err(_) => return Some(Err(format!(
-                    "Unknown error occurred while parsing testfile: {}", test_path.display()
-                ))),
-            };
-
-            match (line.find(comment_syntax), line.find(directive)) {
-                (Some(c), Some(d)) if c <= d => {}
-                _ => continue,
-            }
-
-            let rhs = match line.split_once(directive) {
-                Some((_, rhs)) => rhs,
-                None => continue,
-            };
-
-            if found_any {
-                contents.push(b'\n');
-            }
-            contents.extend_from_slice(&str_to_bytes(rhs, true));
-            found_any = true;
+        match values {
+            Err(e) => Some(Err(e)),
+            Ok(parts) if parts.is_empty() => None,
+            Ok(parts) => Some(Ok(parts.join(&b'\n'))),
         }
-
-        found_any.then(|| Ok(contents))
     }
 
     /// Check if a path is a valid test file (not hidden, not .out/.ins extension).
@@ -146,13 +137,10 @@ impl TestFile {
 
 impl Validate for TestFile {
     fn validate(&self) -> Vec<DragonError> {
-        let mut errors = Vec::new();
-        if let Err(msg) = &self.expected_out {
-            errors.push(DragonError::TestFile(msg.clone()));
-        }
-        if let Err(msg) = &self.input_stream {
-            errors.push(DragonError::TestFile(msg.clone()));
-        }
-        errors
+        [&self.expected_out, &self.input_stream]
+            .into_iter()
+            .filter_map(|r| r.as_ref().err())
+            .map(|msg| DragonError::TestFile(msg.clone()))
+            .collect()
     }
 }
