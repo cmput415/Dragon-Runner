@@ -228,9 +228,9 @@ impl<'a> ToolChainRunner<'a> {
         exe: &Executable,
     ) -> ControlFlow<TestResult, PipelineState> {
         let input_stream = if step.uses_ins {
-            test.get_input_stream().to_vec()
+            test.get_input_stream()
         } else {
-            Vec::new()
+            b""
         };
 
         let output_resolved = self.resolve_output_file(step);
@@ -534,6 +534,11 @@ mod tests {
     fn create_config(name: &str) -> Config {
         let path = config_path(name);
         load_config(&path, None).expect("config should load")
+    }
+
+    fn _assert_send_sync() {
+        fn check<T: Send + Sync>() {}
+        check::<ToolChainRunner<'_>>();
     }
 
     fn run_tests_for_config(config: &Config, expected_result: bool) {
