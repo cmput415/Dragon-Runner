@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 use crate::config::Executable;
 use crate::error::{DragonError, Validate};
+use crate::runner::MagicArg;
 
 /// A single step in a toolchain (e.g., compile, link, run).
 #[derive(Debug, Clone, Deserialize)]
@@ -25,8 +26,8 @@ impl Step {
     /// Derive a human-readable step name from the raw exe string and the executable.
     pub fn display_name(&self, exe: &Executable) -> String {
         match self.exe_raw.as_str() {
-            "$EXE" => exe.id.clone(),
-            "$INPUT" => "run".to_string(),
+            s if s == MagicArg::Exe.pattern() => exe.id.clone(),
+            s if s == MagicArg::Input.pattern() => "run".to_string(),
             other => {
                 // Use filename component for paths, bare name as-is
                 Path::new(other)

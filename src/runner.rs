@@ -36,6 +36,34 @@ struct PipelineState {
     memory_leak: bool,
 }
 
+/// Magic variable placeholders used in toolchain step arguments.
+pub enum MagicArg {
+    Exe,
+    Input,
+    Output,
+}
+
+impl MagicArg {
+    pub const ALL: &[MagicArg] = &[MagicArg::Exe, MagicArg::Input, MagicArg::Output];
+
+    pub fn pattern(&self) -> &'static str {
+        match self {
+            MagicArg::Exe => "$EXE",
+            MagicArg::Input => "$INPUT",
+            MagicArg::Output => "$OUTPUT",
+        }
+    }
+
+    fn resolve<'a>(&self, params: &'a MagicParams) -> Option<&'a str> {
+        match self {
+            MagicArg::Exe => Some(&params.exe_path),
+            MagicArg::Input if !params.input_file.is_empty() => Some(&params.input_file),
+            MagicArg::Input => None,
+            MagicArg::Output => params.output_file.as_deref(),
+        }
+    }
+}
+
 /// Magic parameter values substituted into toolchain step arguments.
 pub struct MagicParams {
     pub exe_path: String,
@@ -393,7 +421,7 @@ impl<'a> ToolChainRunner<'a> {
     }
 
     fn resolve_output_file(&self, step: &Step) -> Option<(PathBuf, tempfile::TempPath)> {
-        if step.args.iter().any(|a| a.contains("$OUTPUT")) {
+        if step.args.iter().any(|a| a.contains(MagicArg::Output.pattern())) {
             make_empty_tmp_file()
         } else {
             None
@@ -420,13 +448,11 @@ impl<'a> ToolChainRunner<'a> {
 
     fn replace_magic_args(&self, command: &mut ResolvedCommand, params: &MagicParams) {
         for arg in command.args.iter_mut() {
-            if arg.contains("$EXE") {
-                *arg = arg.replace("$EXE", &params.exe_path);
-            } else if arg.contains("$INPUT") && !params.input_file.is_empty() {
-                *arg = arg.replace("$INPUT", &params.input_file);
-            } else if arg.contains("$OUTPUT") {
-                if let Some(ref out) = params.output_file {
-                    *arg = arg.replace("$OUTPUT", out);
+            for magic in MagicArg::ALL {
+                if arg.contains(magic.pattern()) {
+                    if let Some(val) = magic.resolve(params) {
+                        *arg = arg.replace(magic.pattern(), val);
+                    }
                 }
             }
         }
