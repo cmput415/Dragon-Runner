@@ -578,9 +578,22 @@ mod tests {
         run_tests_for_config(&config, false);
     }
 
+    fn valgrind_available() -> bool {
+        std::process::Command::new("valgrind")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|s: std::process::ExitStatus| s.success())
+    }
+
     /// Memcheck wrapping works on gccPassConfig — runner still produces results.
     #[test]
     fn test_memcheck_clean_programs() {
+        if !valgrind_available() {
+            eprintln!("skipping: valgrind not found");
+            return;
+        }
         let config = create_config("gccPassConfig.json");
         assert!(config.errors.is_empty(), "config errors: {:?}", config.errors);
         let mut ran_any = false;
@@ -613,6 +626,10 @@ mod tests {
     /// Memcheck on MemoryLeaks package — leaky programs should be flagged.
     #[test]
     fn test_memcheck_detects_leaks() {
+        if !valgrind_available() {
+            eprintln!("skipping: valgrind not found");
+            return;
+        }
         let config = create_config("gccMemcheckConfig.json");
         assert!(config.errors.is_empty(), "config errors: {:?}", config.errors);
         for exe in &config.executables {
