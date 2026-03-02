@@ -6,7 +6,6 @@
   "runtimes": {
     "solution": "/home/justin/CDOL/Solutions/VCalc24Solution/bin/libvcalcrt.so"
   },
-  "solutionExecutable": "solution",
   "toolchains": {
     "vcalc-llc": [
       {

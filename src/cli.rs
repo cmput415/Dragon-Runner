@@ -37,6 +37,10 @@ pub struct RunnerArgs {
     #[arg(long = "fail-log")]
     pub failure_log: Option<PathBuf>,
 
+    /// Executable ID to use as the solution (tournament mode)
+    #[arg(long = "solution-exe")]
+    pub solution_exe: Option<String>,
+
     /// Timeout in seconds for each step
     #[arg(long, default_value_t = 2.0)]
     pub timeout: f64,

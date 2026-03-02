@@ -6,7 +6,6 @@
   "runtimes": {
     "<team_name>": "<path_to_libgazrt.so>"
   },
-  "solutionExecutable": "solution",
   "toolchains": {
     "gazprea-llc": [
       {

@@ -227,7 +227,18 @@ impl TournamentHarness {
         let mut defending_exes: Vec<&Executable> = config.executables.iter().collect();
         defending_exes.sort_by(|a, b| a.id.to_lowercase().cmp(&b.id.to_lowercase()));
 
-        let solution_exe = config.solution_exe.as_deref();
+        let Some(solution_exe) = cli_args.solution_exe.as_deref() else {
+            eprintln!("Error: --solution-exe is required in tournament mode");
+            self.passed = false;
+            return;
+        };
+
+        if !config.executables.iter().any(|e| e.id == solution_exe) {
+            eprintln!("Error: --solution-exe '{}' does not match any executable in the config.\nAvailable: {:?}",
+                solution_exe, config.executables.iter().map(|e| &e.id).collect::<Vec<_>>());
+            self.passed = false;
+            return;
+        }
         let failure_log = cli_args.failure_log.as_deref();
 
         for tc in &config.toolchains {
@@ -258,7 +269,7 @@ impl TournamentHarness {
                             print!("{}", ".".yellow());
                             continue;
                         }
-                        let is_solution = solution_exe == Some(&def_exe.id);
+                        let is_solution = solution_exe == def_exe.id;
 
                         if result.did_pass {
                             print!("{}", ".".green());
@@ -443,6 +454,7 @@ mod tests {
         let args = RunnerArgs {
             mode: Mode::Tournament,
             failure_log: Some(failure_log.clone()),
+            solution_exe: Some("TA".into()),
             timeout: 2.0,
             ..Default::default()
         };

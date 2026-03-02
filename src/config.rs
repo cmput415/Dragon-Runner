@@ -24,8 +24,6 @@ struct RawConfig {
     #[serde(default)]
     runtimes: HashMap<String, String>,
     #[serde(default)]
-    solution_executable: Option<String>,
-    #[serde(default)]
     toolchains: HashMap<String, Vec<Step>>,
 }
 
@@ -226,7 +224,6 @@ pub struct Config {
     pub config_path: PathBuf,
     pub test_dir: PathBuf,
     pub executables: Vec<Executable>,
-    pub solution_exe: Option<String>,
     pub toolchains: Vec<ToolChain>,
     pub packages: Vec<Package>,
     pub package_filter: String,
@@ -276,7 +273,6 @@ impl Config {
             config_path: abs_config,
             test_dir,
             executables,
-            solution_exe: raw.solution_executable,
             toolchains,
             packages,
             package_filter: package_filter.into(),
