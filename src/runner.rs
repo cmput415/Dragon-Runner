@@ -227,12 +227,8 @@ impl<'a> ToolChainRunner<'a> {
         test: &Arc<TestFile>,
         exe: &Executable,
     ) -> ControlFlow<TestResult, PipelineState> {
-        let input_stream = if step.uses_ins {
-            test.get_input_stream()
-        } else {
-            b""
-        };
-
+        
+        let input_stream = if step.uses_ins { test.get_input_stream() } else { b"" };
         let output_resolved = self.resolve_output_file(step);
         let output_path = output_resolved.as_ref().map(|(p, _)| p.clone());
         let magic = MagicParams {
@@ -257,7 +253,6 @@ impl<'a> ToolChainRunner<'a> {
         }
 
         let cr = self.run_command(&command, &input_stream);
-
         if cr.timed_out {
             state.command_history.push(cr);
             return ControlFlow::Break(TestResult::timeout(
@@ -275,13 +270,11 @@ impl<'a> ToolChainRunner<'a> {
         let stdout = cr.stdout.clone();
         let stderr = cr.stderr.clone();
         let step_time = (cr.time * 10000.0).round() / 10000.0;
-
         let exit_status = cr.exit_status;
 
         if exit_status == VALGRIND_EXIT_CODE {
             state.memory_leak = true;
         }
-
         state.command_history.push(cr);
 
         if exit_status != 0 && !RESERVED_EXIT_CODES.contains(&exit_status) {
@@ -495,16 +488,6 @@ impl<'a> ToolChainRunner<'a> {
             let exp_error = ERROR_KIND_RE.captures(expected_str);
             let prod_line = ERROR_LINE_RE.captures(produced_str);
             let exp_line = ERROR_LINE_RE.captures(expected_str);
-
-            // MainError hack
-            if let (Some(ref pe), Some(ref ee)) = (&prod_error, &exp_error) {
-                if pe.get(1).map(|m| m.as_str()) == Some("MainError")
-                    && ee.get(1).map(|m| m.as_str()) == Some("MainError")
-                {
-                    return true;
-                }
-            }
-
             match (prod_error, exp_error, prod_line, exp_line) {
                 (Some(_), Some(_), Some(pl), Some(el)) => {
                     pl.get(1).map(|m| m.as_str()) == el.get(1).map(|m| m.as_str())
