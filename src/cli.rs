@@ -142,23 +142,17 @@ pub enum CliAction {
 ///
 /// Supports: `dragon-runner <mode> config.json [flags...]`
 ///           `dragon-runner script <name> [args...]`
-/// If no recognized mode is given, inserts "regular" so clap can parse it.
+/// If no recognized subcommand is given, defaults to "regular".
 pub fn parse_cli_args() -> CliAction {
     let raw_args: Vec<String> = std::env::args().collect();
 
-    // If the user omits the mode subcommand, default to "regular".
-    // Detect this by checking whether the second arg is a known subcommand.
-    let known_modes = ["regular", "tournament", "perf", "memcheck", "script", "serve"];
-    let args_to_parse = if raw_args.len() >= 2 && !known_modes.contains(&raw_args[1].as_str()) && !raw_args[1].starts_with('-') {
-        // Insert "regular" as the subcommand
+    // Try parsing as-is first. If that fails, assume the user omitted the
+    // subcommand and default to "regular".
+    let cli = Cli::try_parse_from(&raw_args).unwrap_or_else(|_| {
         let mut patched = vec![raw_args[0].clone(), "regular".to_string()];
         patched.extend_from_slice(&raw_args[1..]);
-        patched
-    } else {
-        raw_args
-    };
-
-    let cli = Cli::parse_from(args_to_parse);
+        Cli::parse_from(patched)
+    });
 
     match cli.command {
         Commands::Script { args } => CliAction::Script(args),

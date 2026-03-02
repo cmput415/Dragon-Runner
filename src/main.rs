@@ -9,7 +9,6 @@ use dragon_runner_rs::server;
 
 fn main() {
     let action = parse_cli_args();
-
     let cli_args = match action {
         CliAction::Script(args) => {
             std::process::exit(run_script(args));
