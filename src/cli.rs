@@ -33,9 +33,9 @@ pub struct RunnerArgs {
     /// Path to the JSON configuration file
     pub config_file: PathBuf,
 
-    /// Path to write failure log
-    #[arg(long = "fail-log", default_value = "")]
-    pub failure_log: PathBuf,
+    /// Path to write failure log (tournament mode)
+    #[arg(long = "fail-log")]
+    pub failure_log: Option<PathBuf>,
 
     /// Timeout in seconds for each step
     #[arg(long, default_value_t = 2.0)]
@@ -46,12 +46,12 @@ pub struct RunnerArgs {
     pub verify: bool,
 
     /// Debug a specific package path
-    #[arg(long = "debug-package", default_value = "")]
-    pub debug_package: String,
+    #[arg(long = "debug-package")]
+    pub debug_package: Option<String>,
 
     /// Filter packages by glob pattern (case insensitive)
-    #[arg(short = 'p', long = "package", default_value = "")]
-    pub package_filter: String,
+    #[arg(short = 'p', long = "package")]
+    pub package_filter: Option<String>,
 
     /// Show timing information
     #[arg(short = 't', long = "time")]
@@ -66,8 +66,8 @@ pub struct RunnerArgs {
     pub show_testcase: bool,
 
     /// Output file path
-    #[arg(short = 'o', long = "output", default_value = "")]
-    pub output: PathBuf,
+    #[arg(short = 'o', long = "output")]
+    pub output: Option<PathBuf>,
 
     /// Stop on first failure
     #[arg(short = 'f', long = "fast-fail")]

@@ -381,9 +381,8 @@ pub fn load_config(config_path: &Path, args: Option<&RunnerArgs>) -> Option<Conf
     })?;
 
     let debug_package = args
-        .map(|a| a.debug_package.as_str())
-        .filter(|p| !p.is_empty());
-    let package_filter = args.map(|a| a.package_filter.as_str()).unwrap_or("");
+        .and_then(|a| a.debug_package.as_deref());
+    let package_filter = args.and_then(|a| a.package_filter.as_deref()).unwrap_or("");
 
     Some(Config::new(config_path, &config_data, debug_package, package_filter))
 }

@@ -196,7 +196,7 @@ impl TournamentHarness {
         defending_exes.sort_by(|a, b| a.id.to_lowercase().cmp(&b.id.to_lowercase()));
 
         let solution_exe = config.solution_exe.as_deref();
-        let failure_log = &cli_args.failure_log;
+        let failure_log = cli_args.failure_log.as_deref();
 
         for tc in &config.toolchains {
             let csv_filename = format!("toolchain_{}.csv", tc.name);
@@ -227,7 +227,7 @@ impl TournamentHarness {
                         if result.did_pass {
                             print!("{}", ".".green());
                             pass_count += 1;
-                            if is_solution && !failure_log.as_os_str().is_empty() {
+                            if is_solution && failure_log.is_some() {
                                 Self::append_log("pass_log.txt".as_ref(), &format!(
                                     "{} {} {}", tc.name, a_pkg.name, result.test.path.display()
                                 ));
@@ -235,10 +235,12 @@ impl TournamentHarness {
                         } else {
                             print!("{}", ".".red());
                             Self::log_failure_to_file(&feedback_file, &result);
-                            if is_solution && !failure_log.as_os_str().is_empty() {
-                                Self::append_log(failure_log, &format!(
-                                    "{} {} {}", tc.name, a_pkg.name, result.test.path.display()
-                                ));
+                            if let Some(log) = failure_log {
+                                if is_solution {
+                                    Self::append_log(log, &format!(
+                                        "{} {} {}", tc.name, a_pkg.name, result.test.path.display()
+                                    ));
+                                }
                             }
                         }
                         test_count += 1;
@@ -391,7 +393,7 @@ mod tests {
 
         let args = RunnerArgs {
             mode: Mode::Tournament,
-            failure_log: failure_log.into(),
+            failure_log: Some(failure_log.into()),
             timeout: 2.0,
             ..Default::default()
         };
