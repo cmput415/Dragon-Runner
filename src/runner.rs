@@ -670,7 +670,12 @@ mod tests {
 
         assert!(compile_script.exists(), "missing compile_lib.py");
 
-        let expected_lib = tests_dir.join("lib/libfib.so");
+        let (lib_name, config_name) = if cfg!(target_os = "macos") {
+            ("lib/libfib.dylib", "runtimeConfigDarwin.json")
+        } else {
+            ("lib/libfib.so", "runtimeConfigLinux.json")
+        };
+        let expected_lib = tests_dir.join(lib_name);
         if !expected_lib.exists() {
             let status = std::process::Command::new("python3")
                 .args([
@@ -684,7 +689,7 @@ mod tests {
             assert!(expected_lib.exists(), "failed to create shared object");
         }
 
-        let path = config_path("runtimeConfigLinux.json");
+        let path = config_path(config_name);
         let config = load_config(&path, None).expect("config should load");
         assert!(config.errors.is_empty(), "config errors: {:?}", config.errors);
         run_tests_for_config(&config, true);
