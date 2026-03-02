@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>dragon-runner</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:14px/1.5 monospace;background:#1a1a2e;color:#e0e0e0;padding:1rem}
+h1{font-size:1.2rem;margin-bottom:1rem;color:#7fdbca}
+select,textarea,button{font:inherit;background:#16213e;color:#e0e0e0;border:1px solid #334;border-radius:4px;padding:.4rem}
+textarea{width:100%;resize:vertical;tab-size:4}
+button{background:#0f3460;cursor:pointer;padding:.4rem 1.2rem}
+button:hover{background:#1a5276}
+button:disabled{opacity:.5;cursor:wait}
+.row{display:flex;gap:.5rem;margin-bottom:.5rem;align-items:center}
+.row label{min-width:5rem;color:#888}
+#out{margin-top:1rem;white-space:pre-wrap;background:#0f0f23;padding:.8rem;border-radius:4px;min-height:3rem}
+.pass{color:#50fa7b}.fail{color:#ff5555}.dim{color:#666}
+</style>
+</head><body>
+<h1>dragon-runner</h1>
+<div class="row"><label>toolchain</label><select id="tc"></select></div>
+<div class="row"><label>executable</label><select id="exe"></select></div>
+<div class="row"><label>stdin</label><textarea id="sin" rows="2" placeholder="(optional)"></textarea></div>
+<div class="row"><label>expected</label><textarea id="exp" rows="2" placeholder="(optional)"></textarea></div>
+<div class="row"><label>code</label></div>
+<textarea id="code" rows="16" placeholder="enter source code..." spellcheck="false"></textarea>
+<div class="row" style="margin-top:.5rem"><button id="btn" onclick="go()">Run</button><span id="st" class="dim"></span></div>
+<div id="out"></div>
+<script>
+let B=s=>btoa(s),D=s=>atob(s)
+let $=id=>document.getElementById(id)
+
+fetch("/api/info").then(r=>r.json()).then(d=>{
+  d.toolchains.forEach(t=>{let o=new Option(t.name);$("tc").add(o)})
+  d.executables.forEach(e=>{let o=new Option(e.id);$("exe").add(o)})
+  $("st").textContent=d.config_name
+})
+
+async function go(){
+  let b=$("btn");b.disabled=true;$("st").textContent="running...";$("st").className=""
+  let body={toolchain:$("tc").value,executable:$("exe").value,code:B($("code").value)}
+  let s=$("sin").value;if(s)body.stdin=B(s)
+  let e=$("exp").value;if(e)body.expected_output=B(e)
+  try{
+    let r=await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+    let d=await r.json()
+    if(!r.ok){$("out").textContent=d.error;$("st").textContent="error";$("st").className="fail";return}
+    let p=d.passed,t=d.time_secs?.toFixed(3)+"s"
+    $("st").textContent=(p?"PASS":"FAIL")+" "+t
+    $("st").className=p?"pass":"fail"
+    let lines=[]
+    d.steps.forEach(s=>lines.push(`[${s.exit_status}] ${s.name} (${s.time_secs.toFixed(3)}s)`))
+    if(d.stdout)lines.push("\n--- stdout ---\n"+D(d.stdout))
+    if(d.stderr&&D(d.stderr))lines.push("\n--- stderr ---\n"+D(d.stderr))
+    if(d.timed_out)lines.push("\nTIMEOUT at: "+d.failing_step)
+    if(d.failing_step&&!d.timed_out)lines.push("\nfailed at: "+d.failing_step)
+    $("out").textContent=lines.join("\n")
+  }catch(err){$("out").textContent=err;$("st").textContent="error";$("st").className="fail"}
+  finally{b.disabled=false}
+}
+
+$("code").addEventListener("keydown",e=>{
+  if(e.key==="Tab"){e.preventDefault();let t=e.target,s=t.selectionStart;t.value=t.value.slice(0,s)+"\t"+t.value.slice(t.selectionEnd);t.selectionStart=t.selectionEnd=s+1}
+})
+</script>
+</body></html>

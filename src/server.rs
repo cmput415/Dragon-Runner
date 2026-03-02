@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use axum::extract::State;
 use axum::http::StatusCode;
+use axum::response::Html;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use base64::engine::general_purpose::STANDARD as B64;
@@ -92,6 +93,10 @@ fn error_json(status: StatusCode, msg: impl Into<String>) -> (StatusCode, Json<E
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
+
+async fn index() -> Html<&'static str> {
+    Html(include_str!("index.html"))
+}
 
 async fn health() -> &'static str {
     "OK"
@@ -266,6 +271,7 @@ pub async fn run_server(config: Config, bind: &str, timeout: f64, max_concurrent
     });
 
     let app = Router::new()
+        .route("/", get(index))
         .route("/health", get(health))
         .route("/api/info", get(info))
         .route("/api/run", post(run))
