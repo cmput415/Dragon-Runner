@@ -8,21 +8,42 @@ pub fn set_debug_level(level: u32) {
 }
 
 /// Log a message at a given verbosity level with indentation.
+/// Use the `info!`, `debug!`, `trace!`, or `trace2!` macros instead of calling this directly.
+#[doc(hidden)]
 pub fn log(level: u32, indent: usize, msg: &str) {
     if DEBUG_LEVEL.load(Ordering::Relaxed) >= level {
         println!("{:indent$}{msg}", "", indent = indent);
     }
 }
 
-/// Log multiline content with indentation.
-pub fn log_multiline(content: &str, level: u32, indent: usize) {
-    for line in content.lines() {
-        log(level, indent, line.trim_end());
-    }
+/// Always printed (level 0).
+#[macro_export]
+macro_rules! info {
+    ($indent:expr, $($arg:tt)*) => {
+        $crate::log::log(0, $indent, &format!($($arg)*))
+    };
 }
 
-/// Log a delimiter line.
-pub fn log_delimiter(title: &str, level: u32, indent: usize) {
-    let delim = "-".repeat(20);
-    log(level, indent, &format!("{delim} {title} {delim}"));
+/// Printed with -v (level 1).
+#[macro_export]
+macro_rules! debug {
+    ($indent:expr, $($arg:tt)*) => {
+        $crate::log::log(1, $indent, &format!($($arg)*))
+    };
+}
+
+/// Printed with -vv (level 2).
+#[macro_export]
+macro_rules! trace {
+    ($indent:expr, $($arg:tt)*) => {
+        $crate::log::log(2, $indent, &format!($($arg)*))
+    };
+}
+
+/// Printed with -vvv (level 3).
+#[macro_export]
+macro_rules! trace2 {
+    ($indent:expr, $($arg:tt)*) => {
+        $crate::log::log(3, $indent, &format!($($arg)*))
+    };
 }

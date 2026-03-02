@@ -4,9 +4,9 @@ use std::io::Write;
 use colored::Colorize;
 use rayon::prelude::*;
 
+use crate::info;
 use crate::cli::{Mode, RunnerArgs};
 use crate::config::{Config, Executable, Package};
-use crate::log::log;
 use crate::runner::{TestResult, ToolChainRunner};
 
 /// Counters passed through hooks during iteration.
@@ -41,7 +41,7 @@ pub trait TestHarness {
 
         for exe in &config.executables {
             self.pre_executable_hook(&exe.id);
-            log(0, 0, &format!("Running executable: {}", exe.id));
+            info!(0, "Running executable: {}", exe.id);
             let exe_env = exe.runtime_env();
             let mut exe_pass = 0;
             let mut exe_total = 0;
@@ -50,14 +50,14 @@ pub trait TestHarness {
                 let runner = ToolChainRunner::new(tc, cli_args.timeout)
                     .with_env(exe_env.clone())
                     .with_memcheck(cli_args.mode == Mode::Memcheck);
-                log(0, 1, &format!("Running Toolchain: {}", tc.name));
+                info!(1, "Running Toolchain: {}", tc.name);
                 let mut tc_pass = 0;
                 let mut tc_total = 0;
 
                 for pkg in &config.packages {
                     let mut pkg_pass = 0;
                     let mut pkg_total = 0;
-                    log(0, 2, &format!("Entering package {}", pkg.name));
+                    info!(2, "Entering package {}", pkg.name);
 
                     for spkg in &pkg.subpackages {
                         if let Some(ref pat) = filter_pat {
@@ -66,7 +66,7 @@ pub trait TestHarness {
                             }
                         }
 
-                        log(0, 3 + spkg.depth, &format!("Entering subpackage {}", spkg.name));
+                        info!(3 + spkg.depth, "Entering subpackage {}", spkg.name);
                         let mut counters = SubPackageCounters { pass_count: 0, test_count: 0, depth: spkg.depth };
                         self.pre_subpackage_hook(spkg);
 
@@ -87,22 +87,22 @@ pub trait TestHarness {
                         }
 
                         self.post_subpackage_hook(&counters);
-                        log(0, 3 + spkg.depth, &format!("Subpackage Passed:  {} / {}", counters.pass_count, counters.test_count));
+                        info!(3 + spkg.depth, "Subpackage Passed:  {} / {}", counters.pass_count, counters.test_count);
                         pkg_pass += counters.pass_count;
                         pkg_total += counters.test_count;
                     }
 
-                    log(0, 2, &format!("Packaged Passed:  {} / {}", pkg_pass, pkg_total));
+                    info!(2, "Packaged Passed:  {} / {}", pkg_pass, pkg_total);
                     tc_pass += pkg_pass;
                     tc_total += pkg_total;
                 }
 
-                log(0, 1, &format!("Toolchain Passed:  {} / {}", tc_pass, tc_total));
+                info!(1, "Toolchain Passed:  {} / {}", tc_pass, tc_total);
                 exe_pass += tc_pass;
                 exe_total += tc_total;
             }
 
-            log(0, 0, &format!("Executable Passed:  {} / {}", exe_pass, exe_total));
+            info!(0, "Executable Passed:  {} / {}", exe_pass, exe_total);
             self.post_executable_hook();
         }
 
@@ -137,11 +137,11 @@ impl TestHarness for RegularHarness {
         let test_name = &result.test.file;
         if result.did_pass {
             let tag = if result.error_test { "[E-PASS] " } else { "[PASS] " };
-            log(0, indent, &format!("{}{}", tag.green(), test_name));
+            info!(indent, "{}{}", tag.green(), test_name);
             counters.pass_count += 1;
         } else {
             let tag = if result.error_test { "[E-FAIL] " } else { "[FAIL] " };
-            log(0, indent, &format!("{}{}", tag.red(), test_name));
+            info!(indent, "{}{}", tag.red(), test_name);
             self.passed = false;
         }
         counters.test_count += 1;
@@ -281,10 +281,10 @@ impl TestHarness for MemoryCheckHarness {
 
         let test_name = &result.test.file;
         if result.did_pass {
-            log(0, indent, &format!("{}{}", "[PASS] ".green(), test_name));
+            info!(indent, "{}{}", "[PASS] ".green(), test_name);
             counters.pass_count += 1;
         } else {
-            log(0, indent, &format!("{}{}", "[FAIL] ".red(), test_name));
+            info!(indent, "{}{}", "[FAIL] ".red(), test_name);
         }
 
         if result.memory_leak {
@@ -293,9 +293,9 @@ impl TestHarness for MemoryCheckHarness {
     }
 
     fn post_executable_hook(&mut self) {
-        log(0, 0, &format!("Leak Summary: ({} tests)", self.leak_tests.len()));
+        info!(0, "Leak Summary: ({} tests)", self.leak_tests.len());
         for result in &self.leak_tests {
-            log(0, 4, &format!("{}{}", "[LEAK] ".yellow(), result.test.file));
+            info!(4, "{}{}", "[LEAK] ".yellow(), result.test.file);
         }
         self.leak_tests.clear();
         self.test_count = 0;
@@ -338,7 +338,7 @@ impl TestHarness for PerformanceTestingHarness {
         let test_name = &result.test.file;
         if result.did_pass {
             counters.pass_count += 1;
-            log(0, indent, &format!("{}{}", "[PASS] ".green(), test_name));
+            info!(indent, "{}{}", "[PASS] ".green(), test_name);
             self.cur_col.push(result.time.map(|t| format!("{t:.4}")).unwrap_or_default());
         } else {
             self.cur_col.push(format!("{:.4}", cli_args.timeout));

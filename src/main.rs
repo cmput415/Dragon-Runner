@@ -3,7 +3,7 @@ use colored::Colorize;
 use dragon_runner_rs::cli::{parse_cli_args, CliAction, Mode};
 use dragon_runner_rs::config::load_config;
 use dragon_runner_rs::harness::*;
-use dragon_runner_rs::log::log;
+use dragon_runner_rs::{info, debug};
 use dragon_runner_rs::script::run_script;
 use dragon_runner_rs::server;
 
@@ -17,14 +17,14 @@ fn main() {
             let config = match load_config(&config_file, None) {
                 Some(c) => c,
                 None => {
-                    log(0, 0, &format!("Could not open config file: {}", config_file.display()));
+                    info!(0, "Could not open config file: {}", config_file.display());
                     std::process::exit(1);
                 }
             };
             if !config.errors.is_empty() {
-                log(0, 0, &format!("Found Config {} error(s):", config.errors.len()));
+                info!(0, "Found Config {} error(s):", config.errors.len());
                 for e in &config.errors {
-                    log(0, 0, &format!("{e}").red().to_string());
+                    info!(0, "{}", format!("{e}").red());
                 }
                 std::process::exit(1);
             }
@@ -35,42 +35,23 @@ fn main() {
         CliAction::Run(args) => args,
     };
 
-    log(1, 0, &format!("{:?}", cli_args));
+    debug!(0, "{:?}", cli_args);
 
     let config = match load_config(&cli_args.config_file, Some(&cli_args)) {
         Some(c) => c,
         None => {
-            log(0, 0, &format!("Could not open config file: {}", cli_args.config_file.display()));
+            info!(0, "Could not open config file: {}", cli_args.config_file.display());
             std::process::exit(1);
         }
     };
 
     if !config.errors.is_empty() {
-        log(0, 0, &format!("Found Config {} error(s):", config.errors.len()));
-        log(0, 0, &format!("Parsed {} below:", cli_args.config_file.display()));
+        info!(0, "Found Config {} error(s):", config.errors.len());
+        info!(0, "Parsed {} below:", cli_args.config_file.display());
         for e in &config.errors {
-            log(0, 0, &format!("{e}").red().to_string());
+            info!(0, "{}", format!("{e}").red());
         }
         std::process::exit(1);
-    }
-
-    if cli_args.verify {
-        let mut input = String::new();
-        println!("Enter your CCID/Github Team Name: ");
-        std::io::stdin()
-            .read_line(&mut input)
-            .expect("Failed to read input");
-        let ccid = input.trim();
-
-        let found = config.packages.iter().any(|pkg| {
-            log(0, 2, &format!("Searching..  {}", pkg.name));
-            pkg.name == ccid
-        });
-
-        if !found {
-            println!("Could not find package named after CCID: {}", ccid);
-            std::process::exit(1);
-        }
     }
 
     config.log_test_info();

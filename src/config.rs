@@ -4,9 +4,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::{info, debug, trace, trace2};
 use crate::cli::RunnerArgs;
 use crate::error::{DragonError, Validate};
-use crate::log::log;
 use crate::testfile::TestFile;
 use crate::toolchain::ToolChain;
 use crate::util::resolve_relative;
@@ -331,13 +331,13 @@ impl Config {
     }
 
     pub fn log_test_info(&self) {
-        log(1, 0, "\nPackages:");
+        debug!(0, "\nPackages:");
         for pkg in &self.packages {
-            log(1, 2, &format!("-- ({})", pkg.name));
+            debug!(2, "-- ({})", pkg.name);
             for spkg in &pkg.subpackages {
-                log(2, 4, &format!("-- ({})", spkg.name));
+                trace!(4, "-- ({})", spkg.name);
                 for test in &spkg.tests {
-                    log(3, 6, &format!("-- ({})", test.file));
+                    trace2!(6, "-- ({})", test.file);
                 }
             }
         }
@@ -371,12 +371,12 @@ pub fn load_config(config_path: &Path, args: Option<&RunnerArgs>) -> Option<Conf
     }
 
     let content = fs::read_to_string(config_path).ok().or_else(|| {
-        log(0, 0, &format!("Config Error: Failed to parse config: {}", config_path.display()));
+        info!(0, "Config Error: Failed to parse config: {}", config_path.display());
         None
     })?;
 
     let config_data: serde_json::Value = serde_json::from_str(&content).ok().or_else(|| {
-        log(0, 0, &format!("Config Error: Failed to parse config: {}", config_path.display()));
+        info!(0, "Config Error: Failed to parse config: {}", config_path.display());
         None
     })?;
 
