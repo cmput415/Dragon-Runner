@@ -418,7 +418,7 @@ impl SequentialTestHarness for PerformanceTestingHarness {
 
 #[cfg(test)]
 mod tests {
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
 
     use crate::cli::{Mode, RunnerArgs};
     use crate::config::load_config;
@@ -434,12 +434,15 @@ mod tests {
         let path = config_path("ConfigGrade.json");
         let config = load_config(&path, None).expect("config should load");
 
-        let failure_log = Path::new("Failures_rs.txt");
-        let _ = std::fs::remove_file(failure_log);
+        let tmp = tempfile::tempdir().expect("failed to create temp dir");
+        let prev_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(tmp.path()).unwrap();
+
+        let failure_log = tmp.path().join("Failures_rs.txt");
 
         let args = RunnerArgs {
             mode: Mode::Tournament,
-            failure_log: Some(failure_log.into()),
+            failure_log: Some(failure_log.clone()),
             timeout: 2.0,
             ..Default::default()
         };
@@ -452,6 +455,6 @@ mod tests {
             "failure log should have been created"
         );
 
-        let _ = std::fs::remove_file(failure_log);
+        std::env::set_current_dir(prev_dir).unwrap();
     }
 }
