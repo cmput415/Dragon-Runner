@@ -4,12 +4,30 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use serde::Deserialize;
+
 use crate::{info, debug, trace, trace2};
 use crate::cli::RunnerArgs;
 use crate::error::{DragonError, Validate};
 use crate::testfile::TestFile;
-use crate::toolchain::ToolChain;
+use crate::toolchain::{Step, ToolChain};
 use crate::util::resolve_relative;
+
+/// Raw JSON shape of a config file, deserialized directly by serde.
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct RawConfig {
+    #[serde(default)]
+    test_dir: String,
+    #[serde(default)]
+    tested_executable_paths: HashMap<String, String>,
+    #[serde(default)]
+    runtimes: HashMap<String, String>,
+    #[serde(default)]
+    solution_executable: Option<String>,
+    #[serde(default)]
+    toolchains: HashMap<String, Vec<Step>>,
+}
 
 // ---------------------------------------------------------------------------
 // SubPackage
@@ -214,9 +232,9 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(
+    fn new(
         config_path: &Path,
-        config_data: &serde_json::Value,
+        raw: RawConfig,
         debug_package: Option<&str>,
         package_filter: &str,
     ) -> Self {
@@ -229,16 +247,27 @@ impl Config {
             .to_string_lossy()
             .into_owned();
 
-        let test_dir_rel = config_data["testDir"].as_str().unwrap_or("");
-        let test_dir = resolve_relative(Path::new(test_dir_rel), &abs_config);
+        let test_dir = resolve_relative(Path::new(&raw.test_dir), &abs_config);
 
-        let executables = Self::parse_executables(
-            config_data.get("testedExecutablePaths"),
-            config_data.get("runtimes"),
-            &abs_config,
-        );
-        let solution_exe = config_data["solutionExecutable"].as_str().map(Into::into);
-        let toolchains = Self::parse_toolchains(config_data.get("toolchains"));
+        let executables = raw.tested_executable_paths
+            .iter()
+            .map(|(id, path_str)| {
+                let exe_path = resolve_relative(Path::new(path_str), &abs_config);
+                let runtime = raw.runtimes.get(id)
+                    .map(|rt_path| {
+                        let resolved = resolve_relative(Path::new(rt_path), &abs_config);
+                        fs::canonicalize(&resolved).unwrap_or(resolved)
+                    })
+                    .unwrap_or_default();
+                Executable::new(id, exe_path, runtime)
+            })
+            .collect();
+
+        let toolchains = raw.toolchains
+            .into_iter()
+            .map(|(name, steps)| ToolChain::new(&name, steps))
+            .collect();
+
         let packages = Self::gather_packages(&test_dir, debug_package);
 
         let mut cfg = Self {
@@ -246,7 +275,7 @@ impl Config {
             config_path: abs_config,
             test_dir,
             executables,
-            solution_exe,
+            solution_exe: raw.solution_executable,
             toolchains,
             packages,
             package_filter: package_filter.into(),
@@ -254,52 +283,6 @@ impl Config {
         };
         cfg.errors = cfg.collect_errors();
         cfg
-    }
-
-    fn parse_executables(
-        exe_data: Option<&serde_json::Value>,
-        runtime_data: Option<&serde_json::Value>,
-        abs_config_path: &Path,
-    ) -> Vec<Executable> {
-        let exe_map = match exe_data.and_then(|v| v.as_object()) {
-            Some(m) => m,
-            None => return Vec::new(),
-        };
-        let rt_map = runtime_data.and_then(|v| v.as_object());
-
-        exe_map
-            .iter()
-            .map(|(id, path_val)| {
-                let exe_path = resolve_relative(
-                    Path::new(path_val.as_str().unwrap_or("")),
-                    abs_config_path,
-                );
-
-                let runtime = rt_map
-                    .and_then(|rts| rts.get(id.as_str()))
-                    .and_then(|v| v.as_str())
-                    .map(|rt_path| {
-                        let resolved = resolve_relative(Path::new(rt_path), abs_config_path);
-                        fs::canonicalize(&resolved).unwrap_or(resolved)
-                    })
-                    .unwrap_or_default();
-
-                Executable::new(id, exe_path, runtime)
-            })
-            .collect()
-    }
-
-    fn parse_toolchains(tc_data: Option<&serde_json::Value>) -> Vec<ToolChain> {
-        tc_data
-            .and_then(|v| v.as_object())
-            .map(|map| {
-                map.iter()
-                    .map(|(name, steps)| {
-                        ToolChain::new(name, steps.as_array().map(|a| a.as_slice()).unwrap_or(&[]))
-                    })
-                    .collect()
-            })
-            .unwrap_or_default()
     }
 
     fn gather_packages(test_dir: &Path, debug_package: Option<&str>) -> Vec<Package> {
@@ -357,11 +340,11 @@ pub fn load_config(config_path: &Path, args: Option<&RunnerArgs>) -> Option<Conf
     }
 
     let content = fs::read_to_string(config_path).ok().or_else(|| {
-        info!(0, "Config Error: Failed to parse config: {}", config_path.display());
+        info!(0, "Config Error: Failed to read config: {}", config_path.display());
         None
     })?;
 
-    let config_data: serde_json::Value = serde_json::from_str(&content).ok().or_else(|| {
+    let raw: RawConfig = serde_json::from_str(&content).ok().or_else(|| {
         info!(0, "Config Error: Failed to parse config: {}", config_path.display());
         None
     })?;
@@ -370,7 +353,7 @@ pub fn load_config(config_path: &Path, args: Option<&RunnerArgs>) -> Option<Conf
         .and_then(|a| a.debug_package.as_deref());
     let package_filter = args.and_then(|a| a.package_filter.as_deref()).unwrap_or("");
 
-    Some(Config::new(config_path, &config_data, debug_package, package_filter))
+    Some(Config::new(config_path, raw, debug_package, package_filter))
 }
 
 #[cfg(test)]

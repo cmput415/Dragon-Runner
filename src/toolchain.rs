@@ -67,14 +67,8 @@ pub struct ToolChain {
 }
 
 impl ToolChain {
-    pub fn new(name: &str, steps_data: &[serde_json::Value]) -> Self {
-        Self {
-            name: name.into(),
-            steps: steps_data
-                .iter()
-                .filter_map(|v| serde_json::from_value(v.clone()).ok())
-                .collect(),
-        }
+    pub fn new(name: &str, steps: Vec<Step>) -> Self {
+        Self { name: name.into(), steps }
     }
 
     pub fn len(&self) -> usize {
