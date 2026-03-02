@@ -346,21 +346,7 @@ impl Config {
 
 impl fmt::Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Config: {}", self.name)?;
-        writeln!(f, "  testDir: {}", self.test_dir.display())?;
-        writeln!(f, "  executables:")?;
-        for exe in &self.executables {
-            writeln!(f, "    - {} ({})", exe.id, exe.exe_path.display())?;
-        }
-        writeln!(f, "  toolchains:")?;
-        for tc in &self.toolchains {
-            writeln!(f, "    - {} ({} steps)", tc.name, tc.len())?;
-        }
-        writeln!(f, "  packages:")?;
-        for pkg in &self.packages {
-            write!(f, "    - {}", pkg.name)?;
-        }
-        Ok(())
+        fmt::Debug::fmt(self, f)
     }
 }
 

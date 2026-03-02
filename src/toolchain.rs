@@ -1,33 +1,27 @@
 use std::path::Path;
 
+use serde::Deserialize;
+
 use crate::config::Executable;
 use crate::error::{DragonError, Validate};
 
 /// A single step in a toolchain (e.g., compile, link, run).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Step {
+    #[serde(rename = "exe", default)]
     pub exe_raw: String,
+    #[serde(default)]
     pub args: Vec<String>,
+    #[serde(default)]
     pub allow_error: bool,
+    #[serde(rename = "usesInStr", default)]
     pub uses_ins: bool,
+    #[serde(default)]
     pub uses_runtime: bool,
 }
 
 impl Step {
-    pub fn from_json(data: &serde_json::Value) -> Self {
-        Self {
-            exe_raw: data["exe"].as_str().unwrap_or("").into(),
-            args: data
-                .get("args")
-                .and_then(|v| v.as_array())
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(Into::into)).collect())
-                .unwrap_or_default(),
-            allow_error: data["allowError"].as_bool().unwrap_or(false),
-            uses_ins: data["usesInStr"].as_bool().unwrap_or(false),
-            uses_runtime: data["usesRuntime"].as_bool().unwrap_or(false),
-        }
-    }
-
     /// Derive a human-readable step name from the raw exe string and the executable.
     pub fn display_name(&self, exe: &Executable) -> String {
         match self.exe_raw.as_str() {
@@ -76,7 +70,10 @@ impl ToolChain {
     pub fn new(name: &str, steps_data: &[serde_json::Value]) -> Self {
         Self {
             name: name.into(),
-            steps: steps_data.iter().map(Step::from_json).collect(),
+            steps: steps_data
+                .iter()
+                .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                .collect(),
         }
     }
 
