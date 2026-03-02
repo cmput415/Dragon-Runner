@@ -8,6 +8,16 @@ use crate::info;
 use crate::cli::{Mode, RunnerArgs};
 use crate::config::{Config, Executable, Package};
 use crate::runner::{TestResult, ToolChainRunner};
+use crate::testfile::TestFile;
+
+/// Returns the full path or just the filename depending on the flag.
+fn test_display_name(test: &TestFile, full_path: bool) -> String {
+    if full_path {
+        test.path.display().to_string()
+    } else {
+        test.file.clone()
+    }
+}
 
 /// Counters passed through hooks during iteration.
 pub struct SubPackageCounters {
@@ -133,9 +143,9 @@ impl RegularHarness {
 impl SequentialTestHarness for RegularHarness {
     fn run_passed(&self) -> bool { self.passed }
 
-    fn process_test_result(&mut self, result: TestResult, _cli_args: &RunnerArgs, counters: &mut SubPackageCounters) {
+    fn process_test_result(&mut self, result: TestResult, cli_args: &RunnerArgs, counters: &mut SubPackageCounters) {
         let indent = 4 + counters.depth;
-        let test_name = &result.test.file;
+        let test_name = test_display_name(&result.test, cli_args.full_path);
         if result.did_pass {
             let tag = if result.error_test { "[E-PASS] " } else { "[PASS] " };
             info!(indent, "{}{}", tag.green(), test_name);
@@ -275,12 +285,12 @@ impl MemoryCheckHarness {
 impl SequentialTestHarness for MemoryCheckHarness {
     fn run_passed(&self) -> bool { self.passed }
 
-    fn process_test_result(&mut self, result: TestResult, _cli_args: &RunnerArgs, counters: &mut SubPackageCounters) {
+    fn process_test_result(&mut self, result: TestResult, cli_args: &RunnerArgs, counters: &mut SubPackageCounters) {
         self.test_count += 1;
         counters.test_count += 1;
         let indent = 4 + counters.depth;
 
-        let test_name = &result.test.file;
+        let test_name = test_display_name(&result.test, cli_args.full_path);
         if result.did_pass {
             info!(indent, "{}{}", "[PASS] ".green(), test_name);
             counters.pass_count += 1;
@@ -336,7 +346,7 @@ impl SequentialTestHarness for PerformanceTestingHarness {
         }
 
         let indent = 4 + counters.depth;
-        let test_name = &result.test.file;
+        let test_name = test_display_name(&result.test, cli_args.full_path);
         if result.did_pass {
             counters.pass_count += 1;
             info!(indent, "{}{}", "[PASS] ".green(), test_name);

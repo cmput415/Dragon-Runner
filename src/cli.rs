@@ -72,6 +72,10 @@ pub struct RunnerArgs {
     /// Stop on first failure
     #[arg(short = 'f', long = "fast-fail")]
     pub fast_fail: bool,
+
+    /// Print full file paths for test results instead of just the filename
+    #[arg(long = "full-path")]
+    pub full_path: bool,
 }
 
 /// CMPUT 415 testing utility
