@@ -15,18 +15,14 @@ fn main() {
         CliAction::Serve { config_file, bind, timeout, max_concurrent } => {
             let config = match load_config(&config_file, None) {
                 Ok(c) => c,
-                Err(e) => {
-                    info!(0, "{}", format!("{e}").red());
+                Err(errors) => {
+                    info!(0, "Found Config {} error(s):", errors.len());
+                    for e in &errors {
+                        info!(0, "{}", format!("{e}").red());
+                    }
                     std::process::exit(1);
                 }
             };
-            if !config.errors.is_empty() {
-                info!(0, "Found Config {} error(s):", config.errors.len());
-                for e in &config.errors {
-                    info!(0, "{}", format!("{e}").red());
-                }
-                std::process::exit(1);
-            }
             let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
             rt.block_on(server::run_server(config, &bind, timeout, max_concurrent));
             return;
@@ -37,20 +33,15 @@ fn main() {
     debug!(0, "{:?}", cli_args);
     let config = match load_config(&cli_args.config_file, Some(&cli_args)) {
         Ok(c) => c,
-        Err(e) => {
-            info!(0, "{}", format!("{e}").red());
+        Err(errors) => {
+            info!(0, "Found Config {} error(s):", errors.len());
+            info!(0, "Parsed {} below:", cli_args.config_file.display());
+            for e in &errors {
+                info!(0, "{}", format!("{e}").red());
+            }
             std::process::exit(1);
         }
     };
-
-    if !config.errors.is_empty() {
-        info!(0, "Found Config {} error(s):", config.errors.len());
-        info!(0, "Parsed {} below:", cli_args.config_file.display());
-        for e in &config.errors {
-            info!(0, "{}", format!("{e}").red());
-        }
-        std::process::exit(1);
-    }
 
     config.log_test_info();
 

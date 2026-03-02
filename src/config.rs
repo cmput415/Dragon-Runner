@@ -230,7 +230,6 @@ pub struct Config {
     pub toolchains: Vec<ToolChain>,
     pub packages: Vec<Package>,
     pub package_filter: String,
-    pub errors: Vec<DragonError>,
 }
 
 impl Config {
@@ -272,7 +271,7 @@ impl Config {
 
         let packages = Self::gather_packages(&test_dir, debug_package);
 
-        let mut cfg = Self {
+        Self {
             name,
             config_path: abs_config,
             test_dir,
@@ -281,10 +280,7 @@ impl Config {
             toolchains,
             packages,
             package_filter: package_filter.into(),
-            errors: Vec::new(),
-        };
-        cfg.errors = cfg.collect_errors();
-        cfg
+        }
     }
 
     fn gather_packages(test_dir: &Path, debug_package: Option<&str>) -> Vec<Package> {
@@ -308,7 +304,8 @@ impl Config {
             });
         }
         errors.extend(
-            self.executables.iter().flat_map(|e| e.validate())
+            self.executables.iter()
+                .flat_map(|e| e.validate())
                 .chain(self.toolchains.iter().flat_map(|t| t.validate()))
                 .chain(self.packages.iter().flat_map(|p| p.validate()))
         );
@@ -336,20 +333,26 @@ impl fmt::Display for Config {
 }
 
 /// Load and parse a JSON configuration file.
-pub fn load_config(config_path: &Path, args: Option<&RunnerArgs>) -> Result<Config, DragonError> {
+pub fn load_config(config_path: &Path, args: Option<&RunnerArgs>) -> Result<Config, Vec<DragonError>> {
     let path = config_path.to_path_buf();
 
     let content = fs::read_to_string(config_path)
-        .map_err(|_| DragonError::ConfigRead { path: path.clone() })?;
+        .map_err(|_| vec![DragonError::ConfigRead { path: path.clone() }])?;
 
     let raw: RawConfig = serde_json::from_str(&content)
-        .map_err(|e| DragonError::ConfigParse { path: path.clone(), reason: e.to_string() })?;
+        .map_err(|e| vec![DragonError::ConfigParse { path: path.clone(), reason: e.to_string() }])?;
 
     let debug_package = args
         .and_then(|a| a.debug_package.as_deref());
     let package_filter = args.and_then(|a| a.package_filter.as_deref()).unwrap_or("");
 
-    Ok(Config::new(config_path, raw, debug_package, package_filter))
+    let config = Config::new(config_path, raw, debug_package, package_filter);
+    let errors = config.collect_errors();
+    if errors.is_empty() {
+        Ok(config)
+    } else {
+        Err(errors)
+    }
 }
 
 #[cfg(test)]
@@ -382,8 +385,6 @@ mod tests {
                 assert!(!spkg.tests.is_empty(), "subpackage {} should have tests", spkg.name);
             }
         }
-
-        assert!(config.errors.is_empty(), "should have no errors");
     }
 
     #[test]
@@ -424,22 +425,24 @@ mod tests {
     #[test]
     fn test_invalid_dir_config() {
         let path = config_path("invalidDirConfig.json");
-        let config = load_config(&path, None).expect("config should load");
+        let errors = load_config(&path, None).unwrap_err();
 
-        assert!(!config.errors.is_empty(), "should have errors for invalid dir");
-        assert!(!config.test_dir.exists(), "test_dir should not exist");
+        assert!(!errors.is_empty(), "should have errors for invalid dir");
+        assert!(
+            errors.iter().any(|e| matches!(e, DragonError::MissingTestDir { .. })),
+            "should have a MissingTestDir error"
+        );
     }
 
     #[test]
     fn test_invalid_exe_config() {
         let path = config_path("invalidExeConfig.json");
-        let config = load_config(&path, None).expect("config should load");
+        let errors = load_config(&path, None).unwrap_err();
 
-        assert!(!config.errors.is_empty(), "should have errors for invalid exe");
-        assert_eq!(config.executables.len(), 1);
+        assert!(!errors.is_empty(), "should have errors for invalid exe");
         assert!(
-            !config.executables[0].exe_path.exists(),
-            "exe_path should not exist"
+            errors.iter().any(|e| matches!(e, DragonError::MissingFile { .. })),
+            "should have a MissingFile error"
         );
     }
 }
