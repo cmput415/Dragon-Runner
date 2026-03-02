@@ -1,5 +1,4 @@
 use colored::Colorize;
-
 use dragon_runner_rs::cli::{parse_cli_args, CliAction, Mode};
 use dragon_runner_rs::config::load_config;
 use dragon_runner_rs::harness::*;
@@ -36,7 +35,6 @@ fn main() {
     };
 
     debug!(0, "{:?}", cli_args);
-
     let config = match load_config(&cli_args.config_file, Some(&cli_args)) {
         Some(c) => c,
         None => {

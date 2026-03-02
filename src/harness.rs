@@ -16,12 +16,13 @@ pub struct SubPackageCounters {
     pub depth: usize,
 }
 
-/// Mutable hooks called during the default iteration.
-/// Config and cli_args are passed separately to avoid cloning.
-pub trait TestHarness {
+/// Implemented by any `TestHarness` which makes a single, sequential iteration
+/// over the tests in each package and subpackage. Applies to all except for
+/// the `TournamentHarness`, which iterates in a cross product.
+pub trait SequentialTestHarness {
+
     fn run_passed(&self) -> bool;
     fn process_test_result(&mut self, result: TestResult, cli_args: &RunnerArgs, counters: &mut SubPackageCounters);
-
     fn pre_run_hook(&mut self) {}
     fn post_run_hook(&mut self) {}
     fn pre_executable_hook(&mut self, _exe_id: &str) {}
@@ -129,7 +130,7 @@ impl RegularHarness {
     }
 }
 
-impl TestHarness for RegularHarness {
+impl SequentialTestHarness for RegularHarness {
     fn run_passed(&self) -> bool { self.passed }
 
     fn process_test_result(&mut self, result: TestResult, _cli_args: &RunnerArgs, counters: &mut SubPackageCounters) {
@@ -271,7 +272,7 @@ impl MemoryCheckHarness {
     }
 }
 
-impl TestHarness for MemoryCheckHarness {
+impl SequentialTestHarness for MemoryCheckHarness {
     fn run_passed(&self) -> bool { self.passed }
 
     fn process_test_result(&mut self, result: TestResult, _cli_args: &RunnerArgs, counters: &mut SubPackageCounters) {
@@ -326,7 +327,7 @@ impl PerformanceTestingHarness {
     }
 }
 
-impl TestHarness for PerformanceTestingHarness {
+impl SequentialTestHarness for PerformanceTestingHarness {
     fn run_passed(&self) -> bool { self.passed }
 
     fn process_test_result(&mut self, result: TestResult, cli_args: &RunnerArgs, counters: &mut SubPackageCounters) {
