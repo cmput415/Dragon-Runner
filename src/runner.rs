@@ -112,6 +112,7 @@ pub struct TestResult {
     pub did_timeout: bool,
     pub error_test: bool,
     pub memory_leak: bool,
+    pub skipped: bool,
     pub command_history: Vec<CommandResult>,
     pub gen_output: Option<Vec<u8>>,
     pub time: Option<f64>,
@@ -119,6 +120,21 @@ pub struct TestResult {
 }
 
 impl TestResult {
+    fn skipped(test: &Arc<TestFile>) -> Self {
+        Self {
+            test: Arc::clone(test),
+            did_pass: false,
+            did_timeout: false,
+            error_test: false,
+            memory_leak: false,
+            skipped: true,
+            command_history: Vec::new(),
+            gen_output: None,
+            time: None,
+            failing_step: None,
+        }
+    }
+
     fn finished(
         test: &Arc<TestFile>,
         history: Vec<CommandResult>,
@@ -133,6 +149,7 @@ impl TestResult {
             did_timeout: false,
             error_test: false,
             memory_leak,
+            skipped: false,
             command_history: history,
             gen_output: Some(output),
             time: Some(time),
@@ -152,6 +169,7 @@ impl TestResult {
             did_timeout: true,
             error_test: false,
             memory_leak: false,
+            skipped: false,
             command_history: history,
             gen_output: None,
             time: Some(timeout),
@@ -166,6 +184,7 @@ impl TestResult {
             did_timeout: false,
             error_test: false,
             memory_leak: false,
+            skipped: false,
             command_history: history,
             gen_output: None,
             time: None,
@@ -187,6 +206,7 @@ impl TestResult {
             did_timeout: false,
             error_test: true,
             memory_leak,
+            skipped: false,
             command_history: history,
             gen_output: Some(stderr),
             time: None,
@@ -229,6 +249,9 @@ impl<'a> ToolChainRunner<'a> {
 
     /// Run each step of the toolchain for a given test and executable.
     pub fn run(&self, test: &Arc<TestFile>, exe: &Executable) -> TestResult {
+        if test.skip {
+            return TestResult::skipped(test);
+        }
         let tc_len = self.tc.len();
         let init = PipelineState {
             input_file: test.path.clone(),
@@ -559,6 +582,9 @@ mod tests {
                     for spkg in &pkg.subpackages {
                         for test in &spkg.tests {
                             let result = runner.run(test, exe);
+                            if result.skipped {
+                                continue;
+                            }
                             assert_eq!(
                                 result.did_pass, expected_result,
                                 "Test {} expected {} but got {}",

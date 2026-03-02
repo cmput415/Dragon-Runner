@@ -8,6 +8,28 @@ use crate::util::str_to_bytes;
 /// Result of parsing a directive — either successfully read bytes, or a structured error.
 pub type DirectiveResult = Result<Vec<u8>, DragonError>;
 
+/// Recognized directives that can appear in test files.
+pub enum Directive {
+    Check,
+    CheckFile,
+    Input,
+    InputFile,
+    Skip,
+}
+
+impl Directive {
+    /// The string tag to scan for in test file comments.
+    pub fn tag(&self) -> &'static str {
+        match self {
+            Directive::Check => "CHECK:",
+            Directive::CheckFile => "CHECK_FILE:",
+            Directive::Input => "INPUT:",
+            Directive::InputFile => "INPUT_FILE:",
+            Directive::Skip => "SKIP",
+        }
+    }
+}
+
 /// Represents a single test case file with parsed directives.
 #[derive(Debug, Clone)]
 pub struct TestFile {
@@ -18,6 +40,7 @@ pub struct TestFile {
     pub comment_syntax: String,
     pub expected_out: DirectiveResult,
     pub input_stream: DirectiveResult,
+    pub skip: bool,
 }
 
 impl TestFile {
@@ -30,10 +53,17 @@ impl TestFile {
         let file = format!("{stem}{extension}");
         let comment_syntax = "//".to_string();
 
-        let expected_out = Self::resolve_directive(test_path, &comment_syntax, "CHECK:", "CHECK_FILE:");
-        let input_stream = Self::resolve_directive(test_path, &comment_syntax, "INPUT:", "INPUT_FILE:");
+        let expected_out = Self::resolve_directive(
+            test_path, &comment_syntax,
+            Directive::Check.tag(), Directive::CheckFile.tag(),
+        );
+        let input_stream = Self::resolve_directive(
+            test_path, &comment_syntax,
+            Directive::Input.tag(), Directive::InputFile.tag(),
+        );
+        let skip = Self::parse_directive(test_path, &comment_syntax, Directive::Skip.tag()).is_some();
 
-        Self { path: test_path.into(), stem, extension, file, comment_syntax, expected_out, input_stream }
+        Self { path: test_path.into(), stem, extension, file, comment_syntax, expected_out, input_stream, skip }
     }
 
     pub fn get_expected_out(&self) -> &[u8] {
@@ -54,16 +84,18 @@ impl TestFile {
         let inline = Self::parse_directive(test_path, comment_syntax, inline_dir);
         let file_ref = Self::parse_directive(test_path, comment_syntax, file_dir);
 
+        // Transpose Option<Result> → Result<Option> so we can use `?` for errors.
+        let inline = inline.transpose()?;
+        let file_ref = file_ref.transpose()?;
+
         match (inline, file_ref) {
-            (Some(Ok(_)), Some(Ok(_))) => Err(DragonError::DirectiveConflict {
+            (Some(_), Some(_)) => Err(DragonError::DirectiveConflict {
                 test: test_path.file_name().unwrap_or_default().to_string_lossy().into_owned(),
                 inline: inline_dir.into(),
                 file_dir: file_dir.into(),
             }),
-            (Some(Ok(bytes)), _) => Ok(bytes),
-            (Some(Err(e)), _) => Err(e),
-            (None, Some(Ok(ref_bytes))) => Self::read_referenced_file(test_path, file_dir, &ref_bytes),
-            (None, Some(Err(e))) => Err(e),
+            (Some(bytes), _) => Ok(bytes),
+            (None, Some(ref_bytes)) => Self::read_referenced_file(test_path, file_dir, &ref_bytes),
             (None, None) => Ok(Vec::new()),
         }
     }

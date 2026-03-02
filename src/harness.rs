@@ -10,6 +10,15 @@ use crate::config::{Config, Executable, Package};
 use crate::runner::{TestResult, ToolChainRunner};
 use crate::testfile::TestFile;
 
+/// Format a skip count suffix for summary lines.
+fn skip_suffix(skip_count: usize) -> String {
+    if skip_count > 0 {
+        format!(" ({skip_count} skipped)")
+    } else {
+        String::new()
+    }
+}
+
 /// Returns the full path or just the filename depending on the flag.
 fn test_display_name(test: &TestFile, full_path: bool) -> String {
     if full_path {
@@ -23,6 +32,7 @@ fn test_display_name(test: &TestFile, full_path: bool) -> String {
 pub struct SubPackageCounters {
     pub pass_count: usize,
     pub test_count: usize,
+    pub skip_count: usize,
     pub depth: usize,
 }
 
@@ -56,6 +66,7 @@ pub trait SequentialTestHarness {
             let exe_env = exe.runtime_env();
             let mut exe_pass = 0;
             let mut exe_total = 0;
+            let mut exe_skip = 0;
 
             for tc in &config.toolchains {
                 let runner = ToolChainRunner::new(tc, cli_args.timeout)
@@ -64,10 +75,12 @@ pub trait SequentialTestHarness {
                 info!(1, "Running Toolchain: {}", tc.name);
                 let mut tc_pass = 0;
                 let mut tc_total = 0;
+                let mut tc_skip = 0;
 
                 for pkg in &config.packages {
                     let mut pkg_pass = 0;
                     let mut pkg_total = 0;
+                    let mut pkg_skip = 0;
                     info!(2, "Entering package {}", pkg.name);
 
                     for spkg in &pkg.subpackages {
@@ -78,7 +91,7 @@ pub trait SequentialTestHarness {
                         }
 
                         info!(3 + spkg.depth, "Entering subpackage {}", spkg.name);
-                        let mut counters = SubPackageCounters { pass_count: 0, test_count: 0, depth: spkg.depth };
+                        let mut counters = SubPackageCounters { pass_count: 0, test_count: 0, skip_count: 0, depth: spkg.depth };
                         self.pre_subpackage_hook(spkg);
 
                         let results: Vec<TestResult> = spkg.tests
@@ -98,22 +111,25 @@ pub trait SequentialTestHarness {
                         }
 
                         self.post_subpackage_hook(&counters);
-                        info!(3 + spkg.depth, "Subpackage Passed:  {} / {}", counters.pass_count, counters.test_count);
+                        info!(3 + spkg.depth, "Subpackage Passed:  {} / {}{}", counters.pass_count, counters.test_count, skip_suffix(counters.skip_count));
                         pkg_pass += counters.pass_count;
                         pkg_total += counters.test_count;
+                        pkg_skip += counters.skip_count;
                     }
 
-                    info!(2, "Packaged Passed:  {} / {}", pkg_pass, pkg_total);
+                    info!(2, "Packaged Passed:  {} / {}{}", pkg_pass, pkg_total, skip_suffix(pkg_skip));
                     tc_pass += pkg_pass;
                     tc_total += pkg_total;
+                    tc_skip += pkg_skip;
                 }
 
-                info!(1, "Toolchain Passed:  {} / {}", tc_pass, tc_total);
+                info!(1, "Toolchain Passed:  {} / {}{}", tc_pass, tc_total, skip_suffix(tc_skip));
                 exe_pass += tc_pass;
                 exe_total += tc_total;
+                exe_skip += tc_skip;
             }
 
-            info!(0, "Executable Passed:  {} / {}", exe_pass, exe_total);
+            info!(0, "Executable Passed:  {} / {}{}", exe_pass, exe_total, skip_suffix(exe_skip));
             self.post_executable_hook();
         }
 
@@ -146,6 +162,11 @@ impl SequentialTestHarness for RegularHarness {
     fn process_test_result(&mut self, result: TestResult, cli_args: &RunnerArgs, counters: &mut SubPackageCounters) {
         let indent = 4 + counters.depth;
         let test_name = test_display_name(&result.test, cli_args.full_path);
+        if result.skipped {
+            info!(indent, "{}{}", "[SKIP] ".yellow(), test_name);
+            counters.skip_count += 1;
+            return;
+        }
         if result.did_pass {
             let tag = if result.error_test { "[E-PASS] " } else { "[PASS] " };
             info!(indent, "{}{}", tag.green(), test_name);
@@ -233,6 +254,10 @@ impl TournamentHarness {
                     let tests = a_pkg.subpackages.iter().flat_map(|s| &s.tests);
                     for test in tests {
                         let result = runner.run(test, def_exe);
+                        if result.skipped {
+                            print!("{}", ".".yellow());
+                            continue;
+                        }
                         let is_solution = solution_exe == Some(&def_exe.id);
 
                         if result.did_pass {
@@ -286,11 +311,16 @@ impl SequentialTestHarness for MemoryCheckHarness {
     fn run_passed(&self) -> bool { self.passed }
 
     fn process_test_result(&mut self, result: TestResult, cli_args: &RunnerArgs, counters: &mut SubPackageCounters) {
+        let indent = 4 + counters.depth;
+        let test_name = test_display_name(&result.test, cli_args.full_path);
+        if result.skipped {
+            info!(indent, "{}{}", "[SKIP] ".yellow(), test_name);
+            counters.skip_count += 1;
+            return;
+        }
         self.test_count += 1;
         counters.test_count += 1;
-        let indent = 4 + counters.depth;
 
-        let test_name = test_display_name(&result.test, cli_args.full_path);
         if result.did_pass {
             info!(indent, "{}{}", "[PASS] ".green(), test_name);
             counters.pass_count += 1;
@@ -341,12 +371,17 @@ impl SequentialTestHarness for PerformanceTestingHarness {
     fn run_passed(&self) -> bool { self.passed }
 
     fn process_test_result(&mut self, result: TestResult, cli_args: &RunnerArgs, counters: &mut SubPackageCounters) {
+        let indent = 4 + counters.depth;
+        let test_name = test_display_name(&result.test, cli_args.full_path);
+        if result.skipped {
+            info!(indent, "{}{}", "[SKIP] ".yellow(), test_name);
+            counters.skip_count += 1;
+            return;
+        }
         if self.first_exec {
             self.testfile_col.push(result.test.file.clone());
         }
 
-        let indent = 4 + counters.depth;
-        let test_name = test_display_name(&result.test, cli_args.full_path);
         if result.did_pass {
             counters.pass_count += 1;
             info!(indent, "{}{}", "[PASS] ".green(), test_name);
