@@ -14,9 +14,9 @@ fn main() {
         }
         CliAction::Serve { config_file, bind, timeout, max_concurrent } => {
             let config = match load_config(&config_file, None) {
-                Some(c) => c,
-                None => {
-                    info!(0, "Could not open config file: {}", config_file.display());
+                Ok(c) => c,
+                Err(e) => {
+                    info!(0, "{}", format!("{e}").red());
                     std::process::exit(1);
                 }
             };
@@ -36,9 +36,9 @@ fn main() {
 
     debug!(0, "{:?}", cli_args);
     let config = match load_config(&cli_args.config_file, Some(&cli_args)) {
-        Some(c) => c,
-        None => {
-            info!(0, "Could not open config file: {}", cli_args.config_file.display());
+        Ok(c) => c,
+        Err(e) => {
+            info!(0, "{}", format!("{e}").red());
             std::process::exit(1);
         }
     };

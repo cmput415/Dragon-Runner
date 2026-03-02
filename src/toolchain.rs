@@ -44,16 +44,17 @@ impl Validate for Step {
     fn validate(&self) -> Vec<DragonError> {
         let mut errors = Vec::new();
         if self.exe_raw.is_empty() {
-            errors.push(DragonError::Config(
-                "Missing required field 'exe' in Step".into(),
-            ));
+            errors.push(DragonError::MissingField {
+                field: "exe".into(),
+                context: "Step".into(),
+            });
         } else if !self.exe_raw.starts_with('$') && self.exe_raw.contains('/') {
             // Only check existence for paths (containing /), not bare names resolved via $PATH
             if !Path::new(&self.exe_raw).exists() {
-                errors.push(DragonError::Config(format!(
-                    "Cannot find exe '{}' in Step",
-                    self.exe_raw
-                )));
+                errors.push(DragonError::MissingFile {
+                    path: self.exe_raw.clone().into(),
+                    context: "Step".into(),
+                });
             }
         }
         errors

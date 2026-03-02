@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use serde::Deserialize;
 
-use crate::{info, debug, trace, trace2};
+use crate::{debug, trace, trace2};
 use crate::cli::RunnerArgs;
 use crate::error::{DragonError, Validate};
 use crate::testfile::TestFile;
@@ -200,14 +200,16 @@ impl Validate for Executable {
     fn validate(&self) -> Vec<DragonError> {
         let mut errors = Vec::new();
         if !self.exe_path.exists() {
-            errors.push(DragonError::Config(format!(
-                "Cannot find binary file: {} in Executable: {}", self.exe_path.display(), self.id
-            )));
+            errors.push(DragonError::MissingFile {
+                path: self.exe_path.clone(),
+                context: format!("Executable '{}'", self.id),
+            });
         }
         if !self.runtime.as_os_str().is_empty() && !self.runtime.exists() {
-            errors.push(DragonError::Config(format!(
-                "Cannot find runtime file: {} in Executable: {}", self.runtime.display(), self.id
-            )));
+            errors.push(DragonError::MissingFile {
+                path: self.runtime.clone(),
+                context: format!("Executable '{}' runtime", self.id),
+            });
         }
         errors
     }
@@ -301,9 +303,9 @@ impl Config {
     fn collect_errors(&self) -> Vec<DragonError> {
         let mut errors = Vec::new();
         if !self.test_dir.exists() {
-            errors.push(DragonError::Config(format!(
-                "Cannot find test directory: {}", self.test_dir.display()
-            )));
+            errors.push(DragonError::MissingTestDir {
+                path: self.test_dir.clone(),
+            });
         }
         errors.extend(
             self.executables.iter().flat_map(|e| e.validate())
@@ -334,26 +336,20 @@ impl fmt::Display for Config {
 }
 
 /// Load and parse a JSON configuration file.
-pub fn load_config(config_path: &Path, args: Option<&RunnerArgs>) -> Option<Config> {
-    if !config_path.exists() {
-        return None;
-    }
+pub fn load_config(config_path: &Path, args: Option<&RunnerArgs>) -> Result<Config, DragonError> {
+    let path = config_path.to_path_buf();
 
-    let content = fs::read_to_string(config_path).ok().or_else(|| {
-        info!(0, "Config Error: Failed to read config: {}", config_path.display());
-        None
-    })?;
+    let content = fs::read_to_string(config_path)
+        .map_err(|_| DragonError::ConfigRead { path: path.clone() })?;
 
-    let raw: RawConfig = serde_json::from_str(&content).ok().or_else(|| {
-        info!(0, "Config Error: Failed to parse config: {}", config_path.display());
-        None
-    })?;
+    let raw: RawConfig = serde_json::from_str(&content)
+        .map_err(|e| DragonError::ConfigParse { path: path.clone(), reason: e.to_string() })?;
 
     let debug_package = args
         .and_then(|a| a.debug_package.as_deref());
     let package_filter = args.and_then(|a| a.package_filter.as_deref()).unwrap_or("");
 
-    Some(Config::new(config_path, raw, debug_package, package_filter))
+    Ok(Config::new(config_path, raw, debug_package, package_filter))
 }
 
 #[cfg(test)]

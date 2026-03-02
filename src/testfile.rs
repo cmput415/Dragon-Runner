@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use crate::error::{DragonError, Validate};
 use crate::util::str_to_bytes;
 
-/// Result of parsing a directive — either successfully read bytes, or an error message.
-pub type DirectiveResult = Result<Vec<u8>, String>;
+/// Result of parsing a directive — either successfully read bytes, or a structured error.
+pub type DirectiveResult = Result<Vec<u8>, DragonError>;
 
 /// Represents a single test case file with parsed directives.
 #[derive(Debug, Clone)]
@@ -55,10 +55,11 @@ impl TestFile {
         let file_ref = Self::parse_directive(test_path, comment_syntax, file_dir);
 
         match (inline, file_ref) {
-            (Some(Ok(_)), Some(Ok(_))) => Err(format!(
-                "Directive Conflict for test {}: Supplied both {inline_dir} and {file_dir}",
-                test_path.file_name().unwrap_or_default().to_string_lossy(),
-            )),
+            (Some(Ok(_)), Some(Ok(_))) => Err(DragonError::DirectiveConflict {
+                test: test_path.file_name().unwrap_or_default().to_string_lossy().into_owned(),
+                inline: inline_dir.into(),
+                file_dir: file_dir.into(),
+            }),
             (Some(Ok(bytes)), _) => Ok(bytes),
             (Some(Err(e)), _) => Err(e),
             (None, Some(Ok(ref_bytes))) => Self::read_referenced_file(test_path, file_dir, &ref_bytes),
@@ -74,15 +75,15 @@ impl TestFile {
         let full_path = parent.join(&file_str);
 
         if !full_path.exists() {
-            return Err(format!(
-                "Failed to locate path supplied to {directive}\n\tTest:{}\n\tPath:{}\n",
-                test_path.display(),
-                full_path.display(),
-            ));
+            return Err(DragonError::ReferencedFileNotFound {
+                path: full_path,
+                directive: directive.into(),
+                test: test_path.into(),
+            });
         }
 
         fs::read(&full_path)
-            .map_err(|_| format!("Failed to read file {}", full_path.display()))
+            .map_err(|_| DragonError::ReferencedFileRead { path: full_path })
     }
 
     /// Scan a test file for lines matching `// DIRECTIVE:value` and collect the values.
@@ -92,16 +93,14 @@ impl TestFile {
         comment_syntax: &str,
         directive: &str,
     ) -> Option<DirectiveResult> {
-        let err = || format!("Unknown error occurred while parsing testfile: {}", test_path.display());
-
         let file = match fs::File::open(test_path) {
             Ok(f) => f,
-            Err(_) => return Some(Err(err())),
+            Err(_) => return Some(Err(DragonError::TestFileRead { path: test_path.into() })),
         };
 
-        let values: Result<Vec<Vec<u8>>, String> = io::BufReader::new(file)
+        let values: Result<Vec<Vec<u8>>, DragonError> = io::BufReader::new(file)
             .lines()
-            .map(|line| line.map_err(|_| err()))
+            .map(|line| line.map_err(|_| DragonError::TestFileRead { path: test_path.into() }))
             .filter_map(|line| {
                 let line = match line {
                     Ok(l) => l,
@@ -140,7 +139,7 @@ impl Validate for TestFile {
         [&self.expected_out, &self.input_stream]
             .into_iter()
             .filter_map(|r| r.as_ref().err())
-            .map(|msg| DragonError::TestFile(msg.clone()))
+            .cloned()
             .collect()
     }
 }
