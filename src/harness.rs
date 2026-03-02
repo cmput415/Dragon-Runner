@@ -2,6 +2,7 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 
 use colored::Colorize;
+use rayon::prelude::*;
 
 use crate::cli::{Mode, RunnerArgs};
 use crate::config::{Config, Executable, Package};
@@ -69,8 +70,12 @@ pub trait TestHarness {
                         let mut counters = SubPackageCounters { pass_count: 0, test_count: 0, depth: spkg.depth };
                         self.pre_subpackage_hook(spkg);
 
-                        for test in &spkg.tests {
-                            let result = runner.run(test, exe);
+                        let results: Vec<TestResult> = spkg.tests
+                            .par_iter()
+                            .map(|test| runner.run(test, exe))
+                            .collect();
+
+                        for result in results {
                             let fast_fail = cli_args.fast_fail && !result.did_pass;
                             self.process_test_result(result, cli_args, &mut counters);
                             if fast_fail {
