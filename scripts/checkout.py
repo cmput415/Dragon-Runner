@@ -1,3 +1,11 @@
+"""
+============================== 415 Grading Script ==============================
+Author: Justin Meimar
+Name: checkout.py
+Desc: Once all the repositories are pulled from gh-classroom, this script will
+checkout each to the latest commit before the deadline.
+================================================================================
+"""
 import sys
 import subprocess
 import argparse

@@ -7,6 +7,7 @@ use rayon::prelude::*;
 use crate::info;
 use crate::cli::{Mode, RunnerArgs};
 use crate::config::{Config, Executable, Package};
+use crate::log::log;
 use crate::runner::{TestResult, ToolChainRunner};
 use crate::testfile::TestFile;
 
@@ -26,6 +27,100 @@ fn test_display_name(test: &TestFile, full_path: bool) -> String {
     } else {
         test.file.clone()
     }
+}
+
+/// Format a timing suffix for the PASS/FAIL line.
+/// Matches Python: right-aligned in a 10-char field followed by ` (s)`.
+fn time_suffix(result: &TestResult, show_time: bool) -> String {
+    if show_time {
+        if let Some(t) = result.time {
+            return format!("{:>10.4} (s)", t);
+        }
+    }
+    String::new()
+}
+
+/// Truncate bytes with middle omission if they exceed `max_bytes`.
+/// Matches Python's `truncated_bytes()`.
+fn truncated_bytes(data: &[u8], max_bytes: usize) -> Vec<u8> {
+    if data.len() <= max_bytes {
+        return data.to_vec();
+    }
+    let omission = b"\n{{ omitted for brevity }}\n";
+    let available = max_bytes.saturating_sub(omission.len());
+    let half = available / 2;
+    let mut out = Vec::with_capacity(max_bytes);
+    out.extend_from_slice(&data[..half]);
+    out.extend_from_slice(omission);
+    out.extend_from_slice(&data[data.len() - half..]);
+    out
+}
+
+/// Generate a pretty-printed box around file contents.
+/// Matches Python's `TestFile.pretty_print()`.
+fn pretty_print_file(path: &std::path::Path) -> Option<String> {
+    let content = fs::read_to_string(path).ok()?;
+    let term_width = terminal_size::terminal_size()
+        .map(|(w, _)| w.0 as usize)
+        .unwrap_or(80);
+    let content_width = std::cmp::min(term_width.saturating_sub(10), 100);
+    if content_width < 6 {
+        return Some(content);
+    }
+
+    let mut lines = Vec::new();
+    // top border
+    lines.push(format!("\u{250c}{}\u{2510}", "\u{2500}".repeat(content_width - 2)));
+    for line in content.lines() {
+        let display = if line.len() > content_width - 4 {
+            format!("{}...", &line[..content_width - 7])
+        } else {
+            line.to_string()
+        };
+        lines.push(format!("\u{2502} {:<width$} \u{2502}", display, width = content_width - 4));
+    }
+    // bottom border
+    lines.push(format!("\u{2514}{}\u{2518}", "\u{2500}".repeat(content_width - 2)));
+    Some(lines.join("\n"))
+}
+
+/// Print additional test details below the PASS/FAIL line based on CLI flags.
+/// Called by both RegularHarness and MemoryCheckHarness.
+/// Matches the Python `TestResult.log()` output order and verbosity levels.
+fn print_test_details(result: &TestResult, cli_args: &RunnerArgs, indent: usize) {
+    // -s: show testcase (level 0 on fail, level 2 on pass)
+    if cli_args.show_testcase {
+        let level: u32 = if result.did_pass { 2 } else { 0 };
+        if let Some(boxed) = pretty_print_file(&result.test.path) {
+            for line in boxed.lines() {
+                log(level, indent + 2, line);
+            }
+        }
+    }
+
+    // Command history: level 3 on pass, level 2 on fail
+    let cmd_level: u32 = if result.did_pass { 3 } else { 2 };
+    log(cmd_level, indent + 2, &format!("==> Command History"));
+    for cr in &result.command_history {
+        log(cmd_level, indent + 4, &format!("==> {} (exit {})", cr.cmd, cr.exit_status));
+        let stdout = truncated_bytes(&cr.stdout, 512);
+        log(cmd_level, indent + 6, &format!(
+            "stdout ({} bytes): {}", cr.stdout.len(), String::from_utf8_lossy(&stdout),
+        ));
+        let stderr = truncated_bytes(&cr.stderr, 512);
+        log(cmd_level, indent + 6, &format!(
+            "stderr ({} bytes): {}", cr.stderr.len(), String::from_utf8_lossy(&stderr),
+        ));
+    }
+
+    // Expected vs Generated output: level 2 on pass, level 1 on fail
+    let diff_level: u32 = if result.did_pass { 2 } else { 1 };
+    let expected_out = result.test.get_expected_out();
+    let generated_out = result.gen_output.as_deref().unwrap_or(b"");
+    log(diff_level, indent + 2, &format!("==> Expected Out ({} bytes):", expected_out.len()));
+    log(diff_level, indent + 3, &format!("{:?}", expected_out));
+    log(diff_level, indent + 2, &format!("==> Generated Out ({} bytes):", generated_out.len()));
+    log(diff_level, indent + 3, &format!("{:?}", generated_out));
 }
 
 /// Counters passed through hooks during iteration.
@@ -167,16 +262,18 @@ impl SequentialTestHarness for RegularHarness {
             counters.skip_count += 1;
             return;
         }
+        let time = time_suffix(&result, cli_args.time);
         if result.did_pass {
             let tag = if result.error_test { "[E-PASS] " } else { "[PASS] " };
-            info!(indent, "{}{}", tag.green(), test_name);
+            info!(indent, "{}{}{}", tag.green(), test_name, time);
             counters.pass_count += 1;
         } else {
             let tag = if result.error_test { "[E-FAIL] " } else { "[FAIL] " };
-            info!(indent, "{}{}", tag.red(), test_name);
+            info!(indent, "{}{}{}", tag.red(), test_name, time);
             self.passed = false;
         }
         counters.test_count += 1;
+        print_test_details(&result, cli_args, indent);
     }
 }
 
@@ -332,12 +429,15 @@ impl SequentialTestHarness for MemoryCheckHarness {
         self.test_count += 1;
         counters.test_count += 1;
 
+        let time = time_suffix(&result, cli_args.time);
         if result.did_pass {
-            info!(indent, "{}{}", "[PASS] ".green(), test_name);
+            info!(indent, "{}{}{}", "[PASS] ".green(), test_name, time);
             counters.pass_count += 1;
         } else {
-            info!(indent, "{}{}", "[FAIL] ".red(), test_name);
+            info!(indent, "{}{}{}", "[FAIL] ".red(), test_name, time);
         }
+
+        print_test_details(&result, cli_args, indent);
 
         if result.memory_leak {
             self.leak_tests.push(result);

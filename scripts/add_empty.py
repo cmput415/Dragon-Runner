@@ -2,7 +2,8 @@
 ============================== 415 Grading Script ==============================
 Author: Justin Meimar
 Name: add_empty.py
-Desc:
+Desc: Suplement competitive test suite submissions with empty tests to adhere to
+the submission minimum (usually 5 tests).
 ================================================================================
 """
 import sys
