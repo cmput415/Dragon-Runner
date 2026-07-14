@@ -1,5 +1,4 @@
-use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::fs;
 
 use colored::Colorize;
 use rayon::prelude::*;
@@ -7,6 +6,7 @@ use rayon::prelude::*;
 use crate::info;
 use crate::cli::{Mode, RunnerArgs};
 use crate::config::{Config, Executable, Package};
+use crate::grading::{PerfTable, TournamentTable};
 use crate::log::log;
 use crate::runner::{TestResult, ToolChainRunner};
 use crate::testfile::TestFile;
@@ -281,121 +281,124 @@ impl SequentialTestHarness for RegularHarness {
 // TournamentHarness
 // ---------------------------------------------------------------------------
 
-pub struct TournamentHarness {
-    pub passed: bool,
+/// A failing test recorded during tournament iteration, kept only well enough
+/// to reconstruct feedback files.
+pub struct TournamentFailure {
+    pub toolchain: String,
+    pub defender: String,
+    pub test_file: String,
+    pub expected_out: Vec<u8>,
+    pub generated_out: Vec<u8>,
 }
 
+/// A test the *solution* executable passed. Emitted alongside failures so
+/// `--fail-log` can produce both `pass_log.txt` and the fail log.
+pub struct TournamentSolutionResult {
+    pub toolchain: String,
+    pub attacker: String,
+    pub test_path: std::path::PathBuf,
+    pub did_pass: bool,
+}
+
+/// Full result of a tournament run. Owns everything needed to compute grades
+/// or write per-team feedback files; no I/O happens inside the harness.
+pub struct TournamentOutput {
+    pub tables: Vec<TournamentTable>,
+    pub failures: Vec<TournamentFailure>,
+    pub solution_results: Vec<TournamentSolutionResult>,
+}
+
+pub struct TournamentHarness;
+
 impl TournamentHarness {
-    pub fn new() -> Self {
-        Self { passed: true }
-    }
+    pub fn new() -> Self { Self }
 
-    /// Tournament has its own iteration logic (cross-product of packages x executables).
-    pub fn run(&mut self, config: &Config, cli_args: &RunnerArgs) -> bool {
-        self.tournament_iterate(config, cli_args);
-        self.passed
-    }
-
-    fn log_failure_to_file(file: &str, result: &TestResult) {
-        if result.did_pass {
-            return;
+    /// Run the cross-product tournament and return everything needed to
+    /// write CSVs and feedback files. All output paths are the caller's
+    /// responsibility.
+    ///
+    /// Returns `None` if the tournament could not run (missing `--solution-exe`
+    /// or the id doesn't match any executable). The error is printed to stderr.
+    pub fn run(&self, config: &Config, cli_args: &RunnerArgs) -> Option<TournamentOutput> {
+        let Some(solution_exe) = cli_args.solution_exe.as_deref() else {
+            eprintln!("Error: --solution-exe is required in tournament mode");
+            return None;
+        };
+        if !config.executables.iter().any(|e| e.id == solution_exe) {
+            eprintln!("Error: --solution-exe '{}' does not match any executable in the config.\nAvailable: {:?}",
+                solution_exe, config.executables.iter().map(|e| &e.id).collect::<Vec<_>>());
+            return None;
         }
-        let Ok(mut f) = OpenOptions::new().create(true).append(true).open(file) else { return };
 
-        let exp = String::from_utf8_lossy(result.test.get_expected_out());
-        let gen = result.gen_output.as_deref()
-            .map(|b| String::from_utf8_lossy(b).into_owned())
-            .unwrap_or_default();
-
-        let _ = writeln!(f, "{}\nTest: {}\n\nExpected Output: {exp:?}\nGenerated Output: {gen:?}",
-            "=".repeat(80), result.test.file);
-    }
-
-    fn append_log(path: &std::path::Path, line: &str) {
-        if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(path) {
-            let _ = writeln!(f, "{line}");
-        }
-    }
-
-    fn tournament_iterate(&mut self, config: &Config, cli_args: &RunnerArgs) {
         let mut attacking_pkgs: Vec<&Package> = config.packages.iter().collect();
         attacking_pkgs.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
 
         let mut defending_exes: Vec<&Executable> = config.executables.iter().collect();
         defending_exes.sort_by(|a, b| a.id.to_lowercase().cmp(&b.id.to_lowercase()));
 
-        let Some(solution_exe) = cli_args.solution_exe.as_deref() else {
-            eprintln!("Error: --solution-exe is required in tournament mode");
-            self.passed = false;
-            return;
-        };
-
-        if !config.executables.iter().any(|e| e.id == solution_exe) {
-            eprintln!("Error: --solution-exe '{}' does not match any executable in the config.\nAvailable: {:?}",
-                solution_exe, config.executables.iter().map(|e| &e.id).collect::<Vec<_>>());
-            self.passed = false;
-            return;
-        }
-        let failure_log = cli_args.failure_log.as_deref();
+        let mut tables = Vec::with_capacity(config.toolchains.len());
+        let mut failures = Vec::new();
+        let mut solution_results = Vec::new();
 
         for tc in &config.toolchains {
-            let csv_filename = format!("toolchain_{}.csv", tc.name);
-            let mut csv_file = fs::File::create(&csv_filename).expect("cannot create CSV");
-
-            let header: Vec<&str> = std::iter::once(tc.name.as_str())
-                .chain(attacking_pkgs.iter().map(|p| p.name.as_str()))
-                .collect();
-            let _ = writeln!(csv_file, "{}", header.join(","));
             println!("\nToolchain: {}", tc.name);
+            let mut cells = vec![vec![(0u32, 0u32); attacking_pkgs.len()]; defending_exes.len()];
 
-            for def_exe in &defending_exes {
+            for (i, def_exe) in defending_exes.iter().enumerate() {
                 let runner = ToolChainRunner::new(tc, cli_args.timeout)
                     .with_env(def_exe.runtime_env());
-                let feedback_file = format!("{}-{}feedback.txt", def_exe.id, tc.name);
-                let mut row_cells: Vec<String> = vec![def_exe.id.clone()];
+                let is_solution = solution_exe == def_exe.id;
 
-                for a_pkg in &attacking_pkgs {
+                for (j, a_pkg) in attacking_pkgs.iter().enumerate() {
                     print!("\n  {:<12} --> {:<12}", a_pkg.name, def_exe.id);
-                    let mut pass_count = 0usize;
-                    let mut test_count = 0usize;
+                    let mut pass_count = 0u32;
+                    let mut test_count = 0u32;
 
-                    let tests = a_pkg.subpackages.iter().flat_map(|s| &s.tests);
-                    for test in tests {
+                    for test in a_pkg.subpackages.iter().flat_map(|s| &s.tests) {
                         let result = runner.run(test, def_exe);
                         if result.skipped {
                             print!("{}", ".".yellow());
                             continue;
                         }
-                        let is_solution = solution_exe == def_exe.id;
+                        test_count += 1;
 
                         if result.did_pass {
                             print!("{}", ".".green());
                             pass_count += 1;
-                            if is_solution && failure_log.is_some() {
-                                Self::append_log("pass_log.txt".as_ref(), &format!(
-                                    "{} {} {}", tc.name, a_pkg.name, result.test.path.display()
-                                ));
-                            }
                         } else {
                             print!("{}", ".".red());
-                            Self::log_failure_to_file(&feedback_file, &result);
-                            if let Some(log) = failure_log {
-                                if is_solution {
-                                    Self::append_log(log, &format!(
-                                        "{} {} {}", tc.name, a_pkg.name, result.test.path.display()
-                                    ));
-                                }
-                            }
+                            failures.push(TournamentFailure {
+                                toolchain: tc.name.clone(),
+                                defender: def_exe.id.clone(),
+                                test_file: result.test.file.clone(),
+                                expected_out: result.test.get_expected_out().to_vec(),
+                                generated_out: result.gen_output.clone().unwrap_or_default(),
+                            });
                         }
-                        test_count += 1;
+
+                        if is_solution {
+                            solution_results.push(TournamentSolutionResult {
+                                toolchain: tc.name.clone(),
+                                attacker: a_pkg.name.clone(),
+                                test_path: result.test.path.clone(),
+                                did_pass: result.did_pass,
+                            });
+                        }
                     }
 
-                    row_cells.push(format!("{pass_count}/{test_count}"));
+                    cells[i][j] = (pass_count, test_count);
                 }
-
-                let _ = writeln!(csv_file, "{}", row_cells.join(","));
             }
+
+            tables.push(TournamentTable {
+                toolchain: tc.name.clone(),
+                defenders: defending_exes.iter().map(|e| e.id.clone()).collect(),
+                attackers: attacking_pkgs.iter().map(|p| p.name.clone()).collect(),
+                cells,
+            });
         }
+
+        Some(TournamentOutput { tables, failures, solution_results })
     }
 }
 
@@ -458,28 +461,47 @@ impl SequentialTestHarness for MemoryCheckHarness {
 // PerformanceTestingHarness
 // ---------------------------------------------------------------------------
 
+/// Collects per-(test, executable) timings; returns a `PerfTable` for the
+/// caller to grade and write.
 pub struct PerformanceTestingHarness {
-    pub passed: bool,
-    pub csv_cols: Vec<Vec<String>>,
-    pub cur_col: Vec<String>,
-    pub testfile_col: Vec<String>,
-    pub first_exec: bool,
+    /// Timings by executable, in the order executables are encountered. Each
+    /// inner Vec is a column: one entry per test (in `tests` order).
+    columns: Vec<Vec<f64>>,
+    tests: Vec<String>,
+    exe_ids: Vec<String>,
+    current_column: Vec<f64>,
+    first_exec: bool,
 }
 
 impl PerformanceTestingHarness {
     pub fn new() -> Self {
         Self {
-            passed: true,
-            csv_cols: Vec::new(),
-            cur_col: Vec::new(),
-            testfile_col: vec!["Test".into()],
+            columns: Vec::new(),
+            tests: Vec::new(),
+            exe_ids: Vec::new(),
+            current_column: Vec::new(),
             first_exec: true,
         }
+    }
+
+    /// Assemble a `PerfTable`. `times_seconds[test][compiler]`.
+    pub fn into_table(self) -> PerfTable {
+        let num_tests = self.tests.len();
+        let num_compilers = self.exe_ids.len();
+        let mut times = vec![vec![0.0f64; num_compilers]; num_tests];
+        for (c, col) in self.columns.iter().enumerate() {
+            for (r, &t) in col.iter().enumerate() {
+                if r < num_tests {
+                    times[r][c] = t;
+                }
+            }
+        }
+        PerfTable { compilers: self.exe_ids, tests: self.tests, times_seconds: times }
     }
 }
 
 impl SequentialTestHarness for PerformanceTestingHarness {
-    fn run_passed(&self) -> bool { self.passed }
+    fn run_passed(&self) -> bool { true }
 
     fn process_test_result(&mut self, result: TestResult, cli_args: &RunnerArgs, counters: &mut SubPackageCounters) {
         let indent = 4 + counters.depth;
@@ -490,83 +512,27 @@ impl SequentialTestHarness for PerformanceTestingHarness {
             return;
         }
         if self.first_exec {
-            self.testfile_col.push(result.test.file.clone());
+            self.tests.push(result.test.file.clone());
         }
 
         if result.did_pass {
             counters.pass_count += 1;
             info!(indent, "{}{}", "[PASS] ".green(), test_name);
-            self.cur_col.push(result.time.map(|t| format!("{t:.4}")).unwrap_or_default());
+            self.current_column.push(result.time.unwrap_or(cli_args.timeout));
         } else {
-            self.cur_col.push(format!("{:.4}", cli_args.timeout));
+            self.current_column.push(cli_args.timeout);
         }
         counters.test_count += 1;
     }
 
     fn pre_executable_hook(&mut self, exe_id: &str) {
-        self.cur_col.push(exe_id.into());
+        self.exe_ids.push(exe_id.into());
+        self.current_column.clear();
     }
 
     fn post_executable_hook(&mut self) {
-        if self.first_exec {
-            self.csv_cols.push(self.testfile_col.clone());
-            self.first_exec = false;
-        }
-        self.csv_cols.push(std::mem::take(&mut self.cur_col));
-    }
-
-    fn post_run_hook(&mut self) {
-        let max_len = self.csv_cols.iter().map(|c| c.len()).max().unwrap_or(0);
-        let mut f = fs::File::create("perf.csv").expect("cannot create perf.csv");
-        for row_idx in 0..max_len {
-            let row: Vec<&str> = self.csv_cols.iter()
-                .map(|col| col.get(row_idx).map(|s| s.as_str()).unwrap_or(""))
-                .collect();
-            let _ = writeln!(f, "{}", row.join(","));
-        }
+        self.columns.push(std::mem::take(&mut self.current_column));
+        self.first_exec = false;
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
-
-    use crate::cli::{Mode, RunnerArgs};
-    use crate::config::load_config;
-    use super::TournamentHarness;
-
-    fn config_path(name: &str) -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("tests").join("configs").join(name)
-    }
-
-    #[test]
-    fn test_grader_config() {
-        let path = config_path("ConfigGrade.json");
-        let config = load_config(&path, None).expect("config should load");
-
-        let tmp = tempfile::tempdir().expect("failed to create temp dir");
-        let prev_dir = std::env::current_dir().unwrap();
-        std::env::set_current_dir(tmp.path()).unwrap();
-
-        let failure_log = tmp.path().join("Failures_rs.txt");
-
-        let args = RunnerArgs {
-            mode: Mode::Tournament,
-            failure_log: Some(failure_log.clone()),
-            solution_exe: Some("TA".into()),
-            timeout: 2.0,
-            ..Default::default()
-        };
-
-        let mut harness = TournamentHarness::new();
-        harness.run(&config, &args);
-
-        assert!(
-            failure_log.exists(),
-            "failure log should have been created"
-        );
-
-        std::env::set_current_dir(prev_dir).unwrap();
-    }
-}

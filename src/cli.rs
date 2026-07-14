@@ -41,6 +41,10 @@ pub struct RunnerArgs {
     #[arg(long = "solution-exe")]
     pub solution_exe: Option<String>,
 
+    /// Path to JSON file overriding grading weights (tournament + perf modes)
+    #[arg(long = "grade-config")]
+    pub grade_config: Option<PathBuf>,
+
     /// Timeout in seconds for each step
     #[arg(long, default_value_t = 2.0)]
     pub timeout: f64,
@@ -49,9 +53,9 @@ pub struct RunnerArgs {
     #[arg(long)]
     pub verify: bool,
 
-    /// Debug a specific package path
-    #[arg(long = "debug-package")]
-    pub debug_package: Option<String>,
+    /// Run the toolchain against a specific file or directory instead of scanning testDir
+    #[arg(long = "test-path")]
+    pub test_path: Option<String>,
 
     /// Filter packages by glob pattern (case insensitive)
     #[arg(short = 'p', long = "package")]

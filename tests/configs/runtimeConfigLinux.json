@@ -1,7 +1,7 @@
 {
   "testDir": "../packages/RuntimeCPackage",
   "testedExecutablePaths": {
-    "clang": "/usr/bin/clang"
+    "clang": "clang"
   },
   "runtimes": {
     "clang": "../lib/libfib.so"

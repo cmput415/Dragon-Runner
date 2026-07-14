@@ -1,7 +1,7 @@
 {
   "testDir": "../packages/CPackage",
   "testedExecutablePaths": {
-    "gcc": "/usr/bin/gcc"
+    "gcc": "gcc"
   },
   "runtimes": {
     "gcc": "../lib/lib-this-runtime-dne.so"

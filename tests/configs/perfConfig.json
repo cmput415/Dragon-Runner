@@ -1,9 +1,9 @@
 {
   "testDir": "../packages/CPackage/RegularPass/",
   "testedExecutablePaths": {
-    "gcc1": "/usr/bin/gcc",
-    "gcc2": "/usr/bin/gcc",
-    "gcc3": "/usr/bin/gcc"
+    "gcc1": "gcc",
+    "gcc2": "gcc",
+    "gcc3": "gcc"
   },
   "toolchains": {
     "GCC-toolchain": [

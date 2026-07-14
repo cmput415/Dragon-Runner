@@ -11,7 +11,7 @@ use crate::cli::RunnerArgs;
 use crate::error::{DragonError, Validate};
 use crate::testfile::TestFile;
 use crate::toolchain::{Step, ToolChain};
-use crate::util::resolve_relative;
+use crate::util::{path_lookup, resolve_relative};
 
 /// Raw JSON shape of a config file, deserialized directly by serde.
 #[derive(Deserialize, Default)]
@@ -152,6 +152,20 @@ impl Validate for Package {
     }
 }
 
+/// Resolve an `exe` string from `testedExecutablePaths`.
+///
+/// - Bare names (no `/`) are kept as-is; validation and execution look them
+///   up in `$PATH` — so `"gcc"` works portably on both FHS Linux and NixOS.
+/// - Anything containing a `/` is resolved as a filesystem path relative to
+///   the config file's directory (absolute paths stay absolute).
+fn resolve_exe_spec(spec: &str, config_path: &Path) -> PathBuf {
+    if spec.contains('/') {
+        resolve_relative(Path::new(spec), config_path)
+    } else {
+        PathBuf::from(spec)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Executable
 // ---------------------------------------------------------------------------
@@ -197,7 +211,14 @@ impl Executable {
 impl Validate for Executable {
     fn validate(&self) -> Vec<DragonError> {
         let mut errors = Vec::new();
-        if !self.exe_path.exists() {
+        let exe_str = self.exe_path.to_string_lossy();
+        let is_bare_name = !exe_str.contains('/');
+        let found = if is_bare_name {
+            path_lookup(&exe_str).is_some()
+        } else {
+            self.exe_path.exists()
+        };
+        if !found {
             errors.push(DragonError::MissingFile {
                 path: self.exe_path.clone(),
                 context: format!("Executable '{}'", self.id),
@@ -233,7 +254,7 @@ impl Config {
     fn new(
         config_path: &Path,
         raw: RawConfig,
-        debug_package: Option<&str>,
+        test_path: Option<&str>,
         package_filter: &str,
     ) -> Self {
         let abs_config = fs::canonicalize(config_path)
@@ -250,7 +271,7 @@ impl Config {
         let executables = raw.tested_executable_paths
             .iter()
             .map(|(id, path_str)| {
-                let exe_path = resolve_relative(Path::new(path_str), &abs_config);
+                let exe_path = resolve_exe_spec(path_str, &abs_config);
                 let runtime = raw.runtimes.get(id)
                     .map(|rt_path| {
                         let resolved = resolve_relative(Path::new(rt_path), &abs_config);
@@ -266,7 +287,7 @@ impl Config {
             .map(|(name, steps)| ToolChain::new(&name, steps))
             .collect();
 
-        let packages = Self::gather_packages(&test_dir, debug_package);
+        let packages = Self::gather_packages(&test_dir, test_path);
 
         Self {
             name,
@@ -279,8 +300,8 @@ impl Config {
         }
     }
 
-    fn gather_packages(test_dir: &Path, debug_package: Option<&str>) -> Vec<Package> {
-        if let Some(pkg) = debug_package.filter(|p| !p.is_empty()) {
+    fn gather_packages(test_dir: &Path, test_path: Option<&str>) -> Vec<Package> {
+        if let Some(pkg) = test_path.filter(|p| !p.is_empty()) {
             return vec![Package::new(Path::new(pkg))];
         }
         fs::read_dir(test_dir)
@@ -338,11 +359,11 @@ pub fn load_config(config_path: &Path, args: Option<&RunnerArgs>) -> Result<Conf
     let raw: RawConfig = serde_json::from_str(&content)
         .map_err(|e| vec![DragonError::ConfigParse { path: path.clone(), reason: e.to_string() }])?;
 
-    let debug_package = args
-        .and_then(|a| a.debug_package.as_deref());
+    let test_path = args
+        .and_then(|a| a.test_path.as_deref());
     let package_filter = args.and_then(|a| a.package_filter.as_deref()).unwrap_or("");
 
-    let config = Config::new(config_path, raw, debug_package, package_filter);
+    let config = Config::new(config_path, raw, test_path, package_filter);
     let errors = config.collect_errors();
     if errors.is_empty() {
         Ok(config)

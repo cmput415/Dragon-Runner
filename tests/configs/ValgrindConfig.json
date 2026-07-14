@@ -1,8 +1,8 @@
 {
   "testDir": "../packages/MemoryLeaks",
   "testedExecutablePaths": {
-    "clang": "/usr/bin/clang",
-    "clang2": "/usr/bin/clang"
+    "clang": "clang",
+    "clang2": "clang"
   },
   "toolchains": {
     "LLVM": [
@@ -16,7 +16,7 @@
         "allowError": true
       },
       {
-        "exe": "/usr/bin/valgrind",
+        "exe": "valgrind",
         "args": [
           "--leak-check=full",
           "--error-exitcode=111",

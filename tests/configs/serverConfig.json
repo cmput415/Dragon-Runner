@@ -2,7 +2,7 @@
   "name": "Server Config",
   "testDir": "../packages/CPackage",
   "testedExecutablePaths": {
-    "gcc": "/usr/bin/gcc"
+    "gcc": "gcc"
   },
   "toolchains": {
     "gcc-explorer": [

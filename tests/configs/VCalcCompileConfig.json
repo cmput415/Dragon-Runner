@@ -26,7 +26,7 @@
         ]
       },
       {
-        "exe": "/usr/bin/clang",
+        "exe": "clang",
         "args": [
           "$INPUT",
           "-o",

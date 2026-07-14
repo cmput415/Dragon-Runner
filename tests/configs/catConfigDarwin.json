@@ -1,7 +1,7 @@
 {
   "testDir": "../packages/CPackage",
   "testedExecutablePaths": {
-    "gcc": "/usr/bin/gcc"
+    "gcc": "gcc"
   },
   "toolchains": {
     "GCC-toolchain": [
@@ -15,7 +15,7 @@
         "allowError": true
       },
       {
-        "exe": "/bin/cat",
+        "exe": "cat",
         "args": [
           "$INPUT"
         ]

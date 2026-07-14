@@ -14,6 +14,15 @@ pub fn resolve_relative(relative_dir: &Path, abs_path: &Path) -> PathBuf {
     base.join(relative_dir)
 }
 
+/// Look up an executable name in `$PATH`. Returns the first hit that is a file.
+/// Returns `None` if `$PATH` is unset or no directory contains it.
+pub fn path_lookup(name: &str) -> Option<PathBuf> {
+    let path_var = std::env::var_os("PATH")?;
+    std::env::split_paths(&path_var)
+        .map(|dir| dir.join(name))
+        .find(|candidate| candidate.is_file())
+}
+
 /// Convert a string to bytes, optionally chopping trailing newline.
 pub fn str_to_bytes(s: &str, chop_newline: bool) -> Vec<u8> {
     let s = if chop_newline && s.ends_with('\n') {

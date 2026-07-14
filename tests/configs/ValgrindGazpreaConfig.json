@@ -27,7 +27,7 @@
         ]
       },
       {
-        "exe": "/usr/bin/clang",
+        "exe": "clang",
         "args": [
           "$INPUT",
           "-o",
@@ -38,7 +38,7 @@
         ]
       },
       {
-        "exe": "/usr/bin/valgrind",
+        "exe": "valgrind",
         "args": [
           "--leak-check=full",
           "--error-exitcode=111",

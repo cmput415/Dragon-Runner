@@ -1,7 +1,7 @@
 {
   "testDir": "../packages/CMixedPackage",
   "testedExecutablePaths": {
-    "gcc": "/usr/bin/gcc"
+    "gcc": "gcc"
   },
   "toolchains": {
     "GCC-toolchain": [

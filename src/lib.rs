@@ -1,6 +1,7 @@
 pub mod cli;
 pub mod config;
 pub mod error;
+pub mod grading;
 pub mod harness;
 pub mod log;
 pub mod runner;

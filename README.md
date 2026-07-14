@@ -118,19 +118,21 @@ If no mode subcommand is given, `regular` is assumed.
 
 ### Modes
 - `regular` (default) — Standard test execution
-- `tournament` — Cross-product testing for grading
-- `perf` — Performance benchmarking
+- `tournament` — Cross-product grading. Emits per-toolchain `toolchain_<name>.csv`, a graded `summary.csv`, and per-team feedback files.
+- `perf` — Performance benchmarking. Emits `perf.csv` and `perf_summary.csv`.
 - `memcheck` — Memory leak detection via valgrind
 - `serve` — HTTP server mode
-- `script` — Run grading scripts
+- `script` — Run helper scripts (submission management)
 
 ### Options
 | Option | Description |
 |--------|-------------|
 | `--timeout SECONDS` | Test timeout (default: 2.0) |
-| `--fail-log FILE` | Log failures to file |
+| `--fail-log FILE` | Log failures to file (tournament mode) |
+| `--solution-exe ID` | Executable ID to use as the solution (tournament mode) |
+| `--grade-config FILE` | JSON file overriding grading weights (tournament + perf modes) |
 | `--verify` | Verify package exists for CCID |
-| `--debug-package PATH` | Test single package |
+| `--test-path PATH` | Run against a single file or directory instead of scanning `testDir` |
 | `-p, --package PATTERN` | Filter packages by glob pattern |
 | `-t, --time` | Show execution times |
 | `-v, --verbosity` | Increase output verbosity (repeat for more) |
@@ -138,6 +140,20 @@ If no mode subcommand is given, `regular` is assumed.
 | `-o, --output FILE` | Output file for results |
 | `-f, --fast-fail` | Stop on first failure |
 | `--full-path` | Print full file paths for test results |
+
+### Grading config
+
+Tournament and perf grading use these defaults; override any subset via `--grade-config`:
+
+```json
+{
+  "defensivePts": 2.0,
+  "offensivePts": 1.0,
+  "coherencePts": 10.0,
+  "competitiveWeight": 0.2,
+  "taWeight": 0.5
+}
+```
 
 ### Examples
 

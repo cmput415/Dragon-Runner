@@ -23,8 +23,6 @@ class Loader:
             "checkout":      "checkout",
             "gather":        "gather",
             "gen-config":    "gen_config",
-            "grade":         "grade",
-            "grade-perf":    "grade_perf",
         }
 
     def _load_script_class(self, module_name: str) -> Optional[Type[Script]]:

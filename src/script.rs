@@ -20,8 +20,6 @@ const SCRIPTS: &[(&str, &str)] = &[
     ("checkout", "checkout.py"),
     ("gather", "gather.py"),
     ("gen-config", "gen_config.py"),
-    ("grade", "grade.py"),
-    ("grade-perf", "grade_perf.py"),
 ];
 
 pub fn run_script(args: Vec<String>) -> i32 {
