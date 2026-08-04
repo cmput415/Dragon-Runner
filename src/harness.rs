@@ -3,11 +3,12 @@ use std::fs;
 use colored::Colorize;
 use rayon::prelude::*;
 
-use crate::info;
 use crate::cli::{Mode, RunnerArgs};
 use crate::config::{Config, Executable, Package};
 use crate::grading::{PerfTable, TournamentTable};
+use crate::info;
 use crate::log::log;
+use crate::progress;
 use crate::runner::{TestResult, ToolChainRunner};
 use crate::testfile::TestFile;
 
@@ -70,17 +71,27 @@ fn pretty_print_file(path: &std::path::Path) -> Option<String> {
 
     let mut lines = Vec::new();
     // top border
-    lines.push(format!("\u{250c}{}\u{2510}", "\u{2500}".repeat(content_width - 2)));
+    lines.push(format!(
+        "\u{250c}{}\u{2510}",
+        "\u{2500}".repeat(content_width - 2)
+    ));
     for line in content.lines() {
         let display = if line.len() > content_width - 4 {
             format!("{}...", &line[..content_width - 7])
         } else {
             line.to_string()
         };
-        lines.push(format!("\u{2502} {:<width$} \u{2502}", display, width = content_width - 4));
+        lines.push(format!(
+            "\u{2502} {:<width$} \u{2502}",
+            display,
+            width = content_width - 4
+        ));
     }
     // bottom border
-    lines.push(format!("\u{2514}{}\u{2518}", "\u{2500}".repeat(content_width - 2)));
+    lines.push(format!(
+        "\u{2514}{}\u{2518}",
+        "\u{2500}".repeat(content_width - 2)
+    ));
     Some(lines.join("\n"))
 }
 
@@ -93,34 +104,58 @@ fn print_test_details(result: &TestResult, cli_args: &RunnerArgs, indent: usize)
         let level: u32 = if result.did_pass { 2 } else { 0 };
         if let Some(boxed) = pretty_print_file(&result.test.path) {
             for line in boxed.lines() {
-                log(level, indent + 2, line);
+                log(level, indent + 2, format_args!("{line}"));
             }
         }
     }
 
     // Command history: level 3 on pass, level 2 on fail
     let cmd_level: u32 = if result.did_pass { 3 } else { 2 };
-    log(cmd_level, indent + 2, &format!("==> Command History"));
+    log(cmd_level, indent + 2, format_args!("==> Command History"));
     for cr in &result.command_history {
-        log(cmd_level, indent + 4, &format!("==> {} (exit {})", cr.cmd, cr.exit_status));
+        log(
+            cmd_level,
+            indent + 4,
+            format_args!("==> {} (exit {})", cr.cmd, cr.exit_status),
+        );
         let stdout = truncated_bytes(&cr.stdout, 512);
-        log(cmd_level, indent + 6, &format!(
-            "stdout ({} bytes): {}", cr.stdout.len(), String::from_utf8_lossy(&stdout),
-        ));
+        log(
+            cmd_level,
+            indent + 6,
+            format_args!(
+                "stdout ({} bytes): {}",
+                cr.stdout.len(),
+                String::from_utf8_lossy(&stdout),
+            ),
+        );
         let stderr = truncated_bytes(&cr.stderr, 512);
-        log(cmd_level, indent + 6, &format!(
-            "stderr ({} bytes): {}", cr.stderr.len(), String::from_utf8_lossy(&stderr),
-        ));
+        log(
+            cmd_level,
+            indent + 6,
+            format_args!(
+                "stderr ({} bytes): {}",
+                cr.stderr.len(),
+                String::from_utf8_lossy(&stderr),
+            ),
+        );
     }
 
     // Expected vs Generated output: level 2 on pass, level 1 on fail
     let diff_level: u32 = if result.did_pass { 2 } else { 1 };
     let expected_out = result.test.get_expected_out();
     let generated_out = result.gen_output.as_deref().unwrap_or(b"");
-    log(diff_level, indent + 2, &format!("==> Expected Out ({} bytes):", expected_out.len()));
-    log(diff_level, indent + 3, &format!("{:?}", expected_out));
-    log(diff_level, indent + 2, &format!("==> Generated Out ({} bytes):", generated_out.len()));
-    log(diff_level, indent + 3, &format!("{:?}", generated_out));
+    log(
+        diff_level,
+        indent + 2,
+        format_args!("==> Expected Out ({} bytes):", expected_out.len()),
+    );
+    log(diff_level, indent + 3, format_args!("{:?}", expected_out));
+    log(
+        diff_level,
+        indent + 2,
+        format_args!("==> Generated Out ({} bytes):", generated_out.len()),
+    );
+    log(diff_level, indent + 3, format_args!("{:?}", generated_out));
 }
 
 /// Counters passed through hooks during iteration.
@@ -135,9 +170,13 @@ pub struct SubPackageCounters {
 /// over the tests in each package and subpackage. Applies to all except for
 /// the `TournamentHarness`, which iterates in a cross product.
 pub trait SequentialTestHarness {
-
     fn run_passed(&self) -> bool;
-    fn process_test_result(&mut self, result: TestResult, cli_args: &RunnerArgs, counters: &mut SubPackageCounters);
+    fn process_test_result(
+        &mut self,
+        result: TestResult,
+        cli_args: &RunnerArgs,
+        counters: &mut SubPackageCounters,
+    );
     fn pre_run_hook(&mut self) {}
     fn post_run_hook(&mut self) {}
     fn pre_executable_hook(&mut self, _exe_id: &str) {}
@@ -186,10 +225,16 @@ pub trait SequentialTestHarness {
                         }
 
                         info!(3 + spkg.depth, "Entering subpackage {}", spkg.name);
-                        let mut counters = SubPackageCounters { pass_count: 0, test_count: 0, skip_count: 0, depth: spkg.depth };
+                        let mut counters = SubPackageCounters {
+                            pass_count: 0,
+                            test_count: 0,
+                            skip_count: 0,
+                            depth: spkg.depth,
+                        };
                         self.pre_subpackage_hook(spkg);
 
-                        let results: Vec<TestResult> = spkg.tests
+                        let results: Vec<TestResult> = spkg
+                            .tests
                             .par_iter()
                             .map(|test| runner.run(test, exe))
                             .collect();
@@ -206,25 +251,49 @@ pub trait SequentialTestHarness {
                         }
 
                         self.post_subpackage_hook(&counters);
-                        info!(3 + spkg.depth, "Subpackage Passed:  {} / {}{}", counters.pass_count, counters.test_count, skip_suffix(counters.skip_count));
+                        info!(
+                            3 + spkg.depth,
+                            "Subpackage Passed:  {} / {}{}",
+                            counters.pass_count,
+                            counters.test_count,
+                            skip_suffix(counters.skip_count)
+                        );
                         pkg_pass += counters.pass_count;
                         pkg_total += counters.test_count;
                         pkg_skip += counters.skip_count;
                     }
 
-                    info!(2, "Packaged Passed:  {} / {}{}", pkg_pass, pkg_total, skip_suffix(pkg_skip));
+                    info!(
+                        2,
+                        "Packaged Passed:  {} / {}{}",
+                        pkg_pass,
+                        pkg_total,
+                        skip_suffix(pkg_skip)
+                    );
                     tc_pass += pkg_pass;
                     tc_total += pkg_total;
                     tc_skip += pkg_skip;
                 }
 
-                info!(1, "Toolchain Passed:  {} / {}{}", tc_pass, tc_total, skip_suffix(tc_skip));
+                info!(
+                    1,
+                    "Toolchain Passed:  {} / {}{}",
+                    tc_pass,
+                    tc_total,
+                    skip_suffix(tc_skip)
+                );
                 exe_pass += tc_pass;
                 exe_total += tc_total;
                 exe_skip += tc_skip;
             }
 
-            info!(0, "Executable Passed:  {} / {}{}", exe_pass, exe_total, skip_suffix(exe_skip));
+            info!(
+                0,
+                "Executable Passed:  {} / {}{}",
+                exe_pass,
+                exe_total,
+                skip_suffix(exe_skip)
+            );
             self.post_executable_hook();
         }
 
@@ -252,9 +321,16 @@ impl RegularHarness {
 }
 
 impl SequentialTestHarness for RegularHarness {
-    fn run_passed(&self) -> bool { self.passed }
+    fn run_passed(&self) -> bool {
+        self.passed
+    }
 
-    fn process_test_result(&mut self, result: TestResult, cli_args: &RunnerArgs, counters: &mut SubPackageCounters) {
+    fn process_test_result(
+        &mut self,
+        result: TestResult,
+        cli_args: &RunnerArgs,
+        counters: &mut SubPackageCounters,
+    ) {
         let indent = 4 + counters.depth;
         let test_name = test_display_name(&result.test, cli_args.full_path);
         if result.skipped {
@@ -264,11 +340,19 @@ impl SequentialTestHarness for RegularHarness {
         }
         let time = time_suffix(&result, cli_args.time);
         if result.did_pass {
-            let tag = if result.error_test { "[E-PASS] " } else { "[PASS] " };
+            let tag = if result.error_test {
+                "[E-PASS] "
+            } else {
+                "[PASS] "
+            };
             info!(indent, "{}{}{}", tag.green(), test_name, time);
             counters.pass_count += 1;
         } else {
-            let tag = if result.error_test { "[E-FAIL] " } else { "[FAIL] " };
+            let tag = if result.error_test {
+                "[E-FAIL] "
+            } else {
+                "[FAIL] "
+            };
             info!(indent, "{}{}{}", tag.red(), test_name, time);
             self.passed = false;
         }
@@ -311,7 +395,9 @@ pub struct TournamentOutput {
 pub struct TournamentHarness;
 
 impl TournamentHarness {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 
     /// Run the cross-product tournament and return everything needed to
     /// write CSVs and feedback files. All output paths are the caller's
@@ -321,11 +407,11 @@ impl TournamentHarness {
     /// or the id doesn't match any executable). The error is printed to stderr.
     pub fn run(&self, config: &Config, cli_args: &RunnerArgs) -> Option<TournamentOutput> {
         let Some(solution_exe) = cli_args.solution_exe.as_deref() else {
-            eprintln!("Error: --solution-exe is required in tournament mode");
+            crate::error!(0, "Error: --solution-exe is required in tournament mode");
             return None;
         };
         if !config.executables.iter().any(|e| e.id == solution_exe) {
-            eprintln!("Error: --solution-exe '{}' does not match any executable in the config.\nAvailable: {:?}",
+            crate::error!(0, "Error: --solution-exe '{}' does not match any executable in the config.\nAvailable: {:?}",
                 solution_exe, config.executables.iter().map(|e| &e.id).collect::<Vec<_>>());
             return None;
         }
@@ -341,32 +427,32 @@ impl TournamentHarness {
         let mut solution_results = Vec::new();
 
         for tc in &config.toolchains {
-            println!("\nToolchain: {}", tc.name);
+            info!(0, "\nToolchain: {}", tc.name);
             let mut cells = vec![vec![(0u32, 0u32); attacking_pkgs.len()]; defending_exes.len()];
 
             for (i, def_exe) in defending_exes.iter().enumerate() {
-                let runner = ToolChainRunner::new(tc, cli_args.timeout)
-                    .with_env(def_exe.runtime_env());
+                let runner =
+                    ToolChainRunner::new(tc, cli_args.timeout).with_env(def_exe.runtime_env());
                 let is_solution = solution_exe == def_exe.id;
 
                 for (j, a_pkg) in attacking_pkgs.iter().enumerate() {
-                    print!("\n  {:<12} --> {:<12}", a_pkg.name, def_exe.id);
+                    progress!("\n  {:<12} --> {:<12}", a_pkg.name, def_exe.id);
                     let mut pass_count = 0u32;
                     let mut test_count = 0u32;
 
                     for test in a_pkg.subpackages.iter().flat_map(|s| &s.tests) {
                         let result = runner.run(test, def_exe);
                         if result.skipped {
-                            print!("{}", ".".yellow());
+                            progress!("{}", ".".yellow());
                             continue;
                         }
                         test_count += 1;
 
                         if result.did_pass {
-                            print!("{}", ".".green());
+                            progress!("{}", ".".green());
                             pass_count += 1;
                         } else {
-                            print!("{}", ".".red());
+                            progress!("{}", ".".red());
                             failures.push(TournamentFailure {
                                 toolchain: tc.name.clone(),
                                 defender: def_exe.id.clone(),
@@ -398,7 +484,11 @@ impl TournamentHarness {
             });
         }
 
-        Some(TournamentOutput { tables, failures, solution_results })
+        Some(TournamentOutput {
+            tables,
+            failures,
+            solution_results,
+        })
     }
 }
 
@@ -414,14 +504,25 @@ pub struct MemoryCheckHarness {
 
 impl MemoryCheckHarness {
     pub fn new() -> Self {
-        Self { passed: true, leak_tests: Vec::new(), test_count: 0 }
+        Self {
+            passed: true,
+            leak_tests: Vec::new(),
+            test_count: 0,
+        }
     }
 }
 
 impl SequentialTestHarness for MemoryCheckHarness {
-    fn run_passed(&self) -> bool { self.passed }
+    fn run_passed(&self) -> bool {
+        self.passed
+    }
 
-    fn process_test_result(&mut self, result: TestResult, cli_args: &RunnerArgs, counters: &mut SubPackageCounters) {
+    fn process_test_result(
+        &mut self,
+        result: TestResult,
+        cli_args: &RunnerArgs,
+        counters: &mut SubPackageCounters,
+    ) {
         let indent = 4 + counters.depth;
         let test_name = test_display_name(&result.test, cli_args.full_path);
         if result.skipped {
@@ -496,14 +597,25 @@ impl PerformanceTestingHarness {
                 }
             }
         }
-        PerfTable { compilers: self.exe_ids, tests: self.tests, times_seconds: times }
+        PerfTable {
+            compilers: self.exe_ids,
+            tests: self.tests,
+            times_seconds: times,
+        }
     }
 }
 
 impl SequentialTestHarness for PerformanceTestingHarness {
-    fn run_passed(&self) -> bool { true }
+    fn run_passed(&self) -> bool {
+        true
+    }
 
-    fn process_test_result(&mut self, result: TestResult, cli_args: &RunnerArgs, counters: &mut SubPackageCounters) {
+    fn process_test_result(
+        &mut self,
+        result: TestResult,
+        cli_args: &RunnerArgs,
+        counters: &mut SubPackageCounters,
+    ) {
         let indent = 4 + counters.depth;
         let test_name = test_display_name(&result.test, cli_args.full_path);
         if result.skipped {
@@ -518,7 +630,8 @@ impl SequentialTestHarness for PerformanceTestingHarness {
         if result.did_pass {
             counters.pass_count += 1;
             info!(indent, "{}{}", "[PASS] ".green(), test_name);
-            self.current_column.push(result.time.unwrap_or(cli_args.timeout));
+            self.current_column
+                .push(result.time.unwrap_or(cli_args.timeout));
         } else {
             self.current_column.push(cli_args.timeout);
         }
@@ -535,4 +648,3 @@ impl SequentialTestHarness for PerformanceTestingHarness {
         self.first_exec = false;
     }
 }
-

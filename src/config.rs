@@ -6,12 +6,12 @@ use std::sync::Arc;
 
 use serde::Deserialize;
 
-use crate::{debug, trace, trace2};
 use crate::cli::RunnerArgs;
 use crate::error::{DragonError, Validate};
 use crate::testfile::TestFile;
 use crate::toolchain::{Step, ToolChain};
 use crate::util::{path_lookup, resolve_relative};
+use crate::{debug, trace, trace2};
 
 /// Raw JSON shape of a config file, deserialized directly by serde.
 #[derive(Deserialize, Default)]
@@ -54,7 +54,12 @@ impl SubPackage {
             vec![Arc::new(TestFile::new(path))]
         };
 
-        Self { path: path.into(), name, depth, tests }
+        Self {
+            path: path.into(),
+            name,
+            depth,
+            tests,
+        }
     }
 
     fn gather_tests(dir: &Path) -> Vec<Arc<TestFile>> {
@@ -139,7 +144,11 @@ impl Package {
                 let entry_path = e.path();
                 let spkg = SubPackage::new(&entry_path, depth);
                 let children = Self::collect_subpackages_recursive(&entry_path, depth + 1);
-                let head = if spkg.tests.is_empty() { None } else { Some(spkg) };
+                let head = if spkg.tests.is_empty() {
+                    None
+                } else {
+                    Some(spkg)
+                };
                 head.into_iter().chain(children)
             })
             .collect()
@@ -154,8 +163,7 @@ impl Validate for Package {
 
 /// Resolve an `exe` string from `testedExecutablePaths`.
 ///
-/// - Bare names (no `/`) are kept as-is; validation and execution look them
-///   up in `$PATH` — so `"gcc"` works portably on both FHS Linux and NixOS.
+/// - Bare names are resolved through `$PATH`.
 /// - Anything containing a `/` is resolved as a filesystem path relative to
 ///   the config file's directory (absolute paths stay absolute).
 fn resolve_exe_spec(spec: &str, config_path: &Path) -> PathBuf {
@@ -180,7 +188,11 @@ pub struct Executable {
 
 impl Executable {
     pub fn new(id: &str, exe_path: PathBuf, runtime: PathBuf) -> Self {
-        Self { id: id.into(), exe_path, runtime }
+        Self {
+            id: id.into(),
+            exe_path,
+            runtime,
+        }
     }
 
     /// Build environment variables needed for runtime library injection.
@@ -190,8 +202,17 @@ impl Executable {
         if self.runtime.as_os_str().is_empty() {
             return env;
         }
-        let rt_dir = self.runtime.parent().unwrap_or(Path::new("")).display().to_string();
-        let rt_stem = self.runtime.file_stem().unwrap_or_default().to_string_lossy();
+        let rt_dir = self
+            .runtime
+            .parent()
+            .unwrap_or(Path::new(""))
+            .display()
+            .to_string();
+        let rt_stem = self
+            .runtime
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy();
         let rt_lib = rt_stem.strip_prefix("lib").unwrap_or(&rt_stem).to_string();
         let rt_str = self.runtime.display().to_string();
 
@@ -257,8 +278,8 @@ impl Config {
         test_path: Option<&str>,
         package_filter: &str,
     ) -> Self {
-        let abs_config = fs::canonicalize(config_path)
-            .unwrap_or_else(|_| config_path.to_path_buf());
+        let abs_config =
+            fs::canonicalize(config_path).unwrap_or_else(|_| config_path.to_path_buf());
 
         let name = config_path
             .file_stem()
@@ -268,11 +289,14 @@ impl Config {
 
         let test_dir = resolve_relative(Path::new(&raw.test_dir), &abs_config);
 
-        let executables = raw.tested_executable_paths
+        let executables = raw
+            .tested_executable_paths
             .iter()
             .map(|(id, path_str)| {
                 let exe_path = resolve_exe_spec(path_str, &abs_config);
-                let runtime = raw.runtimes.get(id)
+                let runtime = raw
+                    .runtimes
+                    .get(id)
                     .map(|rt_path| {
                         let resolved = resolve_relative(Path::new(rt_path), &abs_config);
                         fs::canonicalize(&resolved).unwrap_or(resolved)
@@ -282,7 +306,8 @@ impl Config {
             })
             .collect();
 
-        let toolchains = raw.toolchains
+        let toolchains = raw
+            .toolchains
             .into_iter()
             .map(|(name, steps)| ToolChain::new(&name, steps))
             .collect();
@@ -321,10 +346,11 @@ impl Config {
             });
         }
         errors.extend(
-            self.executables.iter()
+            self.executables
+                .iter()
                 .flat_map(|e| e.validate())
                 .chain(self.toolchains.iter().flat_map(|t| t.validate()))
-                .chain(self.packages.iter().flat_map(|p| p.validate()))
+                .chain(self.packages.iter().flat_map(|p| p.validate())),
         );
         errors
     }
@@ -350,17 +376,23 @@ impl fmt::Display for Config {
 }
 
 /// Load and parse a JSON configuration file.
-pub fn load_config(config_path: &Path, args: Option<&RunnerArgs>) -> Result<Config, Vec<DragonError>> {
+pub fn load_config(
+    config_path: &Path,
+    args: Option<&RunnerArgs>,
+) -> Result<Config, Vec<DragonError>> {
     let path = config_path.to_path_buf();
 
     let content = fs::read_to_string(config_path)
         .map_err(|_| vec![DragonError::ConfigRead { path: path.clone() }])?;
 
-    let raw: RawConfig = serde_json::from_str(&content)
-        .map_err(|e| vec![DragonError::ConfigParse { path: path.clone(), reason: e.to_string() }])?;
+    let raw: RawConfig = serde_json::from_str(&content).map_err(|e| {
+        vec![DragonError::ConfigParse {
+            path: path.clone(),
+            reason: e.to_string(),
+        }]
+    })?;
 
-    let test_path = args
-        .and_then(|a| a.test_path.as_deref());
+    let test_path = args.and_then(|a| a.test_path.as_deref());
     let package_filter = args.and_then(|a| a.package_filter.as_deref()).unwrap_or("");
 
     let config = Config::new(config_path, raw, test_path, package_filter);
@@ -377,7 +409,9 @@ mod tests {
     use super::*;
 
     fn configs_dir() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests").join("configs")
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("configs")
     }
 
     fn config_path(name: &str) -> PathBuf {
@@ -397,9 +431,17 @@ mod tests {
         assert!(!config.packages.is_empty(), "should have packages");
 
         for pkg in &config.packages {
-            assert!(!pkg.subpackages.is_empty(), "package {} should have subpackages", pkg.name);
+            assert!(
+                !pkg.subpackages.is_empty(),
+                "package {} should have subpackages",
+                pkg.name
+            );
             for spkg in &pkg.subpackages {
-                assert!(!spkg.tests.is_empty(), "subpackage {} should have tests", spkg.name);
+                assert!(
+                    !spkg.tests.is_empty(),
+                    "subpackage {} should have tests",
+                    spkg.name
+                );
             }
         }
     }
@@ -446,7 +488,9 @@ mod tests {
 
         assert!(!errors.is_empty(), "should have errors for invalid dir");
         assert!(
-            errors.iter().any(|e| matches!(e, DragonError::MissingTestDir { .. })),
+            errors
+                .iter()
+                .any(|e| matches!(e, DragonError::MissingTestDir { .. })),
             "should have a MissingTestDir error"
         );
     }
@@ -458,7 +502,9 @@ mod tests {
 
         assert!(!errors.is_empty(), "should have errors for invalid exe");
         assert!(
-            errors.iter().any(|e| matches!(e, DragonError::MissingFile { .. })),
+            errors
+                .iter()
+                .any(|e| matches!(e, DragonError::MissingFile { .. })),
             "should have a MissingFile error"
         );
     }

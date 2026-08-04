@@ -1,3 +1,4 @@
+use regex::Regex;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
@@ -6,26 +7,23 @@ use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
-
-use regex::Regex;
 use wait_timeout::ChildExt;
-
-static ENV_VAR_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\$(\w+)|\$\{(\w+)\}").unwrap());
-static ERROR_KIND_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)(\w+Error)").unwrap());
-static ERROR_LINE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)on\s+Line\s+(\d+)").unwrap());
 
 use crate::config::Executable;
 use crate::testfile::TestFile;
 use crate::toolchain::{Step, ToolChain};
-use crate::util::{make_tmp_file, make_empty_tmp_file};
+use crate::util::{make_empty_tmp_file, make_tmp_file};
 
-/// Reserved exit code for valgrind leak detection.
+static ENV_VAR_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\$(\w+)|\$\{(\w+)\}").unwrap());
+static ERROR_KIND_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)(\w+Error)").unwrap());
+static ERROR_LINE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)on\s+Line\s+(\d+)").unwrap());
+
+/// Reserved exit code for Valgrind leak detection.
 pub const VALGRIND_EXIT_CODE: i32 = 111;
-
 const RESERVED_EXIT_CODES: &[i32] = &[VALGRIND_EXIT_CODE];
+
+// F24 and F25 runtime errors that need special handling.
 const RUNTIME_ERRORS: &[&str] = &["SizeError", "IndexError", "MathError", "StrideError"];
 
 /// State threaded between pipeline steps during a toolchain run.
@@ -177,7 +175,11 @@ impl TestResult {
         }
     }
 
-    fn fail(test: &Arc<TestFile>, history: Vec<CommandResult>, failing_step: Option<String>) -> Self {
+    fn fail(
+        test: &Arc<TestFile>,
+        history: Vec<CommandResult>,
+        failing_step: Option<String>,
+    ) -> Self {
         Self {
             test: Arc::clone(test),
             did_pass: false,
@@ -260,9 +262,13 @@ impl<'a> ToolChainRunner<'a> {
             memory_leak: false,
         };
 
-        let result = self.tc.iter().enumerate().try_fold(init, |state, (index, step)| {
-            self.run_step(state, step, index == tc_len - 1, test, exe)
-        });
+        let result = self
+            .tc
+            .iter()
+            .enumerate()
+            .try_fold(init, |state, (index, step)| {
+                self.run_step(state, step, index == tc_len - 1, test, exe)
+            });
 
         match result {
             ControlFlow::Break(tr) => tr,
@@ -278,8 +284,11 @@ impl<'a> ToolChainRunner<'a> {
         test: &Arc<TestFile>,
         exe: &Executable,
     ) -> ControlFlow<TestResult, PipelineState> {
-        
-        let input_stream = if step.uses_ins { test.get_input_stream() } else { b"" };
+        let input_stream = if step.uses_ins {
+            test.get_input_stream()
+        } else {
+            b""
+        };
         let output_resolved = self.resolve_output_file(step);
         let output_path = output_resolved.as_ref().map(|(p, _)| p.clone());
         let magic = MagicParams {
@@ -298,7 +307,8 @@ impl<'a> ToolChainRunner<'a> {
         // In memcheck mode, wrap the last step with valgrind
         if self.memcheck && last_step && !self.wrap_valgrind(&mut command) {
             return ControlFlow::Break(TestResult::fail(
-                test, state.command_history,
+                test,
+                state.command_history,
                 Some("memcheck: valgrind not found".to_string()),
             ));
         }
@@ -307,15 +317,16 @@ impl<'a> ToolChainRunner<'a> {
         if cr.timed_out {
             state.command_history.push(cr);
             return ControlFlow::Break(TestResult::timeout(
-                test, state.command_history, &step.display_name(exe), self.timeout,
+                test,
+                state.command_history,
+                &step.display_name(exe),
+                self.timeout,
             ));
         }
 
         if cr.exit_status == -1 {
             state.command_history.push(cr);
-            return ControlFlow::Break(TestResult::fail(
-                test, state.command_history, None,
-            ));
+            return ControlFlow::Break(TestResult::fail(test, state.command_history, None));
         }
 
         let stdout = cr.stdout.clone();
@@ -329,36 +340,48 @@ impl<'a> ToolChainRunner<'a> {
         state.command_history.push(cr);
 
         if exit_status != 0 && !RESERVED_EXIT_CODES.contains(&exit_status) {
-            let did_pass = step.allow_error
-                && self.check_error_test(&stderr, test.get_expected_out());
+            let did_pass =
+                step.allow_error && self.check_error_test(&stderr, test.get_expected_out());
             return ControlFlow::Break(TestResult::error(
-                test, state.command_history, stderr,
-                &step.display_name(exe), did_pass, state.memory_leak,
+                test,
+                state.command_history,
+                stderr,
+                &step.display_name(exe),
+                did_pass,
+                state.memory_leak,
             ));
         }
 
         if last_step {
             let final_output = match output_path {
                 Some(ref p) if p.exists() => fs::read(p).unwrap_or_default(),
-                Some(_) => return ControlFlow::Break(TestResult::finished(
-                    test, state.command_history, Vec::new(), step_time, state.memory_leak,
-                )),
+                Some(_) => {
+                    return ControlFlow::Break(TestResult::finished(
+                        test,
+                        state.command_history,
+                        Vec::new(),
+                        step_time,
+                        state.memory_leak,
+                    ))
+                }
                 None => stdout,
             };
             return ControlFlow::Break(TestResult::finished(
-                test, state.command_history, final_output, step_time, state.memory_leak,
+                test,
+                state.command_history,
+                final_output,
+                step_time,
+                state.memory_leak,
             ));
         }
 
-        // Not the last step — continue the pipeline
-        state.input_file = output_path.unwrap_or_else(|| {
-            match make_tmp_file(&stdout) {
-                Some((path, handle)) => {
-                    state.tmp_handles.push(handle);
-                    path
-                }
-                None => PathBuf::new(),
+        // Continue the pipeline.
+        state.input_file = output_path.unwrap_or_else(|| match make_tmp_file(&stdout) {
+            Some((path, handle)) => {
+                state.tmp_handles.push(handle);
+                path
             }
+            None => PathBuf::new(),
         });
         ControlFlow::Continue(state)
     }
@@ -407,7 +430,7 @@ impl<'a> ToolChainRunner<'a> {
                 let timeout_dur = Duration::from_secs_f64(self.timeout);
                 match child.wait_timeout(timeout_dur) {
                     Ok(Some(status)) => {
-                        // Process exited within timeout — read remaining output
+                        // Read the remaining output.
                         cr.time = start.elapsed().as_secs_f64();
                         cr.exit_status = status.code().unwrap_or(1);
 
@@ -421,7 +444,7 @@ impl<'a> ToolChainRunner<'a> {
                         }
                     }
                     Ok(None) => {
-                        // Still running — timeout
+                        // The process timed out.
                         let _ = child.kill();
                         let _ = child.wait();
                         cr.timed_out = true;
@@ -444,7 +467,11 @@ impl<'a> ToolChainRunner<'a> {
     }
 
     fn resolve_output_file(&self, step: &Step) -> Option<(PathBuf, tempfile::TempPath)> {
-        if step.args.iter().any(|a| a.contains(MagicArg::Output.pattern())) {
+        if step
+            .args
+            .iter()
+            .any(|a| a.contains(MagicArg::Output.pattern()))
+        {
             make_empty_tmp_file()
         } else {
             None
@@ -457,8 +484,11 @@ impl<'a> ToolChainRunner<'a> {
         let mut command = ResolvedCommand::new(args);
         self.replace_magic_args(&mut command, params);
         self.replace_env_vars(&mut command);
-        // Only resolve paths containing '/' — bare names (e.g. "gcc") use $PATH lookup
-        if !command.args.is_empty() && command.args[0].contains('/') && !Path::new(&command.args[0]).is_absolute() {
+        // Resolve paths; leave command names for PATH lookup.
+        if !command.args.is_empty()
+            && command.args[0].contains('/')
+            && !Path::new(&command.args[0]).is_absolute()
+        {
             if let Ok(abs) = fs::canonicalize(&command.args[0]) {
                 command.args[0] = abs.to_string_lossy().into_owned();
             } else if let Ok(cwd) = env::current_dir() {
@@ -491,7 +521,10 @@ impl<'a> ToolChainRunner<'a> {
                     .map(|m| m.as_str())
                     .unwrap_or("");
                 // Check runner's extra_env first, then fall back to process env
-                let val = self.extra_env.get(var_name).cloned()
+                let val = self
+                    .extra_env
+                    .get(var_name)
+                    .cloned()
                     .or_else(|| env::var(var_name).ok());
                 if let Some(val) = val {
                     *arg = arg
@@ -520,9 +553,7 @@ impl<'a> ToolChainRunner<'a> {
             .iter()
             .find(|e| expected_str.contains(**e))
             .copied();
-        let did_raise_rt = RUNTIME_ERRORS
-            .iter()
-            .any(|e| produced_str.contains(e));
+        let did_raise_rt = RUNTIME_ERRORS.iter().any(|e| produced_str.contains(e));
 
         if did_raise_rt {
             if let Some(rt_err) = rt_error {
@@ -547,16 +578,17 @@ impl<'a> ToolChainRunner<'a> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
 
-    use crate::config::{load_config, Config};
     use super::ToolChainRunner;
+    use crate::config::{load_config, Config};
 
     fn configs_dir() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests").join("configs")
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("configs")
     }
 
     fn config_path(name: &str) -> PathBuf {
@@ -576,8 +608,7 @@ mod tests {
     fn run_tests_for_config(config: &Config, expected_result: bool) {
         for exe in &config.executables {
             for tc in &config.toolchains {
-                let runner = ToolChainRunner::new(tc, 10.0)
-                    .with_env(exe.runtime_env());
+                let runner = ToolChainRunner::new(tc, 10.0).with_env(exe.runtime_env());
                 for pkg in &config.packages {
                     for spkg in &pkg.subpackages {
                         for test in &spkg.tests {
@@ -586,7 +617,8 @@ mod tests {
                                 continue;
                             }
                             assert_eq!(
-                                result.did_pass, expected_result,
+                                result.did_pass,
+                                expected_result,
                                 "Test {} expected {} but got {}",
                                 test.file,
                                 if expected_result { "PASS" } else { "FAIL" },
@@ -622,11 +654,11 @@ mod tests {
             .is_ok_and(|s: std::process::ExitStatus| s.success())
     }
 
-    /// Memcheck wrapping works on gccPassConfig — runner still produces results.
+    /// Memcheck preserves clean test results.
     #[test]
     fn test_memcheck_clean_programs() {
         if !valgrind_available() {
-            eprintln!("skipping: valgrind not found");
+            crate::info!(0, "skipping: valgrind not found");
             return;
         }
         let config = create_config("gccPassConfig.json");
@@ -658,11 +690,11 @@ mod tests {
         assert!(ran_any, "should have run at least one test");
     }
 
-    /// Memcheck on MemoryLeaks package — leaky programs should be flagged.
+    /// Memcheck detects leaking programs.
     #[test]
     fn test_memcheck_detects_leaks() {
         if !valgrind_available() {
-            eprintln!("skipping: valgrind not found");
+            crate::info!(0, "skipping: valgrind not found");
             return;
         }
         let config = create_config("gccMemcheckConfig.json");
@@ -682,7 +714,9 @@ mod tests {
                                     "Leaky test {} should be detected as memory leak",
                                     test.file,
                                 );
-                            } else if test.path.to_string_lossy().contains("safe") && test.file.contains("001_safe") {
+                            } else if test.path.to_string_lossy().contains("safe")
+                                && test.file.contains("001_safe")
+                            {
                                 assert!(
                                     !result.memory_leak,
                                     "Safe test {} should not have memory leak",

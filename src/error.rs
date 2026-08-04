@@ -20,13 +20,21 @@ pub enum DragonError {
     MissingField { field: String, context: String },
 
     #[error("Directive conflict in {test}: both {inline} and {file_dir} supplied")]
-    DirectiveConflict { test: String, inline: String, file_dir: String },
+    DirectiveConflict {
+        test: String,
+        inline: String,
+        file_dir: String,
+    },
 
     #[error("Failed to read test file: {path}")]
     TestFileRead { path: PathBuf },
 
     #[error("Referenced file not found: {path} (directive {directive} in test {test})")]
-    ReferencedFileNotFound { path: PathBuf, directive: String, test: PathBuf },
+    ReferencedFileNotFound {
+        path: PathBuf,
+        directive: String,
+        test: PathBuf,
+    },
 
     #[error("Failed to read referenced file: {path}")]
     ReferencedFileRead { path: PathBuf },

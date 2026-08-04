@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 use crate::error::{DragonError, Validate};
 use crate::util::str_to_bytes;
 
-/// Result of parsing a directive — either successfully read bytes, or a structured error.
 pub type DirectiveResult = Result<Vec<u8>, DragonError>;
 
 /// Recognized directives that can appear in test files.
@@ -45,7 +44,11 @@ pub struct TestFile {
 
 impl TestFile {
     pub fn new(test_path: &Path) -> Self {
-        let stem = test_path.file_stem().unwrap_or_default().to_string_lossy().into_owned();
+        let stem = test_path
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
         let extension = test_path
             .extension()
             .map(|e| format!(".{}", e.to_string_lossy()))
@@ -54,16 +57,30 @@ impl TestFile {
         let comment_syntax = "//".to_string();
 
         let expected_out = Self::resolve_directive(
-            test_path, &comment_syntax,
-            Directive::Check.tag(), Directive::CheckFile.tag(),
+            test_path,
+            &comment_syntax,
+            Directive::Check.tag(),
+            Directive::CheckFile.tag(),
         );
         let input_stream = Self::resolve_directive(
-            test_path, &comment_syntax,
-            Directive::Input.tag(), Directive::InputFile.tag(),
+            test_path,
+            &comment_syntax,
+            Directive::Input.tag(),
+            Directive::InputFile.tag(),
         );
-        let skip = Self::parse_directive(test_path, &comment_syntax, Directive::Skip.tag()).is_some();
+        let skip =
+            Self::parse_directive(test_path, &comment_syntax, Directive::Skip.tag()).is_some();
 
-        Self { path: test_path.into(), stem, extension, file, comment_syntax, expected_out, input_stream, skip }
+        Self {
+            path: test_path.into(),
+            stem,
+            extension,
+            file,
+            comment_syntax,
+            expected_out,
+            input_stream,
+            skip,
+        }
     }
 
     pub fn get_expected_out(&self) -> &[u8] {
@@ -84,13 +101,17 @@ impl TestFile {
         let inline = Self::parse_directive(test_path, comment_syntax, inline_dir);
         let file_ref = Self::parse_directive(test_path, comment_syntax, file_dir);
 
-        // Transpose Option<Result> → Result<Option> so we can use `?` for errors.
+        // Propagate errors from optional directives.
         let inline = inline.transpose()?;
         let file_ref = file_ref.transpose()?;
 
         match (inline, file_ref) {
             (Some(_), Some(_)) => Err(DragonError::DirectiveConflict {
-                test: test_path.file_name().unwrap_or_default().to_string_lossy().into_owned(),
+                test: test_path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned(),
                 inline: inline_dir.into(),
                 file_dir: file_dir.into(),
             }),
@@ -101,7 +122,11 @@ impl TestFile {
     }
 
     /// Given file-reference bytes from a FILE directive, resolve and read the target file.
-    fn read_referenced_file(test_path: &Path, directive: &str, ref_bytes: &[u8]) -> DirectiveResult {
+    fn read_referenced_file(
+        test_path: &Path,
+        directive: &str,
+        ref_bytes: &[u8],
+    ) -> DirectiveResult {
         let file_str = String::from_utf8_lossy(ref_bytes).trim().to_string();
         let parent = test_path.parent().unwrap_or(Path::new(""));
         let full_path = parent.join(&file_str);
@@ -114,8 +139,7 @@ impl TestFile {
             });
         }
 
-        fs::read(&full_path)
-            .map_err(|_| DragonError::ReferencedFileRead { path: full_path })
+        fs::read(&full_path).map_err(|_| DragonError::ReferencedFileRead { path: full_path })
     }
 
     /// Scan a test file for lines matching `// DIRECTIVE:value` and collect the values.
@@ -127,12 +151,20 @@ impl TestFile {
     ) -> Option<DirectiveResult> {
         let file = match fs::File::open(test_path) {
             Ok(f) => f,
-            Err(_) => return Some(Err(DragonError::TestFileRead { path: test_path.into() })),
+            Err(_) => {
+                return Some(Err(DragonError::TestFileRead {
+                    path: test_path.into(),
+                }))
+            }
         };
 
         let values: Result<Vec<Vec<u8>>, DragonError> = io::BufReader::new(file)
             .lines()
-            .map(|line| line.map_err(|_| DragonError::TestFileRead { path: test_path.into() }))
+            .map(|line| {
+                line.map_err(|_| DragonError::TestFileRead {
+                    path: test_path.into(),
+                })
+            })
             .filter_map(|line| {
                 let line = match line {
                     Ok(l) => l,
@@ -158,7 +190,11 @@ impl TestFile {
     /// Check if a path is a valid test file (not hidden, not .out/.ins extension).
     pub fn is_test(path: &Path) -> bool {
         path.is_file()
-            && !path.file_name().unwrap_or_default().to_string_lossy().starts_with('.')
+            && !path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .starts_with('.')
             && !matches!(
                 path.extension().and_then(|e| e.to_str()),
                 Some("out" | "ins")

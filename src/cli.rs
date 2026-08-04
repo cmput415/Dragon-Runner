@@ -138,7 +138,7 @@ pub enum Commands {
     },
 }
 
-/// Result of parsing CLI arguments — either a runner mode, a script invocation, or a server.
+/// Parsed runner, script, or server action.
 pub enum CliAction {
     Run(RunnerArgs),
     Script(Vec<String>),
@@ -168,9 +168,17 @@ pub fn parse_cli_args() -> CliAction {
 
     match cli.command {
         Commands::Script { args } => CliAction::Script(args),
-        Commands::Serve { config_file, bind, timeout, max_concurrent } => {
-            CliAction::Serve { config_file, bind, timeout, max_concurrent }
-        }
+        Commands::Serve {
+            config_file,
+            bind,
+            timeout,
+            max_concurrent,
+        } => CliAction::Serve {
+            config_file,
+            bind,
+            timeout,
+            max_concurrent,
+        },
         commands => {
             let (mode, mut args) = match commands {
                 Commands::Regular { flags } => (Mode::Regular, flags),

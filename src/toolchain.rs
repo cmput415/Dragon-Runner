@@ -70,7 +70,10 @@ pub struct ToolChain {
 
 impl ToolChain {
     pub fn new(name: &str, steps: Vec<Step>) -> Self {
-        Self { name: name.into(), steps }
+        Self {
+            name: name.into(),
+            steps,
+        }
     }
 
     pub fn len(&self) -> usize {

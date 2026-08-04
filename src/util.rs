@@ -1,7 +1,7 @@
-use std::path::{Path, PathBuf};
 use std::fs;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
 
 /// Resolve a relative path against an absolute path.
 /// If abs_path points to a file, resolve relative to its parent directory.
@@ -33,10 +33,8 @@ pub fn str_to_bytes(s: &str, chop_newline: bool) -> Vec<u8> {
     s.as_bytes().to_vec()
 }
 
-
 /// Create a temporary file with the given content and execute permissions.
-/// Returns (path_string, handle). The caller must keep the handle alive
-/// for as long as the temp file is needed — it is deleted on drop.
+/// The handle keeps the file alive.
 pub fn make_tmp_file(content: &[u8]) -> Option<(PathBuf, tempfile::TempPath)> {
     let mut tmp = tempfile::NamedTempFile::new().ok()?;
     tmp.write_all(content).ok()?;
@@ -48,7 +46,7 @@ pub fn make_tmp_file(content: &[u8]) -> Option<(PathBuf, tempfile::TempPath)> {
 }
 
 /// Create an empty temporary file with execute permissions.
-/// Returns (path_buf, handle). Caller must keep the handle alive — deleted on drop.
+/// The handle keeps the file alive.
 pub fn make_empty_tmp_file() -> Option<(PathBuf, tempfile::TempPath)> {
     let tmp = tempfile::NamedTempFile::new().ok()?;
     let path = tmp.into_temp_path();
@@ -72,4 +70,3 @@ pub fn truncated_bytes(data: &[u8], max_bytes: usize) -> Vec<u8> {
     result.extend_from_slice(&data[data.len() - half..]);
     result
 }
-

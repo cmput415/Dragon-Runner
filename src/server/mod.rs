@@ -144,7 +144,12 @@ async fn run(
         .iter()
         .find(|tc| tc.name == req.toolchain)
         .cloned()
-        .ok_or_else(|| error_json(StatusCode::BAD_REQUEST, format!("unknown toolchain: {}", req.toolchain)))?;
+        .ok_or_else(|| {
+            error_json(
+                StatusCode::BAD_REQUEST,
+                format!("unknown toolchain: {}", req.toolchain),
+            )
+        })?;
 
     // Look up executable by id
     let exe: Executable = state
@@ -153,28 +158,52 @@ async fn run(
         .iter()
         .find(|e| e.id == req.executable)
         .cloned()
-        .ok_or_else(|| error_json(StatusCode::BAD_REQUEST, format!("unknown executable: {}", req.executable)))?;
+        .ok_or_else(|| {
+            error_json(
+                StatusCode::BAD_REQUEST,
+                format!("unknown executable: {}", req.executable),
+            )
+        })?;
 
     // Decode source code
-    let code_bytes = B64.decode(&req.code)
-        .map_err(|e| error_json(StatusCode::BAD_REQUEST, format!("invalid base64 in code: {e}")))?;
+    let code_bytes = B64.decode(&req.code).map_err(|e| {
+        error_json(
+            StatusCode::BAD_REQUEST,
+            format!("invalid base64 in code: {e}"),
+        )
+    })?;
 
     // Decode optional stdin
-    let stdin_bytes = req.stdin
+    let stdin_bytes = req
+        .stdin
         .as_ref()
         .map(|s| B64.decode(s))
         .transpose()
-        .map_err(|e| error_json(StatusCode::BAD_REQUEST, format!("invalid base64 in stdin: {e}")))?;
+        .map_err(|e| {
+            error_json(
+                StatusCode::BAD_REQUEST,
+                format!("invalid base64 in stdin: {e}"),
+            )
+        })?;
 
     // Decode optional expected_output
-    let expected_bytes = req.expected_output
+    let expected_bytes = req
+        .expected_output
         .as_ref()
         .map(|s| B64.decode(s))
         .transpose()
-        .map_err(|e| error_json(StatusCode::BAD_REQUEST, format!("invalid base64 in expected_output: {e}")))?;
+        .map_err(|e| {
+            error_json(
+                StatusCode::BAD_REQUEST,
+                format!("invalid base64 in expected_output: {e}"),
+            )
+        })?;
 
     // Acquire semaphore permit for backpressure
-    let _permit = state.run_semaphore.acquire().await
+    let _permit = state
+        .run_semaphore
+        .acquire()
+        .await
         .map_err(|_| error_json(StatusCode::SERVICE_UNAVAILABLE, "server shutting down"))?;
 
     let timeout = state.timeout;
@@ -207,14 +236,18 @@ async fn run(
 
         let test = Arc::new(test);
 
-        let runner = ToolChainRunner::new(&tc, timeout)
-            .with_env(exe.runtime_env());
+        let runner = ToolChainRunner::new(&tc, timeout).with_env(exe.runtime_env());
 
         let result = runner.run(&test, &exe);
         Ok::<_, String>(result)
     })
     .await
-    .map_err(|e| error_json(StatusCode::INTERNAL_SERVER_ERROR, format!("task panicked: {e}")))?
+    .map_err(|e| {
+        error_json(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("task panicked: {e}"),
+        )
+    })?
     .map_err(|e| error_json(StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
     // Build step info from command history
@@ -282,9 +315,7 @@ pub async fn run_server(config: Config, bind: &str, timeout: f64, max_concurrent
         .await
         .unwrap_or_else(|e| panic!("failed to bind to {bind}: {e}"));
 
-    println!("dragon-runner server listening on {bind}");
+    crate::info!(0, "dragon-runner server listening on {bind}");
 
-    axum::serve(listener, app)
-        .await
-        .expect("server error");
+    axum::serve(listener, app).await.expect("server error");
 }

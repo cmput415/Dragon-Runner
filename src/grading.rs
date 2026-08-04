@@ -29,11 +29,21 @@ pub struct GradingConfig {
     pub ta_weight: f64,
 }
 
-fn default_defensive_pts() -> f64 { 2.0 }
-fn default_offensive_pts() -> f64 { 1.0 }
-fn default_coherence_pts() -> f64 { 10.0 }
-fn default_competitive_weight() -> f64 { 0.2 }
-fn default_ta_weight() -> f64 { 0.5 }
+fn default_defensive_pts() -> f64 {
+    2.0
+}
+fn default_offensive_pts() -> f64 {
+    1.0
+}
+fn default_coherence_pts() -> f64 {
+    10.0
+}
+fn default_competitive_weight() -> f64 {
+    0.2
+}
+fn default_ta_weight() -> f64 {
+    0.5
+}
 
 impl Default for GradingConfig {
     fn default() -> Self {
@@ -48,10 +58,9 @@ impl Default for GradingConfig {
 }
 
 pub fn load_grading_config(path: &Path) -> Result<GradingConfig, String> {
-    let text = fs::read_to_string(path)
-        .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-    serde_json::from_str(&text)
-        .map_err(|e| format!("cannot parse {}: {e}", path.display()))
+    let text =
+        fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    serde_json::from_str(&text).map_err(|e| format!("cannot parse {}: {e}", path.display()))
 }
 
 // ---------------------------------------------------------------------------
@@ -75,7 +84,11 @@ pub struct TournamentTable {
 impl TournamentTable {
     fn pass_fraction(&self, i: usize, j: usize) -> f64 {
         let (pass, total) = self.cells[i][j];
-        if total == 0 { 0.0 } else { pass as f64 / total as f64 }
+        if total == 0 {
+            0.0
+        } else {
+            pass as f64 / total as f64
+        }
     }
 }
 
@@ -101,21 +114,30 @@ pub struct Scores {
 /// tables, stored back as a (num, denom) pair scaled to a fixed denominator
 /// of 1000 so the result stays in `(u32, u32)`.
 pub fn average_tables(tables: &[TournamentTable]) -> TournamentTable {
-    assert!(!tables.is_empty(), "average_tables: need at least one table");
+    assert!(
+        !tables.is_empty(),
+        "average_tables: need at least one table"
+    );
     let first = &tables[0];
     let n = first.defenders.len();
     let m = first.attackers.len();
     for t in tables {
-        assert_eq!(t.defenders, first.defenders, "shape mismatch in average_tables");
-        assert_eq!(t.attackers, first.attackers, "shape mismatch in average_tables");
+        assert_eq!(
+            t.defenders, first.defenders,
+            "shape mismatch in average_tables"
+        );
+        assert_eq!(
+            t.attackers, first.attackers,
+            "shape mismatch in average_tables"
+        );
     }
 
     const DENOM: u32 = 1000;
     let mut cells = vec![vec![(0u32, DENOM); m]; n];
     for i in 0..n {
         for j in 0..m {
-            let avg: f64 = tables.iter().map(|t| t.pass_fraction(i, j)).sum::<f64>()
-                / tables.len() as f64;
+            let avg: f64 =
+                tables.iter().map(|t| t.pass_fraction(i, j)).sum::<f64>() / tables.len() as f64;
             cells[i][j] = ((avg * DENOM as f64).round() as u32, DENOM);
         }
     }
@@ -141,14 +163,13 @@ pub fn average_tables(tables: &[TournamentTable]) -> TournamentTable {
 /// - `ta[j]`: fraction of team `j`'s own tests that the solution passed.
 /// - `competitive_total[j] = defensive[j] + offensive[j] + coherence[j]`.
 /// - `normalized[j] = competitive_weight * competitive_total[j] / max`.
-pub fn compute_scores(
-    table: &TournamentTable,
-    cfg: &GradingConfig,
-    solution_id: &str,
-) -> Scores {
+pub fn compute_scores(table: &TournamentTable, cfg: &GradingConfig, solution_id: &str) -> Scores {
     let n = table.defenders.len();
-    assert_eq!(n, table.attackers.len(),
-        "compute_scores expects a square table (defenders == attackers)");
+    assert_eq!(
+        n,
+        table.attackers.len(),
+        "compute_scores expects a square table (defenders == attackers)"
+    );
 
     let solution_col = table.attackers.iter().position(|a| a == solution_id);
 
@@ -185,8 +206,15 @@ pub fn compute_scores(
         .map(|j| defensive[j] + offensive[j] + coherence[j])
         .collect();
     let max = competitive_total.iter().cloned().fold(0.0_f64, f64::max);
-    let normalized: Vec<f64> = competitive_total.iter()
-        .map(|&s| if max > 0.0 { cfg.competitive_weight * s / max } else { 0.0 })
+    let normalized: Vec<f64> = competitive_total
+        .iter()
+        .map(|&s| {
+            if max > 0.0 {
+                cfg.competitive_weight * s / max
+            } else {
+                0.0
+            }
+        })
         .collect();
 
     Scores {
@@ -239,11 +267,16 @@ pub fn compute_perf_scores(table: &PerfTable) -> PerfScores {
         }
     }
 
-    let scores: Vec<f64> = sums.iter().zip(counts.iter())
+    let scores: Vec<f64> = sums
+        .iter()
+        .zip(counts.iter())
         .map(|(&s, &c)| if c > 0 { s / c as f64 } else { 0.0 })
         .collect();
 
-    PerfScores { compilers: table.compilers.clone(), scores }
+    PerfScores {
+        compilers: table.compilers.clone(),
+        scores,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -304,15 +337,34 @@ pub fn write_summary_csv(
     writeln!(f, "{}", row("Defensive Points", &scores.defensive, 2))?;
     writeln!(f, "{}", row("Offensive Points", &scores.offensive, 2))?;
     writeln!(f, "{}", row("Coherence Points", &scores.coherence, 0))?;
-    writeln!(f, "{}", row("Competitive Points", &scores.competitive_total, 2))?;
+    writeln!(
+        f,
+        "{}",
+        row("Competitive Points", &scores.competitive_total, 2)
+    )?;
 
     let ta_weighted: Vec<f64> = scores.ta.iter().map(|s| s * cfg.ta_weight).collect();
-    writeln!(f, "{}", row(
-        &format!("TA Testing Score ({:.0}% Weight)", cfg.ta_weight * 100.0),
-        &ta_weighted, 3))?;
-    writeln!(f, "{}", row(
-        &format!("Normalized Points ({:.0}% Weight)", cfg.competitive_weight * 100.0),
-        &scores.normalized, 3))?;
+    writeln!(
+        f,
+        "{}",
+        row(
+            &format!("TA Testing Score ({:.0}% Weight)", cfg.ta_weight * 100.0),
+            &ta_weighted,
+            3
+        )
+    )?;
+    writeln!(
+        f,
+        "{}",
+        row(
+            &format!(
+                "Normalized Points ({:.0}% Weight)",
+                cfg.competitive_weight * 100.0
+            ),
+            &scores.normalized,
+            3
+        )
+    )?;
 
     Ok(())
 }
@@ -383,19 +435,28 @@ mod tests {
     fn compute_scores_identity_matrix() {
         // Every team passes only its own tests.
         let cfg = GradingConfig::default();
-        let t = table(&["A", "B", "C"], vec![
-            vec![(2, 2), (0, 2), (0, 2)],
-            vec![(0, 2), (2, 2), (0, 2)],
-            vec![(0, 2), (0, 2), (2, 2)],
-        ]);
+        let t = table(
+            &["A", "B", "C"],
+            vec![
+                vec![(2, 2), (0, 2), (0, 2)],
+                vec![(0, 2), (2, 2), (0, 2)],
+                vec![(0, 2), (0, 2), (2, 2)],
+            ],
+        );
         let s = compute_scores(&t, &cfg, "A");
 
-        // Coherence: every team passes its own tests → full 10 each.
-        for c in &s.coherence { approx_eq(*c, 10.0); }
-        // Defensive: no off-diagonal passes → 0.
-        for d in &s.defensive { approx_eq(*d, 0.0); }
-        // Offensive: every other team fully failed our tests → 1.0 * 2 fails.
-        for o in &s.offensive { approx_eq(*o, 2.0); }
+        // Each team passes its own tests.
+        for c in &s.coherence {
+            approx_eq(*c, 10.0);
+        }
+        // No team passes another team's tests.
+        for d in &s.defensive {
+            approx_eq(*d, 0.0);
+        }
+        // Each other team fully fails our tests.
+        for o in &s.offensive {
+            approx_eq(*o, 2.0);
+        }
         // ta = fraction A (solution) passed against each defender's tests.
         // For j=0 (A itself), self-cell is 2/2 = 1.0.
         // For j=1 (B), cell[1][0] = 0/2 = 0.0.
@@ -438,11 +499,14 @@ mod tests {
         //   ta[B] = pass_fraction(B, A) = 0.5
         //   ta[C] = pass_fraction(C, A) = 0.75
         let cfg = GradingConfig::default();
-        let t = table(&["A", "B", "C"], vec![
-            vec![(4, 4), (4, 4), (4, 4)],
-            vec![(2, 4), (2, 4), (0, 4)],
-            vec![(3, 4), (3, 4), (3, 4)],
-        ]);
+        let t = table(
+            &["A", "B", "C"],
+            vec![
+                vec![(4, 4), (4, 4), (4, 4)],
+                vec![(2, 4), (2, 4), (0, 4)],
+                vec![(3, 4), (3, 4), (3, 4)],
+            ],
+        );
         let s = compute_scores(&t, &cfg, "A");
 
         approx_eq(s.defensive[0], 4.0);
@@ -474,18 +538,18 @@ mod tests {
 
     #[test]
     fn average_tables_means_pass_fractions() {
-        let a = table(&["X", "Y"], vec![
-            vec![(4, 4), (0, 4)],
-            vec![(0, 4), (4, 4)],
-        ]);
-        let b = table(&["X", "Y"], vec![
-            vec![(2, 4), (2, 4)],
-            vec![(2, 4), (2, 4)],
-        ]);
+        let a = table(
+            &["X", "Y"],
+            vec![vec![(4, 4), (0, 4)], vec![(0, 4), (4, 4)]],
+        );
+        let b = table(
+            &["X", "Y"],
+            vec![vec![(2, 4), (2, 4)], vec![(2, 4), (2, 4)]],
+        );
         let avg = average_tables(&[a, b]);
-        // (1.0 + 0.5) / 2 = 0.75 → 750/1000
+        // (1.0 + 0.5) / 2 = 0.75
         assert_eq!(avg.cells[0][0], (750, 1000));
-        // (0.0 + 0.5) / 2 = 0.25 → 250/1000
+        // (0.0 + 0.5) / 2 = 0.25
         assert_eq!(avg.cells[0][1], (250, 1000));
         assert_eq!(avg.cells[1][0], (250, 1000));
         assert_eq!(avg.cells[1][1], (750, 1000));
@@ -496,13 +560,10 @@ mod tests {
         let t = PerfTable {
             compilers: vec!["fast".into(), "slow".into()],
             tests: vec!["t1".into(), "t2".into()],
-            times_seconds: vec![
-                vec![1.0, 2.0],
-                vec![0.5, 1.0],
-            ],
+            times_seconds: vec![vec![1.0, 2.0], vec![0.5, 1.0]],
         };
         let s = compute_perf_scores(&t);
-        // fastest on both rows is column 0 → mean(1.0, 1.0) = 1.0
+        // Column 0 is fastest in both rows.
         approx_eq(s.scores[0], 1.0);
         // slow: mean(0.5, 0.5) = 0.5
         approx_eq(s.scores[1], 0.5);

@@ -24,9 +24,9 @@ const SCRIPTS: &[(&str, &str)] = &[
 
 pub fn run_script(args: Vec<String>) -> i32 {
     if args.is_empty() {
-        eprintln!("Available scripts:");
+        crate::error!(0, "Available scripts:");
         for (name, _) in SCRIPTS {
-            eprintln!("  {}", name);
+            crate::error!(2, "{}", name);
         }
         return 1;
     }
@@ -35,14 +35,14 @@ pub fn run_script(args: Vec<String>) -> i32 {
     let module = match SCRIPTS.iter().find(|(name, _)| name == script_name) {
         Some((_, m)) => m,
         None => {
-            eprintln!("Unknown script: {}", script_name);
+            crate::error!(0, "Unknown script: {}", script_name);
             return 1;
         }
     };
 
     let script_path = scripts_dir().join(module);
     if !script_path.exists() {
-        eprintln!("Script file not found: {}", script_path.display());
+        crate::error!(0, "Script file not found: {}", script_path.display());
         return 1;
     }
 
@@ -54,7 +54,7 @@ pub fn run_script(args: Vec<String>) -> i32 {
     match status {
         Ok(s) => s.code().unwrap_or(1),
         Err(e) => {
-            eprintln!("Failed to run script: {}", e);
+            crate::error!(0, "Failed to run script: {}", e);
             1
         }
     }
