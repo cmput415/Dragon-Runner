@@ -27,14 +27,19 @@ fn main() {
             allow_origin,
         } => {
             let config = load_or_exit(&config_file, None);
-            let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
-            rt.block_on(server::run_server(
-                config,
-                &bind,
-                timeout,
-                max_concurrent,
-                &allow_origin,
-            ));
+            let rt = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    error!(0, "failed to create tokio runtime: {e}");
+                    std::process::exit(1);
+                }
+            };
+            if let Err(e) =
+                rt.block_on(server::run_server(config, &bind, timeout, max_concurrent, &allow_origin))
+            {
+                error!(0, "server error: {e}");
+                std::process::exit(1);
+            }
             return;
         }
         Run(args) => args,

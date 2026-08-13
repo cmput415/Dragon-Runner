@@ -300,7 +300,7 @@ pub async fn run_server(
     timeout: f64,
     max_concurrent: usize,
     allow_origins: &[String],
-) {
+) -> std::io::Result<()> {
     let state = Arc::new(AppState {
         config,
         timeout,
@@ -315,13 +315,17 @@ pub async fn run_server(
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES));
 
     if !allow_origins.is_empty() {
-        let origins: Vec<HeaderValue> = allow_origins
+        let origins = allow_origins
             .iter()
             .map(|o| {
-                HeaderValue::from_str(o)
-                    .unwrap_or_else(|e| panic!("invalid --allow-origin {o:?}: {e}"))
+                HeaderValue::from_str(o).map_err(|e| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!("invalid --allow-origin {o:?}: {e}"),
+                    )
+                })
             })
-            .collect();
+            .collect::<std::io::Result<Vec<_>>>()?;
         let cors = CorsLayer::new()
             .allow_origin(origins)
             .allow_methods([Method::GET, Method::POST])
@@ -331,11 +335,7 @@ pub async fn run_server(
 
     let app = app.with_state(state);
 
-    let listener = tokio::net::TcpListener::bind(bind)
-        .await
-        .unwrap_or_else(|e| panic!("failed to bind to {bind}: {e}"));
-
+    let listener = tokio::net::TcpListener::bind(bind).await?;
     crate::info!(0, "dragon-runner server listening on {bind}");
-
-    axum::serve(listener, app).await.expect("server error");
+    axum::serve(listener, app).await
 }
