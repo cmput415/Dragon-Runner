@@ -87,6 +87,27 @@ fn resolve_grading_config(cli_args: &RunnerArgs) -> GradingConfig {
     }
 }
 
+/// Slugify a config-supplied ID for safe use as a filename component.
+/// Anything outside [A-Za-z0-9._-] becomes `_`, and empty or pure-dot
+/// results are replaced with `_` so we can't emit `.`, `..`, or hidden files.
+fn slugify(s: &str) -> String {
+    let cleaned: String = s
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if cleaned.is_empty() {
+        "_".into()
+    } else {
+        cleaned
+    }
+}
+
 fn run_tournament(config: &Config, cli_args: &RunnerArgs) -> bool {
     let Some(output) = TournamentHarness::new().run(config, cli_args) else {
         return false;
@@ -95,7 +116,7 @@ fn run_tournament(config: &Config, cli_args: &RunnerArgs) -> bool {
     let out_dir = std::path::PathBuf::from(".");
 
     for table in &output.tables {
-        let path = out_dir.join(format!("toolchain_{}.csv", table.toolchain));
+        let path = out_dir.join(format!("toolchain_{}.csv", slugify(&table.toolchain)));
         if let Err(e) = write_tournament_csv(table, &path) {
             error!(0, "failed to write {}: {e}", path.display());
             return false;
@@ -161,7 +182,11 @@ fn write_feedback_files(failures: &[TournamentFailure], out_dir: &Path) -> std::
             .push(f);
     }
     for ((defender, toolchain), items) in &grouped {
-        let path = out_dir.join(format!("{defender}-{toolchain}feedback.txt"));
+        let path = out_dir.join(format!(
+            "{}-{}feedback.txt",
+            slugify(defender),
+            slugify(toolchain)
+        ));
         let mut f = fs::File::create(&path)?;
         for item in items {
             writeln!(
