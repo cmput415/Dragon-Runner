@@ -1,10 +1,14 @@
 use std::sync::Arc;
 
-use axum::extract::State;
+use axum::extract::{DefaultBodyLimit, State};
 use axum::http::{header, HeaderValue, Method, StatusCode};
 use axum::response::Html;
 use axum::routing::{get, post};
 use axum::{Json, Router};
+
+/// Maximum size of a POST body accepted by /api/run. Bounds how much source
+/// code, stdin, and expected output a client can submit in one request.
+const MAX_REQUEST_BYTES: usize = 1024 * 1024;
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -309,7 +313,8 @@ pub async fn run_server(
         .route("/", get(index))
         .route("/health", get(health))
         .route("/api/info", get(info))
-        .route("/api/run", post(run));
+        .route("/api/run", post(run))
+        .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES));
 
     if !allow_origins.is_empty() {
         let origins: Vec<HeaderValue> = allow_origins
