@@ -26,8 +26,10 @@ static ERROR_KIND_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)(\w+Er
 static ERROR_LINE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)on\s+Line\s+(\d+)").unwrap());
 
-/// Reserved exit code for Valgrind leak detection.
-pub const VALGRIND_EXIT_CODE: i32 = 111;
+/// Exit code we tell valgrind to raise on leak detection. Picked from the
+/// 200s so it doesn't collide with anything a test program is likely to
+/// return itself.
+pub const VALGRIND_EXIT_CODE: i32 = 217;
 const RESERVED_EXIT_CODES: &[i32] = &[VALGRIND_EXIT_CODE];
 
 // F24 and F25 runtime errors that need special handling.
@@ -425,11 +427,13 @@ impl<'a> ToolChainRunner<'a> {
             .status()
             .is_ok_and(|s| s.success());
         if ok {
+            // --log-fd=2 folds valgrind's diagnostics into the child's stderr
+            // instead of dropping them, so leak reports actually surface.
             let mut wrapped = vec![
                 VALGRIND_BIN.to_string(),
                 "--leak-check=full".to_string(),
                 format!("--error-exitcode={VALGRIND_EXIT_CODE}"),
-                "--log-file=/dev/null".to_string(),
+                "--log-fd=2".to_string(),
             ];
             wrapped.append(&mut command.args);
             command.args = wrapped;
