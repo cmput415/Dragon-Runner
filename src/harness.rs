@@ -422,6 +422,28 @@ impl TournamentHarness {
         let mut defending_exes: Vec<&Executable> = config.executables.iter().collect();
         defending_exes.sort_by(|a, b| a.id.to_lowercase().cmp(&b.id.to_lowercase()));
 
+        // Tournament grading assumes each team appears as both defender and attacker,
+        // so the ID sets must match before we spend time running the cross-product.
+        let def_ids: std::collections::BTreeSet<String> = defending_exes
+            .iter()
+            .map(|e| e.id.to_lowercase())
+            .collect();
+        let atk_names: std::collections::BTreeSet<String> = attacking_pkgs
+            .iter()
+            .map(|p| p.name.to_lowercase())
+            .collect();
+        if def_ids != atk_names {
+            let missing_atk: Vec<&String> = def_ids.difference(&atk_names).collect();
+            let missing_def: Vec<&String> = atk_names.difference(&def_ids).collect();
+            crate::error!(
+                0,
+                "Tournament defenders and attackers must match.\n  Defenders without attacker package: {:?}\n  Attacker packages without defender: {:?}",
+                missing_atk,
+                missing_def,
+            );
+            return None;
+        }
+
         let mut tables = Vec::with_capacity(config.toolchains.len());
         let mut failures = Vec::new();
         let mut solution_results = Vec::new();
@@ -569,13 +591,11 @@ impl SequentialTestHarness for MemoryCheckHarness {
 /// Collects per-(test, executable) timings; returns a `PerfTable` for the
 /// caller to grade and write.
 pub struct PerformanceTestingHarness {
-    /// Timings by executable, in the order executables are encountered. Each
-    /// inner Vec is a column: one entry per test (in `tests` order).
-    columns: Vec<Vec<f64>>,
+    columns: Vec<std::collections::HashMap<String, f64>>,
     tests: Vec<String>,
+    tests_seen: std::collections::HashSet<String>,
     exe_ids: Vec<String>,
-    current_column: Vec<f64>,
-    first_exec: bool,
+    current_column: std::collections::HashMap<String, f64>,
 }
 
 impl PerformanceTestingHarness {
@@ -583,23 +603,24 @@ impl PerformanceTestingHarness {
         Self {
             columns: Vec::new(),
             tests: Vec::new(),
+            tests_seen: std::collections::HashSet::new(),
             exe_ids: Vec::new(),
-            current_column: Vec::new(),
-            first_exec: true,
+            current_column: std::collections::HashMap::new(),
         }
     }
 
     /// Assemble a `PerfTable`. `times_seconds[test][compiler]`.
+    /// Missing entries (skipped or absent for that executable) become INFINITY
+    /// per the PerfTable contract.
     pub fn into_table(self) -> PerfTable {
-        let num_tests = self.tests.len();
         let num_compilers = self.exe_ids.len();
-        let mut times = vec![vec![0.0f64; num_compilers]; num_tests];
-        for (c, col) in self.columns.iter().enumerate() {
-            for (r, &t) in col.iter().enumerate() {
-                if r < num_tests {
-                    times[r][c] = t;
-                }
+        let mut times = Vec::with_capacity(self.tests.len());
+        for test in &self.tests {
+            let mut row = Vec::with_capacity(num_compilers);
+            for col in &self.columns {
+                row.push(col.get(test).copied().unwrap_or(f64::INFINITY));
             }
+            times.push(row);
         }
         PerfTable {
             compilers: self.exe_ids,
@@ -622,23 +643,28 @@ impl SequentialTestHarness for PerformanceTestingHarness {
     ) {
         let indent = 4 + counters.depth;
         let test_name = test_display_name(&result.test, cli_args.full_path);
+        let key = result.test.file.clone();
+
+        // Record every test we encounter, in first-seen order.
+        if self.tests_seen.insert(key.clone()) {
+            self.tests.push(key.clone());
+        }
+
         if result.skipped {
             info!(indent, "{}{}", "[SKIP] ".yellow(), test_name);
             counters.skip_count += 1;
+            // Skipped means missing in this column; leave it out so into_table fills INFINITY.
             return;
         }
-        if self.first_exec {
-            self.tests.push(result.test.file.clone());
-        }
 
-        if result.did_pass {
+        let time = if result.did_pass {
             counters.pass_count += 1;
             info!(indent, "{}{}", "[PASS] ".green(), test_name);
-            self.current_column
-                .push(result.time.unwrap_or(cli_args.timeout));
+            result.time.unwrap_or(cli_args.timeout)
         } else {
-            self.current_column.push(cli_args.timeout);
-        }
+            cli_args.timeout
+        };
+        self.current_column.insert(key, time);
         counters.test_count += 1;
     }
 
@@ -649,6 +675,5 @@ impl SequentialTestHarness for PerformanceTestingHarness {
 
     fn post_executable_hook(&mut self) {
         self.columns.push(std::mem::take(&mut self.current_column));
-        self.first_exec = false;
     }
 }
