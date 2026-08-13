@@ -221,10 +221,9 @@ fn write_solution_logs(
     out_dir: &Path,
 ) -> std::io::Result<()> {
     let pass_path = out_dir.join("pass_log.txt");
-    let mut pass = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&pass_path)?;
+    // Truncate pass_log so it stays in sync with the freshly written CSVs;
+    // failure_log is user-named and stays in append mode.
+    let mut pass = fs::File::create(&pass_path)?;
     let mut fail = fs::OpenOptions::new()
         .create(true)
         .append(true)

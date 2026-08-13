@@ -139,7 +139,14 @@ impl Package {
             .into_iter()
             .flatten()
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().is_dir())
+            .filter(|e| {
+                // Skip symlinks so a cycle can't blow the stack.
+                let path = e.path();
+                match fs::symlink_metadata(&path) {
+                    Ok(md) => md.is_dir() && !md.file_type().is_symlink(),
+                    Err(_) => false,
+                }
+            })
             .flat_map(|e| {
                 let entry_path = e.path();
                 let spkg = SubPackage::new(&entry_path, depth);
@@ -196,7 +203,8 @@ impl Executable {
     }
 
     /// Build environment variables needed for runtime library injection.
-    /// Returns an empty map if no runtime is configured.
+    /// Returns an empty map if no runtime is configured. Loader path/preload
+    /// variables prepend to any existing caller value so we don't nuke it.
     pub fn runtime_env(&self) -> HashMap<String, String> {
         let mut env = HashMap::new();
         if self.runtime.as_os_str().is_empty() {
@@ -217,15 +225,22 @@ impl Executable {
         let rt_str = self.runtime.display().to_string();
 
         if cfg!(target_os = "macos") {
-            env.insert("DYLD_LIBRARY_PATH".into(), rt_dir.clone());
-            env.insert("DYLD_INSERT_LIBRARIES".into(), rt_str);
+            env.insert("DYLD_LIBRARY_PATH".into(), prepend_env("DYLD_LIBRARY_PATH", &rt_dir, ':'));
+            env.insert("DYLD_INSERT_LIBRARIES".into(), prepend_env("DYLD_INSERT_LIBRARIES", &rt_str, ':'));
         } else {
-            env.insert("LD_LIBRARY_PATH".into(), rt_dir.clone());
-            env.insert("LD_PRELOAD".into(), rt_str);
+            env.insert("LD_LIBRARY_PATH".into(), prepend_env("LD_LIBRARY_PATH", &rt_dir, ':'));
+            env.insert("LD_PRELOAD".into(), prepend_env("LD_PRELOAD", &rt_str, ' '));
         }
         env.insert("RT_PATH".into(), rt_dir);
         env.insert("RT_LIB".into(), rt_lib);
         env
+    }
+}
+
+fn prepend_env(name: &str, value: &str, sep: char) -> String {
+    match std::env::var(name) {
+        Ok(prev) if !prev.is_empty() => format!("{value}{sep}{prev}"),
+        _ => value.to_string(),
     }
 }
 
@@ -309,10 +324,23 @@ impl Config {
         let toolchains = raw
             .toolchains
             .into_iter()
-            .map(|(name, steps)| ToolChain::new(&name, steps))
+            .map(|(name, mut steps)| {
+                for step in &mut steps {
+                    // Resolve step exe paths relative to the config file, not the process cwd.
+                    if !step.exe_raw.is_empty()
+                        && !step.exe_raw.starts_with('$')
+                        && step.exe_raw.contains('/')
+                        && !Path::new(&step.exe_raw).is_absolute()
+                    {
+                        let resolved = resolve_relative(Path::new(&step.exe_raw), &abs_config);
+                        step.exe_raw = resolved.to_string_lossy().into_owned();
+                    }
+                }
+                ToolChain::new(&name, steps)
+            })
             .collect();
 
-        let packages = Self::gather_packages(&test_dir, test_path);
+        let packages = Self::gather_packages(&test_dir, test_path, &abs_config);
 
         Self {
             name,
@@ -325,9 +353,11 @@ impl Config {
         }
     }
 
-    fn gather_packages(test_dir: &Path, test_path: Option<&str>) -> Vec<Package> {
+    fn gather_packages(test_dir: &Path, test_path: Option<&str>, config_path: &Path) -> Vec<Package> {
         if let Some(pkg) = test_path.filter(|p| !p.is_empty()) {
-            return vec![Package::new(Path::new(pkg))];
+            // --test-path is relative to the config file, matching how testDir resolves.
+            let resolved = resolve_relative(Path::new(pkg), config_path);
+            return vec![Package::new(&resolved)];
         }
         fs::read_dir(test_dir)
             .into_iter()

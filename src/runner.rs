@@ -348,7 +348,7 @@ impl<'a> ToolChainRunner<'a> {
             ));
         }
 
-        let cr = self.run_command(&command, &input_stream);
+        let cr = self.run_command(&command, input_stream, step.uses_runtime);
         if cr.timed_out {
             state.command_history.push(cr);
             return ControlFlow::Break(TestResult::timeout(
@@ -463,7 +463,7 @@ impl<'a> ToolChainRunner<'a> {
         ok
     }
 
-    fn run_command(&self, command: &ResolvedCommand, stdin: &[u8]) -> CommandResult {
+    fn run_command(&self, command: &ResolvedCommand, stdin: &[u8], apply_env: bool) -> CommandResult {
         let mut cr = CommandResult::new(&command.args[0]);
         let start = Instant::now();
 
@@ -473,9 +473,13 @@ impl<'a> ToolChainRunner<'a> {
             .stdin(process::Stdio::piped())
             .stdout(process::Stdio::piped())
             .stderr(process::Stdio::piped())
-            .envs(&self.extra_env)
             // New pgid so we can kill any descendants on timeout.
             .process_group(0);
+        // Only inject runtime env into steps that opt in via usesRuntime;
+        // otherwise compilers see LD_PRELOAD and misbehave.
+        if apply_env {
+            cmd.envs(&self.extra_env);
+        }
         let result = cmd.spawn();
 
         match result {
