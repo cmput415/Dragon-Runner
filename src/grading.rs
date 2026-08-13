@@ -60,7 +60,26 @@ impl Default for GradingConfig {
 pub fn load_grading_config(path: &Path) -> Result<GradingConfig, String> {
     let text =
         fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-    serde_json::from_str(&text).map_err(|e| format!("cannot parse {}: {e}", path.display()))
+    let cfg: GradingConfig = serde_json::from_str(&text)
+        .map_err(|e| format!("cannot parse {}: {e}", path.display()))?;
+    validate_grading_config(&cfg).map_err(|e| format!("invalid grading config {}: {e}", path.display()))?;
+    Ok(cfg)
+}
+
+fn validate_grading_config(cfg: &GradingConfig) -> Result<(), String> {
+    let fields = [
+        ("defensivePts", cfg.defensive_pts),
+        ("offensivePts", cfg.offensive_pts),
+        ("coherencePts", cfg.coherence_pts),
+        ("competitiveWeight", cfg.competitive_weight),
+        ("taWeight", cfg.ta_weight),
+    ];
+    for (name, v) in fields {
+        if !v.is_finite() || v < 0.0 {
+            return Err(format!("{name} must be a finite non-negative number, got {v}"));
+        }
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -113,23 +132,16 @@ pub struct Scores {
 /// the same order). Cells become the arithmetic mean of pass-fractions across
 /// tables, stored back as a (num, denom) pair scaled to a fixed denominator
 /// of 1000 so the result stays in `(u32, u32)`.
-pub fn average_tables(tables: &[TournamentTable]) -> TournamentTable {
-    assert!(
-        !tables.is_empty(),
-        "average_tables: need at least one table"
-    );
-    let first = &tables[0];
+pub fn average_tables(tables: &[TournamentTable]) -> Result<TournamentTable, String> {
+    let first = tables
+        .first()
+        .ok_or("average_tables: need at least one table")?;
     let n = first.defenders.len();
     let m = first.attackers.len();
     for t in tables {
-        assert_eq!(
-            t.defenders, first.defenders,
-            "shape mismatch in average_tables"
-        );
-        assert_eq!(
-            t.attackers, first.attackers,
-            "shape mismatch in average_tables"
-        );
+        if t.defenders != first.defenders || t.attackers != first.attackers {
+            return Err("average_tables: shape mismatch across tables".into());
+        }
     }
 
     const DENOM: u32 = 1000;
@@ -142,12 +154,12 @@ pub fn average_tables(tables: &[TournamentTable]) -> TournamentTable {
         }
     }
 
-    TournamentTable {
+    Ok(TournamentTable {
         toolchain: "average".into(),
         defenders: first.defenders.clone(),
         attackers: first.attackers.clone(),
         cells,
-    }
+    })
 }
 
 /// Compute per-team scores from a tournament table.
@@ -163,15 +175,30 @@ pub fn average_tables(tables: &[TournamentTable]) -> TournamentTable {
 /// - `ta[j]`: fraction of team `j`'s own tests that the solution passed.
 /// - `competitive_total[j] = defensive[j] + offensive[j] + coherence[j]`.
 /// - `normalized[j] = competitive_weight * competitive_total[j] / max`.
-pub fn compute_scores(table: &TournamentTable, cfg: &GradingConfig, solution_id: &str) -> Scores {
+pub fn compute_scores(
+    table: &TournamentTable,
+    cfg: &GradingConfig,
+    solution_id: &str,
+) -> Result<Scores, String> {
     let n = table.defenders.len();
-    assert_eq!(
-        n,
-        table.attackers.len(),
-        "compute_scores expects a square table (defenders == attackers)"
-    );
+    if n != table.attackers.len() {
+        return Err(format!(
+            "compute_scores expects a square table (defenders={}, attackers={})",
+            n,
+            table.attackers.len()
+        ));
+    }
 
-    let solution_col = table.attackers.iter().position(|a| a == solution_id);
+    let solution_col = table
+        .attackers
+        .iter()
+        .position(|a| a == solution_id)
+        .ok_or_else(|| {
+            format!(
+                "solution id {solution_id:?} not found among attackers: {:?}",
+                table.attackers
+            )
+        })?;
 
     let mut defensive = vec![0.0; n];
     let mut offensive = vec![0.0; n];
@@ -186,9 +213,7 @@ pub fn compute_scores(table: &TournamentTable, cfg: &GradingConfig, solution_id:
             0.0
         };
 
-        if let Some(sc) = solution_col {
-            ta[j] = table.pass_fraction(j, sc);
-        }
+        ta[j] = table.pass_fraction(j, solution_col);
 
         for i in 0..n {
             if i != j {
@@ -217,7 +242,7 @@ pub fn compute_scores(table: &TournamentTable, cfg: &GradingConfig, solution_id:
         })
         .collect();
 
-    Scores {
+    Ok(Scores {
         team_ids: table.defenders.clone(),
         defensive,
         offensive,
@@ -225,7 +250,7 @@ pub fn compute_scores(table: &TournamentTable, cfg: &GradingConfig, solution_id:
         ta,
         competitive_total,
         normalized,
-    }
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -259,7 +284,8 @@ pub fn compute_perf_scores(table: &PerfTable) -> PerfScores {
         if !fastest.is_finite() || fastest <= 0.0 {
             continue;
         }
-        for (c, &t) in row.iter().enumerate() {
+        // Ignore any extra cells past num_compilers so a malformed row can't panic.
+        for (c, &t) in row.iter().take(num_compilers).enumerate() {
             if t.is_finite() && t > 0.0 {
                 sums[c] += fastest / t;
                 counts[c] += 1;
@@ -443,7 +469,7 @@ mod tests {
                 vec![(0, 2), (0, 2), (2, 2)],
             ],
         );
-        let s = compute_scores(&t, &cfg, "A");
+        let s = compute_scores(&t, &cfg, "A").unwrap();
 
         // Each team passes its own tests.
         for c in &s.coherence {
@@ -507,7 +533,7 @@ mod tests {
                 vec![(3, 4), (3, 4), (3, 4)],
             ],
         );
-        let s = compute_scores(&t, &cfg, "A");
+        let s = compute_scores(&t, &cfg, "A").unwrap();
 
         approx_eq(s.defensive[0], 4.0);
         approx_eq(s.defensive[1], 1.0);
@@ -546,7 +572,7 @@ mod tests {
             &["X", "Y"],
             vec![vec![(2, 4), (2, 4)], vec![(2, 4), (2, 4)]],
         );
-        let avg = average_tables(&[a, b]);
+        let avg = average_tables(&[a, b]).unwrap();
         // (1.0 + 0.5) / 2 = 0.75
         assert_eq!(avg.cells[0][0], (750, 1000));
         // (0.0 + 0.5) / 2 = 0.25

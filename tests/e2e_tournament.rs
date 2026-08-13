@@ -75,7 +75,7 @@ fn e2e_tournament_scores_show_full_spread() {
         }
     }
 
-    let scores = compute_scores(table, &grading_cfg, "TA");
+    let scores = compute_scores(table, &grading_cfg, "TA").unwrap();
     assert_eq!(scores.team_ids, expected_order);
 
     // Hand-computed values (see comment block below the test).

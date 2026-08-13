@@ -124,9 +124,21 @@ fn run_tournament(config: &Config, cli_args: &RunnerArgs) -> bool {
     }
 
     if !output.tables.is_empty() {
-        let avg = average_tables(&output.tables);
+        let avg = match average_tables(&output.tables) {
+            Ok(t) => t,
+            Err(e) => {
+                error!(0, "{e}");
+                return false;
+            }
+        };
         let solution = cli_args.solution_exe.as_deref().unwrap();
-        let scores = compute_scores(&avg, &grading_cfg, solution);
+        let scores = match compute_scores(&avg, &grading_cfg, solution) {
+            Ok(s) => s,
+            Err(e) => {
+                error!(0, "{e}");
+                return false;
+            }
+        };
         let summary_path = out_dir.join("summary.csv");
         if let Err(e) = write_summary_csv(&avg, &scores, &grading_cfg, &summary_path) {
             error!(0, "failed to write {}: {e}", summary_path.display());
