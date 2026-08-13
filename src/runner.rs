@@ -2,12 +2,19 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
+use std::io::{Read, Write};
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::{Arc, LazyLock};
+use std::thread;
 use std::time::{Duration, Instant};
 use wait_timeout::ChildExt;
+
+/// Maximum bytes kept per child stdio stream. Anything past this cap is drained
+/// and discarded so the child can't block on a full pipe, but memory use stays
+/// bounded regardless of how much output the child produces.
+const CHILD_STREAM_CAP: usize = 8 * 1024 * 1024;
 
 use crate::config::Executable;
 use crate::testfile::TestFile;
@@ -25,6 +32,30 @@ const RESERVED_EXIT_CODES: &[i32] = &[VALGRIND_EXIT_CODE];
 
 // F24 and F25 runtime errors that need special handling.
 const RUNTIME_ERRORS: &[&str] = &["SizeError", "IndexError", "MathError", "StrideError"];
+
+/// Spawn a thread that reads `reader` to EOF, keeping the first
+/// `CHILD_STREAM_CAP` bytes and discarding the rest. Draining continues past
+/// the cap so the child never blocks on a full pipe buffer.
+fn spawn_capped_drain<R: Read + Send + 'static>(mut reader: R) -> thread::JoinHandle<Vec<u8>> {
+    thread::spawn(move || {
+        let mut buf: Vec<u8> = Vec::new();
+        let mut chunk = [0u8; 8192];
+        loop {
+            match reader.read(&mut chunk) {
+                Ok(0) => break,
+                Ok(n) => {
+                    let remaining = CHILD_STREAM_CAP.saturating_sub(buf.len());
+                    let keep = n.min(remaining);
+                    if keep > 0 {
+                        buf.extend_from_slice(&chunk[..keep]);
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        buf
+    })
+}
 
 /// State threaded between pipeline steps during a toolchain run.
 struct PipelineState {
@@ -421,30 +452,30 @@ impl<'a> ToolChainRunner<'a> {
 
         match result {
             Ok(mut child) => {
-                // Write stdin then close it
-                if let Some(mut child_stdin) = child.stdin.take() {
-                    use std::io::Write;
-                    let _ = child_stdin.write_all(stdin);
-                }
+                // Drain stdout and stderr on dedicated threads so that a child
+                // filling either pipe buffer cannot block us while we wait on
+                // its exit. Each drainer keeps at most CHILD_STREAM_CAP bytes
+                // in memory and discards the rest.
+                let stdout_handle = child.stdout.take().map(spawn_capped_drain);
+                let stderr_handle = child.stderr.take().map(spawn_capped_drain);
+
+                // Write stdin on a thread too, in case it's larger than the
+                // pipe buffer and the child doesn't consume it quickly.
+                let stdin_handle = child.stdin.take().map(|mut pipe| {
+                    let buf = stdin.to_vec();
+                    thread::spawn(move || {
+                        let _ = pipe.write_all(&buf);
+                        // Dropping the pipe closes it so the child sees EOF.
+                    })
+                });
 
                 let timeout_dur = Duration::from_secs_f64(self.timeout);
                 match child.wait_timeout(timeout_dur) {
                     Ok(Some(status)) => {
-                        // Read the remaining output.
                         cr.time = start.elapsed().as_secs_f64();
                         cr.exit_status = status.code().unwrap_or(1);
-
-                        // Read stdout and stderr from the pipes
-                        use std::io::Read;
-                        if let Some(mut out) = child.stdout.take() {
-                            let _ = out.read_to_end(&mut cr.stdout);
-                        }
-                        if let Some(mut err) = child.stderr.take() {
-                            let _ = err.read_to_end(&mut cr.stderr);
-                        }
                     }
                     Ok(None) => {
-                        // The process timed out.
                         let _ = child.kill();
                         let _ = child.wait();
                         cr.timed_out = true;
@@ -455,6 +486,18 @@ impl<'a> ToolChainRunner<'a> {
                         cr.exit_status = 1;
                         cr.time = start.elapsed().as_secs_f64();
                     }
+                }
+
+                // Once the child has exited (or been killed), the pipes hit
+                // EOF and the drainer threads return.
+                if let Some(h) = stdin_handle {
+                    let _ = h.join();
+                }
+                if let Some(h) = stdout_handle {
+                    cr.stdout = h.join().unwrap_or_default();
+                }
+                if let Some(h) = stderr_handle {
+                    cr.stderr = h.join().unwrap_or_default();
                 }
             }
             Err(_) => {
