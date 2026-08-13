@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::extract::State;
-use axum::http::StatusCode;
+use axum::http::{header, HeaderValue, Method, StatusCode};
 use axum::response::Html;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -296,20 +296,41 @@ async fn run(
 // Server entrypoint
 // ---------------------------------------------------------------------------
 
-pub async fn run_server(config: Config, bind: &str, timeout: f64, max_concurrent: usize) {
+pub async fn run_server(
+    config: Config,
+    bind: &str,
+    timeout: f64,
+    max_concurrent: usize,
+    allow_origins: &[String],
+) {
     let state = Arc::new(AppState {
         config,
         timeout,
         run_semaphore: Semaphore::new(max_concurrent),
     });
 
-    let app = Router::new()
+    let mut app = Router::new()
         .route("/", get(index))
         .route("/health", get(health))
         .route("/api/info", get(info))
-        .route("/api/run", post(run))
-        .layer(CorsLayer::permissive())
-        .with_state(state);
+        .route("/api/run", post(run));
+
+    if !allow_origins.is_empty() {
+        let origins: Vec<HeaderValue> = allow_origins
+            .iter()
+            .map(|o| {
+                HeaderValue::from_str(o)
+                    .unwrap_or_else(|e| panic!("invalid --allow-origin {o:?}: {e}"))
+            })
+            .collect();
+        let cors = CorsLayer::new()
+            .allow_origin(origins)
+            .allow_methods([Method::GET, Method::POST])
+            .allow_headers([header::CONTENT_TYPE]);
+        app = app.layer(cors);
+    }
+
+    let app = app.with_state(state);
 
     let listener = tokio::net::TcpListener::bind(bind)
         .await

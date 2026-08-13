@@ -24,10 +24,17 @@ fn main() {
             bind,
             timeout,
             max_concurrent,
+            allow_origin,
         } => {
             let config = load_or_exit(&config_file, None);
             let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
-            rt.block_on(server::run_server(config, &bind, timeout, max_concurrent));
+            rt.block_on(server::run_server(
+                config,
+                &bind,
+                timeout,
+                max_concurrent,
+                &allow_origin,
+            ));
             return;
         }
         Run(args) => args,

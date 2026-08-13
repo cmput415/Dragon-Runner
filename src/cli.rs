@@ -135,6 +135,10 @@ pub enum Commands {
         /// Maximum number of concurrent test executions
         #[arg(long, default_value_t = 4)]
         max_concurrent: usize,
+        /// Allowed CORS origin (repeatable). If unset, cross-origin requests are
+        /// disabled and only same-origin browser calls are accepted.
+        #[arg(long = "allow-origin")]
+        allow_origin: Vec<String>,
     },
 }
 
@@ -147,6 +151,7 @@ pub enum CliAction {
         bind: String,
         timeout: f64,
         max_concurrent: usize,
+        allow_origin: Vec<String>,
     },
 }
 
@@ -173,11 +178,13 @@ pub fn parse_cli_args() -> CliAction {
             bind,
             timeout,
             max_concurrent,
+            allow_origin,
         } => CliAction::Serve {
             config_file,
             bind,
             timeout,
             max_concurrent,
+            allow_origin,
         },
         commands => {
             let (mode, mut args) = match commands {
