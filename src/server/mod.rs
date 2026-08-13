@@ -72,7 +72,6 @@ struct ToolchainInfo {
 #[derive(Serialize)]
 struct ExecutableInfo {
     id: String,
-    path: String,
 }
 
 #[derive(Serialize)]
@@ -117,10 +116,7 @@ async fn info(State(state): State<Arc<AppState>>) -> Json<InfoResponse> {
         executables: cfg
             .executables
             .iter()
-            .map(|e| ExecutableInfo {
-                id: e.id.clone(),
-                path: e.exe_path.display().to_string(),
-            })
+            .map(|e| ExecutableInfo { id: e.id.clone() })
             .collect(),
         packages: cfg
             .packages
