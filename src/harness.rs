@@ -65,7 +65,8 @@ fn pretty_print_file(path: &std::path::Path) -> Option<String> {
         .map(|(w, _)| w.0 as usize)
         .unwrap_or(80);
     let content_width = std::cmp::min(term_width.saturating_sub(10), 100);
-    if content_width < 6 {
+    // Need room for the "│  │" frame and at least one char plus "..." on truncation.
+    if content_width < 8 {
         return Some(content);
     }
 
@@ -75,16 +76,17 @@ fn pretty_print_file(path: &std::path::Path) -> Option<String> {
         "\u{250c}{}\u{2510}",
         "\u{2500}".repeat(content_width - 2)
     ));
+    let max_chars = content_width - 4;
+    let truncate_at = content_width - 7;
     for line in content.lines() {
-        let display = if line.len() > content_width - 4 {
-            format!("{}...", &line[..content_width - 7])
+        let display = if line.chars().count() > max_chars {
+            let head: String = line.chars().take(truncate_at).collect();
+            format!("{head}...")
         } else {
             line.to_string()
         };
         lines.push(format!(
-            "\u{2502} {:<width$} \u{2502}",
-            display,
-            width = content_width - 4
+            "\u{2502} {display:<max_chars$} \u{2502}"
         ));
     }
     // bottom border
@@ -577,11 +579,14 @@ impl SequentialTestHarness for MemoryCheckHarness {
             counters.pass_count += 1;
         } else {
             info!(indent, "{}{}{}", "[FAIL] ".red(), test_name, time);
+            self.passed = false;
         }
 
         print_test_details(&result, cli_args, indent);
 
         if result.memory_leak {
+            // A leak is a failure in memcheck mode, even if output matched.
+            self.passed = false;
             self.leak_tests.push(result);
         }
     }
