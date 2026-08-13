@@ -391,7 +391,7 @@ impl<'a> ToolChainRunner<'a> {
                 Some(ref p) if p.exists() => match fs::read(p) {
                     Ok(bytes) => bytes,
                     Err(_) => {
-                        // Can't read output — that's an infra failure, not a pass.
+                        // Can't read output, so treat this as infra failure, not a pass.
                         return ControlFlow::Break(TestResult::fail(
                             test,
                             state.command_history,
@@ -631,8 +631,11 @@ impl<'a> ToolChainRunner<'a> {
             let prod_line = ERROR_LINE_RE.captures(produced_str);
             let exp_line = ERROR_LINE_RE.captures(expected_str);
             match (prod_error, exp_error, prod_line, exp_line) {
-                (Some(_), Some(_), Some(pl), Some(el)) => {
-                    pl.get(1).map(|m| m.as_str()) == el.get(1).map(|m| m.as_str())
+                (Some(pe), Some(ee), Some(pl), Some(el)) => {
+                    let same_kind = pe.get(1).map(|m| m.as_str().to_ascii_lowercase())
+                        == ee.get(1).map(|m| m.as_str().to_ascii_lowercase());
+                    let same_line = pl.get(1).map(|m| m.as_str()) == el.get(1).map(|m| m.as_str());
+                    same_kind && same_line
                 }
                 _ => false,
             }

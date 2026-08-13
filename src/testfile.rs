@@ -173,12 +173,10 @@ impl TestFile {
                     Ok(l) => l,
                     Err(e) => return Some(Err(e)),
                 };
-                let comment_pos = line.find(comment_syntax)?;
-                let directive_pos = line.find(directive)?;
-                if comment_pos > directive_pos {
-                    return None;
-                }
-                let (_, rhs) = line.split_once(directive)?;
+                // Directive must start right after the comment marker so that
+                // NOSKIP, //foo CHECK: bar, etc. don't false-match.
+                let (_, after_comment) = line.split_once(comment_syntax)?;
+                let rhs = after_comment.trim_start().strip_prefix(directive)?;
                 Some(Ok(str_to_bytes(rhs, true)))
             })
             .collect();

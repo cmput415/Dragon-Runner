@@ -223,10 +223,9 @@ async fn run(
                 .map_err(|e| format!("failed to write temp file: {e}"))?;
         }
 
-        // Build TestFile from the temp path, then discard any directives that
-        // were parsed from user-submitted source. All test parameters come from
-        // the request body only — the client cannot force SKIP or set an
-        // expected output by embedding directives in their code.
+        // Directives in user source are ignored; every test parameter comes
+        // from the request body so a client cannot embed SKIP or CHECK to
+        // force a pass.
         let mut test = TestFile::new(tmp.path());
         test.skip = false;
         test.input_stream = Ok(stdin_bytes.unwrap_or_default());
