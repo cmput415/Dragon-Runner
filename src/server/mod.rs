@@ -223,16 +223,14 @@ async fn run(
                 .map_err(|e| format!("failed to write temp file: {e}"))?;
         }
 
-        // Build TestFile from the temp path
+        // Build TestFile from the temp path, then discard any directives that
+        // were parsed from user-submitted source. All test parameters come from
+        // the request body only — the client cannot force SKIP or set an
+        // expected output by embedding directives in their code.
         let mut test = TestFile::new(tmp.path());
-
-        // Override directives if provided in the request
-        if let Some(input) = stdin_bytes {
-            test.input_stream = Ok(input);
-        }
-        if let Some(expected) = expected_bytes {
-            test.expected_out = Ok(expected);
-        }
+        test.skip = false;
+        test.input_stream = Ok(stdin_bytes.unwrap_or_default());
+        test.expected_out = Ok(expected_bytes.unwrap_or_default());
 
         let test = Arc::new(test);
 
