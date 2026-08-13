@@ -188,10 +188,14 @@ pub trait SequentialTestHarness {
     fn iterate(&mut self, config: &Config, cli_args: &RunnerArgs) {
         self.pre_run_hook();
 
+        // package_filter was validated at config load, so the pattern must parse.
         let filter_pat = if config.package_filter.is_empty() {
             None
         } else {
-            glob::Pattern::new(&config.package_filter.to_lowercase()).ok()
+            Some(
+                glob::Pattern::new(&config.package_filter.to_lowercase())
+                    .expect("package_filter validated at config load"),
+            )
         };
 
         for exe in &config.executables {
@@ -233,20 +237,28 @@ pub trait SequentialTestHarness {
                         };
                         self.pre_subpackage_hook(spkg);
 
-                        let results: Vec<TestResult> = spkg
-                            .tests
-                            .par_iter()
-                            .map(|test| runner.run(test, exe))
-                            .collect();
-
-                        for result in results {
-                            let fast_fail = cli_args.fast_fail && !result.did_pass;
-                            self.process_test_result(result, cli_args, &mut counters);
-                            if fast_fail {
-                                self.post_subpackage_hook(&counters);
-                                self.post_executable_hook();
-                                self.post_run_hook();
-                                return;
+                        // Parallel iteration would run every test before we could
+                        // see the first failure, so fast-fail has to stay sequential.
+                        if cli_args.fast_fail {
+                            for test in &spkg.tests {
+                                let result = runner.run(test, exe);
+                                let is_fail = !result.did_pass;
+                                self.process_test_result(result, cli_args, &mut counters);
+                                if is_fail {
+                                    self.post_subpackage_hook(&counters);
+                                    self.post_executable_hook();
+                                    self.post_run_hook();
+                                    return;
+                                }
+                            }
+                        } else {
+                            let results: Vec<TestResult> = spkg
+                                .tests
+                                .par_iter()
+                                .map(|test| runner.run(test, exe))
+                                .collect();
+                            for result in results {
+                                self.process_test_result(result, cli_args, &mut counters);
                             }
                         }
 

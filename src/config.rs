@@ -345,6 +345,14 @@ impl Config {
                 path: self.test_dir.clone(),
             });
         }
+        if !self.package_filter.is_empty() {
+            if let Err(e) = glob::Pattern::new(&self.package_filter.to_lowercase()) {
+                errors.push(DragonError::InvalidPackageFilter {
+                    pattern: self.package_filter.clone(),
+                    reason: e.to_string(),
+                });
+            }
+        }
         errors.extend(
             self.executables
                 .iter()

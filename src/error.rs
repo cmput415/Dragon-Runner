@@ -38,6 +38,9 @@ pub enum DragonError {
 
     #[error("Failed to read referenced file: {path}")]
     ReferencedFileRead { path: PathBuf },
+
+    #[error("Invalid package filter glob {pattern:?}: {reason}")]
+    InvalidPackageFilter { pattern: String, reason: String },
 }
 
 pub trait Validate {
