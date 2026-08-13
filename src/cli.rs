@@ -46,7 +46,7 @@ pub struct RunnerArgs {
     pub grade_config: Option<PathBuf>,
 
     /// Timeout in seconds for each step
-    #[arg(long, default_value_t = 2.0)]
+    #[arg(long, default_value_t = 2.0, value_parser = parse_timeout)]
     pub timeout: f64,
 
     /// Verify CCID in packages
@@ -130,7 +130,7 @@ pub enum Commands {
         #[arg(long, default_value = "127.0.0.1:3000")]
         bind: String,
         /// Timeout in seconds for each step
-        #[arg(long, default_value_t = 2.0)]
+        #[arg(long, default_value_t = 2.0, value_parser = parse_timeout)]
         timeout: f64,
         /// Maximum number of concurrent test executions
         #[arg(long, default_value_t = 4)]
@@ -140,6 +140,15 @@ pub enum Commands {
         #[arg(long = "allow-origin")]
         allow_origin: Vec<String>,
     },
+}
+
+/// Parse a --timeout value, rejecting NaN, infinity, and non-positive values.
+fn parse_timeout(s: &str) -> Result<f64, String> {
+    let v: f64 = s.parse().map_err(|e: std::num::ParseFloatError| e.to_string())?;
+    if !v.is_finite() || v <= 0.0 {
+        return Err(format!("timeout must be a positive finite number, got {v}"));
+    }
+    Ok(v)
 }
 
 /// Parsed runner, script, or server action.
@@ -163,13 +172,22 @@ pub enum CliAction {
 pub fn parse_cli_args() -> CliAction {
     let raw_args: Vec<String> = std::env::args().collect();
 
-    // Try parsing as-is first. If that fails, assume the user omitted the
-    // subcommand and default to "regular".
-    let cli = Cli::try_parse_from(&raw_args).unwrap_or_else(|_| {
-        let mut patched = vec![raw_args[0].clone(), "regular".to_string()];
-        patched.extend_from_slice(&raw_args[1..]);
-        Cli::parse_from(patched)
-    });
+    // Try parsing as-is first. Only fall back to implicit "regular" when the
+    // failure looks like a missing/invalid subcommand; other errors (bad
+    // values, unknown flags, --help) surface directly so the user sees the
+    // real diagnostic instead of a retry-shadowed one.
+    let cli = match Cli::try_parse_from(&raw_args) {
+        Ok(cli) => cli,
+        Err(e) => match e.kind() {
+            clap::error::ErrorKind::InvalidSubcommand
+            | clap::error::ErrorKind::MissingSubcommand => {
+                let mut patched = vec![raw_args[0].clone(), "regular".to_string()];
+                patched.extend_from_slice(&raw_args[1..]);
+                Cli::parse_from(patched)
+            }
+            _ => e.exit(),
+        },
+    };
 
     match cli.command {
         Commands::Script { args } => CliAction::Script(args),

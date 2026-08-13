@@ -305,7 +305,8 @@ impl<'a> ToolChainRunner<'a> {
 
         match result {
             ControlFlow::Break(tr) => tr,
-            ControlFlow::Continue(_) => panic!("Toolchain reached undefined conditions"),
+            // Empty toolchains are rejected at config load, so we should always Break.
+            ControlFlow::Continue(_) => unreachable!("empty toolchain rejected at config load"),
         }
     }
 
@@ -419,14 +420,23 @@ impl<'a> ToolChainRunner<'a> {
             ));
         }
 
-        // Continue the pipeline.
-        state.input_file = output_path.unwrap_or_else(|| match make_tmp_file(&stdout) {
-            Some((path, handle)) => {
-                state.tmp_handles.push(handle);
-                path
-            }
-            None => PathBuf::new(),
-        });
+        // Continue the pipeline; a tmp-file failure is real and shouldn't feed an empty path forward.
+        state.input_file = match output_path {
+            Some(p) => p,
+            None => match make_tmp_file(&stdout) {
+                Some((path, handle)) => {
+                    state.tmp_handles.push(handle);
+                    path
+                }
+                None => {
+                    return ControlFlow::Break(TestResult::fail(
+                        test,
+                        state.command_history,
+                        Some(format!("failed to buffer output of {}", step.display_name(exe))),
+                    ));
+                }
+            },
+        };
         ControlFlow::Continue(state)
     }
 

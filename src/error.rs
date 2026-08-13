@@ -41,6 +41,9 @@ pub enum DragonError {
 
     #[error("Invalid package filter glob {pattern:?}: {reason}")]
     InvalidPackageFilter { pattern: String, reason: String },
+
+    #[error("Toolchain {name:?} has no steps")]
+    EmptyToolChain { name: String },
 }
 
 pub trait Validate {

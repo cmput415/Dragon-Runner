@@ -91,6 +91,12 @@ impl ToolChain {
 
 impl Validate for ToolChain {
     fn validate(&self) -> Vec<DragonError> {
-        self.steps.iter().flat_map(|s| s.validate()).collect()
+        let mut errors: Vec<DragonError> = self.steps.iter().flat_map(|s| s.validate()).collect();
+        if self.steps.is_empty() {
+            errors.push(DragonError::EmptyToolChain {
+                name: self.name.clone(),
+            });
+        }
+        errors
     }
 }
