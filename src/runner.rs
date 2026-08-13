@@ -33,9 +33,8 @@ const RESERVED_EXIT_CODES: &[i32] = &[VALGRIND_EXIT_CODE];
 // F24 and F25 runtime errors that need special handling.
 const RUNTIME_ERRORS: &[&str] = &["SizeError", "IndexError", "MathError", "StrideError"];
 
-/// Spawn a thread that reads `reader` to EOF, keeping the first
-/// `CHILD_STREAM_CAP` bytes and discarding the rest. Draining continues past
-/// the cap so the child never blocks on a full pipe buffer.
+/// Drain `reader` to EOF, keeping up to `CHILD_STREAM_CAP` bytes so a chatty
+/// child can't blow up runner memory or block on a full pipe.
 fn spawn_capped_drain<R: Read + Send + 'static>(mut reader: R) -> thread::JoinHandle<Vec<u8>> {
     thread::spawn(move || {
         let mut buf: Vec<u8> = Vec::new();
@@ -442,12 +441,15 @@ impl<'a> ToolChainRunner<'a> {
         let mut cr = CommandResult::new(&command.args[0]);
         let start = Instant::now();
 
+        use std::os::unix::process::CommandExt;
         let mut cmd = process::Command::new(&command.args[0]);
         cmd.args(&command.args[1..])
             .stdin(process::Stdio::piped())
             .stdout(process::Stdio::piped())
             .stderr(process::Stdio::piped())
-            .envs(&self.extra_env);
+            .envs(&self.extra_env)
+            // New pgid so we can kill any descendants on timeout.
+            .process_group(0);
         let result = cmd.spawn();
 
         match result {
@@ -476,7 +478,8 @@ impl<'a> ToolChainRunner<'a> {
                         cr.exit_status = status.code().unwrap_or(1);
                     }
                     Ok(None) => {
-                        let _ = child.kill();
+                        // child.id() is the pgid since we spawned into a new group.
+                        unsafe { libc::killpg(child.id() as libc::pid_t, libc::SIGKILL) };
                         let _ = child.wait();
                         cr.timed_out = true;
                         cr.time = self.timeout;
