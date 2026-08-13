@@ -142,7 +142,7 @@ fn print_test_details(result: &TestResult, cli_args: &RunnerArgs, indent: usize)
 
     // Expected vs Generated output: level 2 on pass, level 1 on fail
     let diff_level: u32 = if result.did_pass { 2 } else { 1 };
-    let expected_out = result.test.get_expected_out();
+    let expected_out = result.test.get_expected_out().unwrap_or(b"");
     let generated_out = result.gen_output.as_deref().unwrap_or(b"");
     log(
         diff_level,
@@ -457,7 +457,11 @@ impl TournamentHarness {
                                 toolchain: tc.name.clone(),
                                 defender: def_exe.id.clone(),
                                 test_file: result.test.file.clone(),
-                                expected_out: result.test.get_expected_out().to_vec(),
+                                expected_out: result
+                                    .test
+                                    .get_expected_out()
+                                    .map(<[u8]>::to_vec)
+                                    .unwrap_or_default(),
                                 generated_out: result.gen_output.clone().unwrap_or_default(),
                             });
                         }

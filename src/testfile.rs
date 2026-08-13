@@ -68,8 +68,11 @@ impl TestFile {
             Directive::Input.tag(),
             Directive::InputFile.tag(),
         );
-        let skip =
-            Self::parse_directive(test_path, &comment_syntax, Directive::Skip.tag()).is_some();
+        // A read error shouldn't silently skip the test.
+        let skip = matches!(
+            Self::parse_directive(test_path, &comment_syntax, Directive::Skip.tag()),
+            Some(Ok(_))
+        );
 
         Self {
             path: test_path.into(),
@@ -83,12 +86,12 @@ impl TestFile {
         }
     }
 
-    pub fn get_expected_out(&self) -> &[u8] {
-        self.expected_out.as_deref().unwrap_or(b"")
+    pub fn get_expected_out(&self) -> Result<&[u8], &DragonError> {
+        self.expected_out.as_deref()
     }
 
-    pub fn get_input_stream(&self) -> &[u8] {
-        self.input_stream.as_deref().unwrap_or(b"")
+    pub fn get_input_stream(&self) -> Result<&[u8], &DragonError> {
+        self.input_stream.as_deref()
     }
 
     /// Resolve inline vs file directives into final byte content.

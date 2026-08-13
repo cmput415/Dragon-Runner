@@ -172,9 +172,10 @@ impl TestResult {
         time: f64,
         memory_leak: bool,
     ) -> Self {
-        let expected = test.get_expected_out();
+        // An unreadable expected output is an infra failure, not a pass.
+        let did_pass = matches!(test.get_expected_out(), Ok(exp) if exp == output);
         Self {
-            did_pass: output == expected,
+            did_pass,
             test: Arc::clone(test),
             did_timeout: false,
             error_test: false,
@@ -316,8 +317,9 @@ impl<'a> ToolChainRunner<'a> {
         test: &Arc<TestFile>,
         exe: &Executable,
     ) -> ControlFlow<TestResult, PipelineState> {
+        // Config validation already rejects unreadable input, so empty on error is safe.
         let input_stream = if step.uses_ins {
-            test.get_input_stream()
+            test.get_input_stream().unwrap_or(b"")
         } else {
             b""
         };
@@ -372,8 +374,8 @@ impl<'a> ToolChainRunner<'a> {
         state.command_history.push(cr);
 
         if exit_status != 0 && !RESERVED_EXIT_CODES.contains(&exit_status) {
-            let did_pass =
-                step.allow_error && self.check_error_test(&stderr, test.get_expected_out());
+            let expected = test.get_expected_out().unwrap_or(b"");
+            let did_pass = step.allow_error && self.check_error_test(&stderr, expected);
             return ControlFlow::Break(TestResult::error(
                 test,
                 state.command_history,
@@ -386,7 +388,17 @@ impl<'a> ToolChainRunner<'a> {
 
         if last_step {
             let final_output = match output_path {
-                Some(ref p) if p.exists() => fs::read(p).unwrap_or_default(),
+                Some(ref p) if p.exists() => match fs::read(p) {
+                    Ok(bytes) => bytes,
+                    Err(_) => {
+                        // Can't read output — that's an infra failure, not a pass.
+                        return ControlFlow::Break(TestResult::fail(
+                            test,
+                            state.command_history,
+                            Some(format!("failed to read output file {}", p.display())),
+                        ));
+                    }
+                },
                 Some(_) => {
                     return ControlFlow::Break(TestResult::finished(
                         test,
