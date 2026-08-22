@@ -2,21 +2,22 @@
   "name": "Server Config",
   "testDir": "../packages/CPackage",
   "testedExecutablePaths": {
-    "gcc": "/usr/bin/gcc"
+    "gcc": "gcc"
   },
   "toolchains": {
     "gcc-explorer": [
       {
-        "stepName": "compile",
-        "executablePath": "$EXE",
-        "arguments": ["-xc", "$INPUT", "-o", "$OUTPUT"],
-        "output": "/tmp/test.o",
+        "exe": "$EXE",
+        "args": [
+          "-xc",
+          "$INPUT",
+          "-o",
+          "$OUTPUT"
+        ],
         "allowError": true
       },
       {
-        "stepName": "run",
-        "executablePath": "$INPUT",
-        "arguments": [],
+        "exe": "$INPUT",
         "usesInStr": true,
         "allowError": true
       }

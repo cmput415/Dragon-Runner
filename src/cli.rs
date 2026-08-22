@@ -1,0 +1,220 @@
+use std::fmt;
+use std::path::PathBuf;
+
+use clap::{Args, Parser, Subcommand};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Mode {
+    #[default]
+    Regular,
+    Tournament,
+    Perf,
+    Memcheck,
+}
+
+impl fmt::Display for Mode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Mode::Regular => write!(f, "regular"),
+            Mode::Tournament => write!(f, "tournament"),
+            Mode::Perf => write!(f, "perf"),
+            Mode::Memcheck => write!(f, "memcheck"),
+        }
+    }
+}
+
+/// Shared flags available in all modes (also used as the runtime args type).
+#[derive(Args, Debug, Clone, Default)]
+pub struct RunnerArgs {
+    /// Set by the subcommand, not by clap.
+    #[arg(skip)]
+    pub mode: Mode,
+
+    /// Path to the JSON configuration file
+    pub config_file: PathBuf,
+
+    /// Path to write failure log (tournament mode)
+    #[arg(long = "fail-log")]
+    pub failure_log: Option<PathBuf>,
+
+    /// Executable ID to use as the solution (tournament mode)
+    #[arg(long = "solution-exe")]
+    pub solution_exe: Option<String>,
+
+    /// Path to JSON file overriding grading weights (tournament + perf modes)
+    #[arg(long = "grade-config")]
+    pub grade_config: Option<PathBuf>,
+
+    /// Timeout in seconds for each step
+    #[arg(long, default_value_t = 2.0, value_parser = parse_timeout)]
+    pub timeout: f64,
+
+    /// Run the toolchain against a specific file or directory instead of scanning testDir
+    #[arg(long = "test-path")]
+    pub test_path: Option<String>,
+
+    /// Only run packages whose name matches this glob (case insensitive, e.g. 'Regular*')
+    #[arg(short = 'p', long = "package")]
+    pub package_filter: Option<String>,
+
+    /// Show timing information
+    #[arg(short = 't', long = "time")]
+    pub time: bool,
+
+    /// Increase verbosity (can be repeated: -v, -vv, -vvv)
+    #[arg(short = 'v', long = "verbosity", action = clap::ArgAction::Count)]
+    pub verbosity: u8,
+
+    /// Show test case contents on failure
+    #[arg(short = 's', long = "show-testcase")]
+    pub show_testcase: bool,
+
+    /// Output file path
+    #[arg(short = 'o', long = "output")]
+    pub output: Option<PathBuf>,
+
+    /// Stop on first failure
+    #[arg(short = 'f', long = "fast-fail")]
+    pub fast_fail: bool,
+
+    /// Print full file paths for test results instead of just the filename
+    #[arg(long = "full-path")]
+    pub full_path: bool,
+}
+
+/// CMPUT 415 testing utility
+#[derive(Parser, Debug)]
+#[command(name = "dragon-runner", about = "CMPUT 415 testing utility")]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Commands,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Commands {
+    /// Run in regular mode (default)
+    Regular {
+        #[command(flatten)]
+        flags: RunnerArgs,
+    },
+    /// Run in tournament/grading mode
+    Tournament {
+        #[command(flatten)]
+        flags: RunnerArgs,
+    },
+    /// Run performance tests
+    Perf {
+        #[command(flatten)]
+        flags: RunnerArgs,
+    },
+    /// Run with memory checking (valgrind)
+    Memcheck {
+        #[command(flatten)]
+        flags: RunnerArgs,
+    },
+    /// Run a grading script
+    Script {
+        /// Script name and arguments
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// Start an HTTP server exposing the test runner API
+    Serve {
+        /// Path to the JSON configuration file
+        config_file: PathBuf,
+        /// Address to bind the server to
+        #[arg(long, default_value = "127.0.0.1:3000")]
+        bind: String,
+        /// Timeout in seconds for each step
+        #[arg(long, default_value_t = 2.0, value_parser = parse_timeout)]
+        timeout: f64,
+        /// Maximum number of concurrent test executions
+        #[arg(long, default_value_t = 4)]
+        max_concurrent: usize,
+        /// Allowed CORS origin (repeatable). If unset, cross-origin requests are
+        /// disabled and only same-origin browser calls are accepted.
+        #[arg(long = "allow-origin")]
+        allow_origin: Vec<String>,
+    },
+}
+
+/// Parse a --timeout value, rejecting NaN, infinity, and non-positive values.
+fn parse_timeout(s: &str) -> Result<f64, String> {
+    let v: f64 = s
+        .parse()
+        .map_err(|e: std::num::ParseFloatError| e.to_string())?;
+    if !v.is_finite() || v <= 0.0 {
+        return Err(format!("timeout must be a positive finite number, got {v}"));
+    }
+    Ok(v)
+}
+
+/// Parsed runner, script, or server action.
+pub enum CliAction {
+    Run(RunnerArgs),
+    Script(Vec<String>),
+    Serve {
+        config_file: PathBuf,
+        bind: String,
+        timeout: f64,
+        max_concurrent: usize,
+        allow_origin: Vec<String>,
+    },
+}
+
+/// Parse CLI arguments into a CliAction.
+///
+/// Supports: `dragon-runner <mode> config.json [flags...]`
+///           `dragon-runner script <name> [args...]`
+/// If no recognized subcommand is given, defaults to "regular".
+pub fn parse_cli_args() -> CliAction {
+    let raw_args: Vec<String> = std::env::args().collect();
+
+    // Try parsing as-is first. Only fall back to implicit "regular" when the
+    // failure looks like a missing/invalid subcommand; other errors (bad
+    // values, unknown flags, --help) surface directly so the user sees the
+    // real diagnostic instead of a retry-shadowed one.
+    let cli = match Cli::try_parse_from(&raw_args) {
+        Ok(cli) => cli,
+        Err(e) => match e.kind() {
+            clap::error::ErrorKind::InvalidSubcommand
+            | clap::error::ErrorKind::MissingSubcommand => {
+                let mut patched = vec![raw_args[0].clone(), "regular".to_string()];
+                patched.extend_from_slice(&raw_args[1..]);
+                Cli::parse_from(patched)
+            }
+            _ => e.exit(),
+        },
+    };
+
+    match cli.command {
+        Commands::Script { args } => CliAction::Script(args),
+        Commands::Serve {
+            config_file,
+            bind,
+            timeout,
+            max_concurrent,
+            allow_origin,
+        } => CliAction::Serve {
+            config_file,
+            bind,
+            timeout,
+            max_concurrent,
+            allow_origin,
+        },
+        commands => {
+            let (mode, mut args) = match commands {
+                Commands::Regular { flags } => (Mode::Regular, flags),
+                Commands::Tournament { flags } => (Mode::Tournament, flags),
+                Commands::Perf { flags } => (Mode::Perf, flags),
+                Commands::Memcheck { flags } => (Mode::Memcheck, flags),
+                Commands::Script { .. } | Commands::Serve { .. } => unreachable!(),
+            };
+            args.mode = mode;
+
+            crate::log::set_debug_level(args.verbosity as u32);
+
+            CliAction::Run(args)
+        }
+    }
+}

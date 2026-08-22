@@ -1,0 +1,17 @@
+{
+  "testDir": "../packages/E2ETournament",
+  "testedExecutablePaths": {
+    "TA":     "../fixtures/e2e_compilers/TA.sh",
+    "team_A": "../fixtures/e2e_compilers/team_A.sh",
+    "team_B": "../fixtures/e2e_compilers/team_B.sh",
+    "team_C": "../fixtures/e2e_compilers/team_C.sh"
+  },
+  "toolchains": {
+    "one_step": [
+      {
+        "exe": "$EXE",
+        "usesInStr": true
+      }
+    ]
+  }
+}

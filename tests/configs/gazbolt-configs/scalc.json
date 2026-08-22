@@ -6,16 +6,13 @@
   "toolchains": {
     "interpreter": [
       {
-        "stepName": "scalc-interpreter",
-        "executablePath": "$EXE",
-        "arguments": [
+        "exe": "$EXE",
+        "args": [
           "interpreter",
           "$INPUT",
           "$OUTPUT"
-        ],
-        "output": "scalc.out"
+        ]
       }
     ]
   }
 }
-

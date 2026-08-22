@@ -1,21 +1,21 @@
 {
   "testDir": "../packages/FailCPackage",
   "testedExecutablePaths": {
-    "gcc": "/usr/bin/gcc"
+    "gcc": "gcc"
   },
   "toolchains": {
     "GCC-toolchain": [
       {
-        "stepName": "compile",
-        "executablePath": "$EXE",
-        "arguments": ["$INPUT", "-o", "$OUTPUT"],
-        "output": "/tmp/test.o",
+        "exe": "$EXE",
+        "args": [
+          "$INPUT",
+          "-o",
+          "$OUTPUT"
+        ],
         "allowError": true
       },
       {
-        "stepName": "run",
-        "executablePath": "$INPUT",
-        "arguments": [],
+        "exe": "$INPUT",
         "usesInStr": true,
         "allowError": true
       }

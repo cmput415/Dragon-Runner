@@ -4,19 +4,18 @@ A test runner for CMPUT 415 Compiler Design that services both student testing a
 
 ## Installation
 
-**Requirements:** Python ≥ 3.8
+**Requirements:** Rust toolchain (cargo)
 
 ```bash
 git clone https://github.com/cmput415/Dragon-Runner.git
 cd Dragon-Runner
-pip install .
+cargo install --path .
 ```
-Some newer versions of python prevent system-wide package installations by default. To get around this use a virtual environment or `--break-system-packages`. If `dragon-runner`is not found in your `$PATH` after install, ensure `~/.local/bin` is added.
 
 ## Quick Start
 
 ```bash
-# Run tests normally
+# Run tests normally (mode defaults to regular)
 dragon-runner config.json
 
 # Run in tournament mode (for grading)
@@ -26,7 +25,7 @@ dragon-runner tournament config.json
 dragon-runner memcheck valgrindConfig.json
 
 # Start HTTP server for explorer
-dragon-runner serve /path/to/configs
+dragon-runner serve /path/to/config.json
 ```
 
 ## Configuration
@@ -37,23 +36,19 @@ Dragon-Runner uses JSON configuration files to define test packages, executables
 
 ```json
 {
-  "testDir": "../packages/CPackage", 
+  "testDir": "../packages/CPackage",
   "testedExecutablePaths": {
     "gcc": "/usr/bin/gcc"
   },
   "toolchains": {
     "compile-and-run": [
       {
-        "stepName": "compile",
-        "executablePath": "$EXE", 
-        "arguments": ["$INPUT", "-o", "$OUTPUT"],
-        "output": "/tmp/test.o",
+        "exe": "$EXE",
+        "args": ["$INPUT", "-o", "$OUTPUT"],
         "allowError": true
       },
       {
-        "stepName": "run",
-        "executablePath": "$INPUT",
-        "arguments": [],
+        "exe": "$INPUT",
         "usesInStr": true,
         "allowError": true
       }
@@ -76,20 +71,18 @@ Dragon-Runner uses JSON configuration files to define test packages, executables
 #### Toolchain Steps
 | Property | Description | Required |
 |----------|-------------|----------|
-| `stepName` | Human-readable step name | ✓ |
-| `executablePath` | Path to executable (use `$EXE`, `$INPUT`) | ✓ |
-| `arguments` | Command arguments list | ✓ |
-| `output` | Output file path (optional) | |
-| `allowError` | Allow non-zero exit codes (optional) | |
-| `usesInStr` | Use test input stream as stdin (optional) | |
-| `usesRuntime` | Load runtime library (optional) | |
+| `exe` | Path to executable (supports `$EXE`, `$INPUT`, `$OUTPUT`) | ✓ |
+| `args` | Command arguments list (default: `[]`) | |
+| `allowError` | Allow non-zero exit codes (default: `false`) | |
+| `usesInStr` | Use test input stream as stdin (default: `false`) | |
+| `usesRuntime` | Load runtime library (default: `false`) | |
 
 #### Magic Variables
-- `$EXE` - Path to the tested executable
-- `$INPUT` - Input file (testfile for first step, previous output for others)
-- `$OUTPUT` - Output file for next step
-- `$RT_PATH` - Runtime library directory
-- `$RT_LIB` - Runtime library name
+- `$EXE` — Path to the tested executable
+- `$INPUT` — Input file (test file for first step, previous output for later steps)
+- `$OUTPUT` — Temporary output file for the next step
+
+Environment variables (`$RT_PATH`, `$RT_LIB`, etc.) are also expanded in step arguments.
 
 ## Test File Format
 
@@ -106,12 +99,13 @@ int main() {
 ```
 
 ### Directives
-- `INPUT:` - Single line of stdin (no newline)
-- `INPUT_FILE:` - Path to input file
-- `CHECK:` - Expected stdout (no newline)  
-- `CHECK_FILE:` - Path to expected output file
+- `CHECK:` — Expected stdout line (no trailing newline)
+- `CHECK_FILE:` — Path to expected output file
+- `INPUT:` — Single line of stdin (no trailing newline)
+- `INPUT_FILE:` — Path to input file
+- `SKIP` — Skip this test
 
-Multiple `INPUT:` and `CHECK:` directives are supported. `INPUT:` and `INPUT_FILE:` cannot be used together.
+Multiple `CHECK:` and `INPUT:` directives are concatenated with newlines. Inline and file variants of the same directive cannot be mixed in one test.
 
 ## Command Line Reference
 
@@ -120,25 +114,45 @@ Multiple `INPUT:` and `CHECK:` directives are supported. `INPUT:` and `INPUT_FIL
 dragon-runner [mode] config.json [options...]
 ```
 
+If no mode subcommand is given, `regular` is assumed.
+
 ### Modes
-- `regular` (default) - Standard test execution
-- `tournament` - Cross-product testing for grading
-- `perf` - Performance benchmarking
-- `memcheck` - Memory leak detection
-- `serve` - HTTP server mode
-- `script` - Run grading scripts
+- `regular` (default) — Standard test execution
+- `tournament` — Cross-product grading. Emits per-toolchain `toolchain_<name>.csv`, a graded `summary.csv`, and per-team feedback files.
+- `perf` — Performance benchmarking. Emits `perf.csv` and `perf_summary.csv`.
+- `memcheck` — Memory leak detection via valgrind
+- `serve` — HTTP server mode
+- `script` — Run helper scripts (submission management)
 
 ### Options
 | Option | Description |
 |--------|-------------|
 | `--timeout SECONDS` | Test timeout (default: 2.0) |
-| `--fail-log FILE` | Log failures to file |
-| `--verify` | Verify package exists for CCID |
-| `--debug-package PATH` | Test single package |
+| `--fail-log FILE` | Log failures to file (tournament mode) |
+| `--solution-exe ID` | Executable ID to use as the solution (tournament mode) |
+| `--grade-config FILE` | JSON file overriding grading weights (tournament + perf modes) |
+| `--test-path PATH` | Run against a single file or directory instead of scanning `testDir` |
+| `-p, --package PATTERN` | Only run packages whose name matches this glob (case insensitive, e.g. `Regular*`) |
 | `-t, --time` | Show execution times |
 | `-v, --verbosity` | Increase output verbosity (repeat for more) |
-| `-s, --show-testcase` | Display test file contents |
+| `-s, --show-testcase` | Display test file contents on failure |
 | `-o, --output FILE` | Output file for results |
+| `-f, --fast-fail` | Stop on first failure |
+| `--full-path` | Print full file paths for test results |
+
+### Grading config
+
+Tournament and perf grading use these defaults; override any subset via `--grade-config`:
+
+```json
+{
+  "defensivePts": 2.0,
+  "offensivePts": 1.0,
+  "coherencePts": 10.0,
+  "competitiveWeight": 0.2,
+  "taWeight": 0.5
+}
+```
 
 ### Examples
 
@@ -152,8 +166,8 @@ dragon-runner tournament -vv config.json
 # Performance testing with 5-second timeout
 dragon-runner perf --timeout 5.0 config.json
 
-# Serve configs on port 8080
-dragon-runner serve --port 8080 /path/to/configs
+# Serve config on custom address
+dragon-runner serve --bind 0.0.0.0:8080 config.json
 
 # Run grading script
 dragon-runner script build.py /path/to/submissions build.log 4

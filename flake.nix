@@ -10,45 +10,31 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        
-        python-packages = ps: with ps; [
-          colorama
-          pytest
-          numpy
-          flask
-          flask-cors
-        ];
-        
-        python-with-packages = pkgs.python3.withPackages python-packages;
       in
       {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            python-with-packages
-            python3Packages.pip
-            python3Packages.setuptools
-            python3Packages.wheel
+            rustc
+            cargo
+            rustfmt
+            clippy
           ];
-          
           shellHook = ''
             echo "Dragon Runner development environment"
-            export PYTHONPATH="$PWD:$PYTHONPATH"
           '';
         };
 
-        packages.default = pkgs.python3Packages.buildPythonPackage {
+        packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "dragon-runner";
-          version = "1.0.0";
+          version = "0.1.0";
           src = ./.;
-          
-          propagatedBuildInputs = python-packages pkgs.python3Packages;
-          
+          cargoLock.lockFile = ./Cargo.lock;
+          doCheck = false;
           meta = with pkgs.lib; {
-            description = "An experimental successor to the 415 tester";
-            license = licenses.unfree;
+            description = "The 415 compiler unit tester";
+            license = licenses.mit;
             maintainers = [ ];
           };
         };
       });
 }
-

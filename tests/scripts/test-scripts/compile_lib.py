@@ -31,7 +31,7 @@ def main():
     parser = argparse.ArgumentParser(description="Compile C files into shared libraries.")
     parser.add_argument("input_dir", help="Directory containing .c files")
     parser.add_argument("output_dir", help="Directory to store compiled libraries")
-    parser.add_argument("--compiler", default="/usr/bin/gcc", help="Path to the compiler (default: /usr/bin/gcc)")
+    parser.add_argument("--compiler", default="gcc", help="Path to the compiler (default: gcc; resolved via $PATH)")
     args = parser.parse_args()
 
     is_macos = sys.platform == "darwin"

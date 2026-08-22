@@ -1,0 +1,24 @@
+{
+  "testDir": "../packages/MemoryLeaks",
+  "testedExecutablePaths": {
+    "gcc": "gcc"
+  },
+  "toolchains": {
+    "GCC-toolchain": [
+      {
+        "exe": "$EXE",
+        "args": [
+          "$INPUT",
+          "-o",
+          "$OUTPUT"
+        ],
+        "allowError": true
+      },
+      {
+        "exe": "$INPUT",
+        "usesInStr": true,
+        "allowError": true
+      }
+    ]
+  }
+}

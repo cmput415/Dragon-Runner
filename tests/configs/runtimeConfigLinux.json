@@ -1,7 +1,7 @@
 {
   "testDir": "../packages/RuntimeCPackage",
   "testedExecutablePaths": {
-    "clang": "/usr/bin/clang"
+    "clang": "clang"
   },
   "runtimes": {
     "clang": "../lib/libfib.so"
@@ -9,26 +9,30 @@
   "toolchains": {
     "clang-runtime": [
       {
-        "stepName": "clang",
-        "executablePath": "$EXE",
-        "arguments": ["-c", "$INPUT", "-o", "$OUTPUT"],
-        "output": "/tmp/prog.o"
+        "exe": "$EXE",
+        "args": [
+          "-c",
+          "$INPUT",
+          "-o",
+          "$OUTPUT"
+        ]
       },
       {
-        "stepName": "compile",
-        "executablePath": "$EXE",
-        "arguments": ["$INPUT", "-o", "$OUTPUT", "-L$RT_PATH", "-l$RT_LIB"],
-        "output": "/tmp/prog"
+        "exe": "$EXE",
+        "args": [
+          "$INPUT",
+          "-o",
+          "$OUTPUT",
+          "-L$RT_PATH",
+          "-l$RT_LIB"
+        ]
       },
       {
-        "stepName": "run",
-        "executablePath": "$INPUT",
-        "arguments": [],
+        "exe": "$INPUT",
         "usesInStr": true,
         "allowError": true,
         "usesRuntime": true
       }
     ]
-  } 
+  }
 }
-  

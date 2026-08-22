@@ -1,7 +1,7 @@
 {
   "testDir": "../packages/CPackage",
   "testedExecutablePaths": {
-    "gcc": "/usr/bin/gcc"
+    "gcc": "gcc"
   },
   "runtimes": {
     "gcc": "../lib/lib-this-runtime-dne.so"
@@ -9,16 +9,16 @@
   "toolchains": {
     "GCC-toolchain": [
       {
-        "stepName": "compile",
-        "executablePath": "$EXE",
-        "arguments": ["$INPUT", "-o", "$OUTPUT"],
-        "output": "/tmp/test.o",
+        "exe": "$EXE",
+        "args": [
+          "$INPUT",
+          "-o",
+          "$OUTPUT"
+        ],
         "allowError": true
       },
       {
-        "stepName": "run",
-        "executablePath": "$INPUT",
-        "arguments": [],
+        "exe": "$INPUT",
         "usesInStr": true,
         "allowError": true
       }
