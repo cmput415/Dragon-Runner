@@ -29,9 +29,13 @@ fn main() {
                     std::process::exit(1);
                 }
             };
-            if let Err(e) =
-                rt.block_on(server::run_server(config, &bind, timeout, max_concurrent, &allow_origin))
-            {
+            if let Err(e) = rt.block_on(server::run_server(
+                config,
+                &bind,
+                timeout,
+                max_concurrent,
+                &allow_origin,
+            )) {
                 error!(0, "server error: {e}");
                 std::process::exit(1);
             }

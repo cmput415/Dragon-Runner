@@ -140,7 +140,9 @@ pub enum Commands {
 
 /// Parse a --timeout value, rejecting NaN, infinity, and non-positive values.
 fn parse_timeout(s: &str) -> Result<f64, String> {
-    let v: f64 = s.parse().map_err(|e: std::num::ParseFloatError| e.to_string())?;
+    let v: f64 = s
+        .parse()
+        .map_err(|e: std::num::ParseFloatError| e.to_string())?;
     if !v.is_finite() || v <= 0.0 {
         return Err(format!("timeout must be a positive finite number, got {v}"));
     }

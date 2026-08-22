@@ -89,9 +89,7 @@ fn pretty_print_file(path: &std::path::Path) -> Option<String> {
         } else {
             line.to_string()
         };
-        lines.push(format!(
-            "\u{2502} {display:<max_chars$} \u{2502}"
-        ));
+        lines.push(format!("\u{2502} {display:<max_chars$} \u{2502}"));
     }
     // bottom border
     lines.push(format!(
@@ -442,10 +440,8 @@ impl TournamentHarness {
 
         // Tournament grading assumes each team appears as both defender and attacker,
         // so the ID sets must match before we spend time running the cross-product.
-        let def_ids: std::collections::BTreeSet<String> = defending_exes
-            .iter()
-            .map(|e| e.id.to_lowercase())
-            .collect();
+        let def_ids: std::collections::BTreeSet<String> =
+            defending_exes.iter().map(|e| e.id.to_lowercase()).collect();
         let atk_names: std::collections::BTreeSet<String> = attacking_pkgs
             .iter()
             .map(|p| p.name.to_lowercase())

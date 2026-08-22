@@ -1,23 +1,13 @@
-//! Pure grading types and transformations.
-//!
-//! Everything above the "I/O" section is a deterministic function of its inputs:
-//! given the same table + weights, `compute_scores` always yields the same
-//! `Scores`. Callers do all filesystem work themselves.
-
+use crate::cli::RunnerArgs;
+use crate::error;
+use colored::Colorize;
+use serde::Deserialize;
 use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
 
-use colored::Colorize;
-use serde::Deserialize;
-
-use crate::cli::RunnerArgs;
-use crate::error;
-
-/// Grading weights and per-category point values.
-///
-/// The `Default` impl matches the constants historically hard-coded in
-/// `scripts/grade.py` (DEFENSIVE_PTS=2, etc.). Override via `--grade-config`.
+/// Weights and point values used by `compute_scores`.
+/// Defaults match the original `scripts/grade.py`; override with `--grade-config`.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GradingConfig {
@@ -33,21 +23,11 @@ pub struct GradingConfig {
     pub ta_weight: f64,
 }
 
-fn default_defensive_pts() -> f64 {
-    2.0
-}
-fn default_offensive_pts() -> f64 {
-    1.0
-}
-fn default_coherence_pts() -> f64 {
-    10.0
-}
-fn default_competitive_weight() -> f64 {
-    0.2
-}
-fn default_ta_weight() -> f64 {
-    0.5
-}
+#[rustfmt::skip] fn default_defensive_pts() -> f64 { 2.0 }
+#[rustfmt::skip] fn default_offensive_pts() -> f64 { 1.0 }
+#[rustfmt::skip] fn default_coherence_pts() -> f64 { 10.0 }
+#[rustfmt::skip] fn default_competitive_weight() -> f64 { 0.2 }
+#[rustfmt::skip] fn default_ta_weight() -> f64 { 0.5 }
 
 impl Default for GradingConfig {
     fn default() -> Self {
@@ -61,7 +41,7 @@ impl Default for GradingConfig {
     }
 }
 
-/// Load `--grade-config` if given, else defaults. Aborts the process on parse error.
+/// Load the file passed to `--grade-config`, or return defaults. Exits on error.
 pub fn resolve_grading_config(cli_args: &RunnerArgs) -> GradingConfig {
     match cli_args.grade_config.as_deref() {
         None => GradingConfig::default(),
@@ -78,9 +58,10 @@ pub fn resolve_grading_config(cli_args: &RunnerArgs) -> GradingConfig {
 pub fn load_grading_config(path: &Path) -> Result<GradingConfig, String> {
     let text =
         fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-    let cfg: GradingConfig = serde_json::from_str(&text)
-        .map_err(|e| format!("cannot parse {}: {e}", path.display()))?;
-    validate_grading_config(&cfg).map_err(|e| format!("invalid grading config {}: {e}", path.display()))?;
+    let cfg: GradingConfig =
+        serde_json::from_str(&text).map_err(|e| format!("cannot parse {}: {e}", path.display()))?;
+    validate_grading_config(&cfg)
+        .map_err(|e| format!("invalid grading config {}: {e}", path.display()))?;
     Ok(cfg)
 }
 
@@ -94,7 +75,9 @@ fn validate_grading_config(cfg: &GradingConfig) -> Result<(), String> {
     ];
     for (name, v) in fields {
         if !v.is_finite() || v < 0.0 {
-            return Err(format!("{name} must be a finite non-negative number, got {v}"));
+            return Err(format!(
+                "{name} must be a finite non-negative number, got {v}"
+            ));
         }
     }
     Ok(())
@@ -104,12 +87,9 @@ fn validate_grading_config(cfg: &GradingConfig) -> Result<(), String> {
 // TournamentTable
 // ---------------------------------------------------------------------------
 
-/// Raw pass/total pairs from one toolchain of a tournament.
-///
-/// `cells[i][j]` is `(pass_count, test_count)` when team `defenders[i]` was
-/// tested against attacker package `attackers[j]`. Rows and columns are
-/// expected to line up team-for-team (symmetric identity between defender
-/// executable IDs and attacker package names).
+/// One toolchain's results. `cells[i][j]` is (pass, total) for defender `i`
+/// against attacker `j`. Defenders and attackers are the same teams in the
+/// same order, so the table is square.
 #[derive(Debug, Clone)]
 pub struct TournamentTable {
     pub toolchain: String,
@@ -144,12 +124,9 @@ pub struct Scores {
     pub normalized: Vec<f64>,
 }
 
-/// Combine multiple toolchain tables into a single averaged table.
-///
-/// All input tables must share the same shape (same defenders and attackers in
-/// the same order). Cells become the arithmetic mean of pass-fractions across
-/// tables, stored back as a (num, denom) pair scaled to a fixed denominator
-/// of 1000 so the result stays in `(u32, u32)`.
+/// Average the pass rates across several toolchain tables. All tables must
+/// share the same defenders and attackers in the same order. Cells are stored
+/// as `(rate * 1000, 1000)` so the result stays integer.
 pub fn average_tables(tables: &[TournamentTable]) -> Result<TournamentTable, String> {
     let first = tables
         .first()
@@ -180,19 +157,15 @@ pub fn average_tables(tables: &[TournamentTable]) -> Result<TournamentTable, Str
     })
 }
 
-/// Compute per-team scores from a tournament table.
+/// Score each team from a tournament table.
 ///
-/// Interpretation (mirrors the legacy Python at `scripts/grade.py`):
-/// - `defensive[j]`: how well team `j` (as defender) survived attacks from
-///   other teams. `defensive_pts * sum_{i != j} pass_fraction(cells[j][i])`.
-/// - `offensive[j]`: how effective team `j`'s attacks were against other
-///   teams (fraction of tests that made them fail).
-///   `offensive_pts * sum_{k != j} (1 - pass_fraction(cells[k][j]))`.
-/// - `coherence[j]`: `coherence_pts` if the team passes 100% of its own
-///   tests, otherwise 0.
-/// - `ta[j]`: fraction of team `j`'s own tests that the solution passed.
-/// - `competitive_total[j] = defensive[j] + offensive[j] + coherence[j]`.
-/// - `normalized[j] = competitive_weight * competitive_total[j] / max`.
+/// A team gets defensive points for surviving other teams' tests and
+/// offensive points for breaking other teams' defenses. It gets coherence
+/// points if it passes all of its own tests. `ta` is how the reference
+/// solution did against that team's tests. Normalized rescales the
+/// competitive total so the best team hits `competitive_weight`.
+///
+/// See the tests at the bottom of this file for a worked example.
 pub fn compute_scores(
     table: &TournamentTable,
     cfg: &GradingConfig,
@@ -279,16 +252,16 @@ pub fn compute_scores(
 pub struct PerfTable {
     pub compilers: Vec<String>,
     pub tests: Vec<String>,
-    /// `times_seconds[test][compiler]`. Timeouts should be recorded as the
-    /// configured timeout value; missing runs as `f64::INFINITY`.
+    /// Row is a test, column is a compiler. Timeouts get the timeout value;
+    /// missing runs get infinity.
     pub times_seconds: Vec<Vec<f64>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct PerfScores {
     pub compilers: Vec<String>,
-    /// Per-compiler score in [0, 1]: mean of (fastest_on_test / this_time)
-    /// across all tests. The fastest compiler on every test scores 1.0.
+    /// Per-compiler score in [0, 1]. The fastest compiler on every test
+    /// scores 1.0; everyone else is a fraction of that.
     pub scores: Vec<f64>,
 }
 
@@ -302,7 +275,7 @@ pub fn compute_perf_scores(table: &PerfTable) -> PerfScores {
         if !fastest.is_finite() || fastest <= 0.0 {
             continue;
         }
-        // Ignore any extra cells past num_compilers so a malformed row can't panic.
+        // Extra cells in a malformed row would panic without this take().
         for (c, &t) in row.iter().take(num_compilers).enumerate() {
             if t.is_finite() && t > 0.0 {
                 sums[c] += fastest / t;
@@ -324,7 +297,7 @@ pub fn compute_perf_scores(table: &PerfTable) -> PerfScores {
 }
 
 // ---------------------------------------------------------------------------
-// I/O helpers (thin, at the edge of the module)
+// I/O helpers 
 // ---------------------------------------------------------------------------
 
 fn fmt_cell(cell: (u32, u32)) -> String {

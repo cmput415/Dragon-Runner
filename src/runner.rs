@@ -432,7 +432,10 @@ impl<'a> ToolChainRunner<'a> {
                     return ControlFlow::Break(TestResult::fail(
                         test,
                         state.command_history,
-                        Some(format!("failed to buffer output of {}", step.display_name(exe))),
+                        Some(format!(
+                            "failed to buffer output of {}",
+                            step.display_name(exe)
+                        )),
                     ));
                 }
             },
@@ -463,7 +466,12 @@ impl<'a> ToolChainRunner<'a> {
         ok
     }
 
-    fn run_command(&self, command: &ResolvedCommand, stdin: &[u8], apply_env: bool) -> CommandResult {
+    fn run_command(
+        &self,
+        command: &ResolvedCommand,
+        stdin: &[u8],
+        apply_env: bool,
+    ) -> CommandResult {
         let mut cr = CommandResult::new(&command.args[0]);
         let start = Instant::now();
 

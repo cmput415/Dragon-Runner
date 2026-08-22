@@ -226,10 +226,19 @@ impl Executable {
         let rt_str = self.runtime.display().to_string();
 
         if cfg!(target_os = "macos") {
-            env.insert("DYLD_LIBRARY_PATH".into(), prepend_env("DYLD_LIBRARY_PATH", &rt_dir, ':'));
-            env.insert("DYLD_INSERT_LIBRARIES".into(), prepend_env("DYLD_INSERT_LIBRARIES", &rt_str, ':'));
+            env.insert(
+                "DYLD_LIBRARY_PATH".into(),
+                prepend_env("DYLD_LIBRARY_PATH", &rt_dir, ':'),
+            );
+            env.insert(
+                "DYLD_INSERT_LIBRARIES".into(),
+                prepend_env("DYLD_INSERT_LIBRARIES", &rt_str, ':'),
+            );
         } else {
-            env.insert("LD_LIBRARY_PATH".into(), prepend_env("LD_LIBRARY_PATH", &rt_dir, ':'));
+            env.insert(
+                "LD_LIBRARY_PATH".into(),
+                prepend_env("LD_LIBRARY_PATH", &rt_dir, ':'),
+            );
             env.insert("LD_PRELOAD".into(), prepend_env("LD_PRELOAD", &rt_str, ' '));
         }
         env.insert("RT_PATH".into(), rt_dir);
@@ -354,7 +363,11 @@ impl Config {
         }
     }
 
-    fn gather_packages(test_dir: &Path, test_path: Option<&str>, config_path: &Path) -> Vec<Package> {
+    fn gather_packages(
+        test_dir: &Path,
+        test_path: Option<&str>,
+        config_path: &Path,
+    ) -> Vec<Package> {
         if let Some(pkg) = test_path.filter(|p| !p.is_empty()) {
             // --test-path is relative to the config file, matching how testDir resolves.
             let resolved = resolve_relative(Path::new(pkg), config_path);
