@@ -388,6 +388,7 @@ impl SequentialTestHarness for RegularHarness {
 pub struct TournamentFailure {
     pub toolchain: String,
     pub defender: String,
+    pub attacker: String,
     pub test_file: String,
     pub expected_out: Vec<u8>,
     pub generated_out: Vec<u8>,
@@ -496,6 +497,7 @@ impl TournamentHarness {
                             failures.push(TournamentFailure {
                                 toolchain: tc.name.clone(),
                                 defender: def_exe.id.clone(),
+                                attacker: a_pkg.name.clone(),
                                 test_file: result.test.file.clone(),
                                 expected_out: result
                                     .test
@@ -719,8 +721,9 @@ pub fn write_feedback_files(failures: &[TournamentFailure], out_dir: &Path) -> s
         for item in items {
             writeln!(
                 f,
-                "{}\nTest: {}\n\nExpected Output: {:?}\nGenerated Output: {:?}",
+                "{}\nAttacker: {}\nTest: {}\n\nExpected Output: {:?}\nGenerated Output: {:?}",
                 "=".repeat(80),
+                item.attacker,
                 item.test_file,
                 String::from_utf8_lossy(&item.expected_out),
                 String::from_utf8_lossy(&item.generated_out),
