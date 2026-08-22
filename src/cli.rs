@@ -49,10 +49,6 @@ pub struct RunnerArgs {
     #[arg(long, default_value_t = 2.0, value_parser = parse_timeout)]
     pub timeout: f64,
 
-    /// Verify CCID in packages
-    #[arg(long)]
-    pub verify: bool,
-
     /// Run the toolchain against a specific file or directory instead of scanning testDir
     #[arg(long = "test-path")]
     pub test_path: Option<String>,

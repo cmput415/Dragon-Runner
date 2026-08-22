@@ -131,7 +131,6 @@ If no mode subcommand is given, `regular` is assumed.
 | `--fail-log FILE` | Log failures to file (tournament mode) |
 | `--solution-exe ID` | Executable ID to use as the solution (tournament mode) |
 | `--grade-config FILE` | JSON file overriding grading weights (tournament + perf modes) |
-| `--verify` | Verify package exists for CCID |
 | `--test-path PATH` | Run against a single file or directory instead of scanning `testDir` |
 | `-p, --package PATTERN` | Filter packages by glob pattern |
 | `-t, --time` | Show execution times |
