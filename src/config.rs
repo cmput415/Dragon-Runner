@@ -505,34 +505,16 @@ mod tests {
         let path = config_path("gccPassConfig.json");
         let config = load_config(&path, None).expect("config should load");
 
-        let all_subpackages: Vec<String> = config
-            .packages
+        let pkg_names: Vec<String> = config.packages.iter().map(|p| p.name.clone()).collect();
+        assert!(pkg_names.iter().any(|n| n == "RegularPass"));
+        assert!(pkg_names.iter().any(|n| n == "ErrorPass"));
+
+        let pat = glob::Pattern::new("regular*").expect("valid glob");
+        let matched: Vec<&String> = pkg_names
             .iter()
-            .flat_map(|pkg| pkg.subpackages.iter())
-            .map(|spkg| spkg.path.display().to_string())
+            .filter(|n| pat.matches(&n.to_lowercase()))
             .collect();
-
-        assert!(!all_subpackages.is_empty(), "should have subpackages");
-
-        let filter_pattern = "*ErrorPass*";
-        let filtered: Vec<&String> = all_subpackages
-            .iter()
-            .filter(|path| {
-                glob::Pattern::new(&filter_pattern.to_lowercase())
-                    .map(|pat| pat.matches(&path.to_lowercase()))
-                    .unwrap_or(false)
-            })
-            .collect();
-
-        assert!(!filtered.is_empty(), "filter should match some subpackages");
-
-        for path in &filtered {
-            assert!(
-                path.to_lowercase().contains("errorpass"),
-                "filtered path should contain 'errorpass': {}",
-                path
-            );
-        }
+        assert_eq!(matched, vec![&"RegularPass".to_string()]);
     }
 
     #[test]

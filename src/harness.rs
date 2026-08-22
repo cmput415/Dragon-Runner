@@ -222,18 +222,17 @@ pub trait SequentialTestHarness {
                 let mut tc_skip = 0;
 
                 for pkg in &config.packages {
+                    if let Some(ref pat) = filter_pat {
+                        if !pat.matches(&pkg.name.to_lowercase()) {
+                            continue;
+                        }
+                    }
                     let mut pkg_pass = 0;
                     let mut pkg_total = 0;
                     let mut pkg_skip = 0;
                     info!(2, "Entering package {}", pkg.name);
 
                     for spkg in &pkg.subpackages {
-                        if let Some(ref pat) = filter_pat {
-                            if !pat.matches(&spkg.path.display().to_string().to_lowercase()) {
-                                continue;
-                            }
-                        }
-
                         info!(3 + spkg.depth, "Entering subpackage {}", spkg.name);
                         let mut counters = SubPackageCounters {
                             pass_count: 0,

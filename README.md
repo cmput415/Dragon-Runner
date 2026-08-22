@@ -132,7 +132,7 @@ If no mode subcommand is given, `regular` is assumed.
 | `--solution-exe ID` | Executable ID to use as the solution (tournament mode) |
 | `--grade-config FILE` | JSON file overriding grading weights (tournament + perf modes) |
 | `--test-path PATH` | Run against a single file or directory instead of scanning `testDir` |
-| `-p, --package PATTERN` | Filter packages by glob pattern |
+| `-p, --package PATTERN` | Only run packages whose name matches this glob (case insensitive, e.g. `Regular*`) |
 | `-t, --time` | Show execution times |
 | `-v, --verbosity` | Increase output verbosity (repeat for more) |
 | `-s, --show-testcase` | Display test file contents on failure |

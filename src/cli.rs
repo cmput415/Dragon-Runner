@@ -53,7 +53,7 @@ pub struct RunnerArgs {
     #[arg(long = "test-path")]
     pub test_path: Option<String>,
 
-    /// Filter packages by glob pattern (case insensitive)
+    /// Only run packages whose name matches this glob (case insensitive, e.g. 'Regular*')
     #[arg(short = 'p', long = "package")]
     pub package_filter: Option<String>,
 
