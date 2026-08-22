@@ -8,7 +8,11 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
 
+use colored::Colorize;
 use serde::Deserialize;
+
+use crate::cli::RunnerArgs;
+use crate::error;
 
 /// Grading weights and per-category point values.
 ///
@@ -54,6 +58,20 @@ impl Default for GradingConfig {
             competitive_weight: default_competitive_weight(),
             ta_weight: default_ta_weight(),
         }
+    }
+}
+
+/// Load `--grade-config` if given, else defaults. Aborts the process on parse error.
+pub fn resolve_grading_config(cli_args: &RunnerArgs) -> GradingConfig {
+    match cli_args.grade_config.as_deref() {
+        None => GradingConfig::default(),
+        Some(path) => match load_grading_config(path) {
+            Ok(c) => c,
+            Err(e) => {
+                error!(0, "{}", format!("grade config error: {e}").red());
+                std::process::exit(1);
+            }
+        },
     }
 }
 

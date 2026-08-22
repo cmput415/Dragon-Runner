@@ -56,6 +56,27 @@ pub fn make_empty_tmp_file() -> Option<(PathBuf, tempfile::TempPath)> {
     Some((path_buf, path))
 }
 
+/// Slugify a config-supplied ID for safe use as a filename component.
+/// Anything outside [A-Za-z0-9._-] becomes `_`, and empty or pure-dot
+/// results are replaced with `_` so we can't emit `.`, `..`, or hidden files.
+pub fn slugify(s: &str) -> String {
+    let cleaned: String = s
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if cleaned.is_empty() {
+        "_".into()
+    } else {
+        cleaned
+    }
+}
+
 /// Truncate bytes in the middle if they exceed max_bytes.
 pub fn truncated_bytes(data: &[u8], max_bytes: usize) -> Vec<u8> {
     if data.len() <= max_bytes {

@@ -1,4 +1,7 @@
+use std::collections::HashMap;
 use std::fs;
+use std::io::Write;
+use std::path::Path;
 
 use colored::Colorize;
 use rayon::prelude::*;
@@ -11,6 +14,7 @@ use crate::log::log;
 use crate::progress;
 use crate::runner::{TestResult, ToolChainRunner};
 use crate::testfile::TestFile;
+use crate::util::slugify;
 
 /// Format a skip count suffix for summary lines.
 fn skip_suffix(skip_count: usize) -> String {
@@ -693,4 +697,60 @@ impl SequentialTestHarness for PerformanceTestingHarness {
     fn post_executable_hook(&mut self) {
         self.columns.push(std::mem::take(&mut self.current_column));
     }
+}
+
+/// Group failures by (defender, toolchain) and write `<defender>-<toolchain>feedback.txt`.
+/// Preserves the historical filename shape (`TA-LLVMfeedback.txt`, etc).
+pub fn write_feedback_files(failures: &[TournamentFailure], out_dir: &Path) -> std::io::Result<()> {
+    let mut grouped: HashMap<(String, String), Vec<&TournamentFailure>> = HashMap::new();
+    for f in failures {
+        grouped
+            .entry((f.defender.clone(), f.toolchain.clone()))
+            .or_default()
+            .push(f);
+    }
+    for ((defender, toolchain), items) in &grouped {
+        let path = out_dir.join(format!(
+            "{}-{}feedback.txt",
+            slugify(defender),
+            slugify(toolchain)
+        ));
+        let mut f = fs::File::create(&path)?;
+        for item in items {
+            writeln!(
+                f,
+                "{}\nTest: {}\n\nExpected Output: {:?}\nGenerated Output: {:?}",
+                "=".repeat(80),
+                item.test_file,
+                String::from_utf8_lossy(&item.expected_out),
+                String::from_utf8_lossy(&item.generated_out),
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// Write solution results in the legacy log format.
+pub fn write_solution_logs(
+    results: &[TournamentSolutionResult],
+    failure_log: &Path,
+    out_dir: &Path,
+) -> std::io::Result<()> {
+    let pass_path = out_dir.join("pass_log.txt");
+    // Truncate pass_log so it stays in sync with the freshly written CSVs;
+    // failure_log is user-named and stays in append mode.
+    let mut pass = fs::File::create(&pass_path)?;
+    let mut fail = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(failure_log)?;
+    for r in results {
+        let line = format!("{} {} {}", r.toolchain, r.attacker, r.test_path.display());
+        if r.did_pass {
+            writeln!(pass, "{line}")?;
+        } else {
+            writeln!(fail, "{line}")?;
+        }
+    }
+    Ok(())
 }

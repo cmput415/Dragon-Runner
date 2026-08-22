@@ -1,18 +1,13 @@
-use std::collections::HashMap;
-use std::fs;
-use std::io::Write;
-use std::path::Path;
-
-use colored::Colorize;
 use dragon_runner_rs::cli::{parse_cli_args, CliAction::*, Mode, RunnerArgs};
-use dragon_runner_rs::config::{load_config, Config};
+use dragon_runner_rs::config::{load_or_exit, Config};
 use dragon_runner_rs::grading::{
-    average_tables, compute_perf_scores, compute_scores, load_grading_config, write_perf_csv,
-    write_perf_summary_csv, write_summary_csv, write_tournament_csv, GradingConfig,
+    average_tables, compute_perf_scores, compute_scores, resolve_grading_config, write_perf_csv,
+    write_perf_summary_csv, write_summary_csv, write_tournament_csv,
 };
 use dragon_runner_rs::harness::*;
 use dragon_runner_rs::script::run_script;
 use dragon_runner_rs::server;
+use dragon_runner_rs::util::slugify;
 use dragon_runner_rs::{debug, error};
 
 fn main() {
@@ -57,55 +52,6 @@ fn main() {
     };
 
     std::process::exit(if success { 0 } else { 1 });
-}
-
-fn load_or_exit(path: &Path, args: Option<&RunnerArgs>) -> Config {
-    match load_config(path, args) {
-        Ok(c) => c,
-        Err(errors) => {
-            error!(0, "Found Config {} error(s):", errors.len());
-            error!(0, "Parsed {} below:", path.display());
-            for e in &errors {
-                error!(0, "{}", format!("{e}").red());
-            }
-            std::process::exit(1);
-        }
-    }
-}
-
-/// Load `--grade-config` if given, else defaults. Aborts the process on parse error.
-fn resolve_grading_config(cli_args: &RunnerArgs) -> GradingConfig {
-    match cli_args.grade_config.as_deref() {
-        None => GradingConfig::default(),
-        Some(path) => match load_grading_config(path) {
-            Ok(c) => c,
-            Err(e) => {
-                error!(0, "{}", format!("grade config error: {e}").red());
-                std::process::exit(1);
-            }
-        },
-    }
-}
-
-/// Slugify a config-supplied ID for safe use as a filename component.
-/// Anything outside [A-Za-z0-9._-] becomes `_`, and empty or pure-dot
-/// results are replaced with `_` so we can't emit `.`, `..`, or hidden files.
-fn slugify(s: &str) -> String {
-    let cleaned: String = s
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_') {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
-    if cleaned.is_empty() {
-        "_".into()
-    } else {
-        cleaned
-    }
 }
 
 fn run_tournament(config: &Config, cli_args: &RunnerArgs) -> bool {
@@ -181,60 +127,4 @@ fn run_perf(config: &Config, cli_args: &RunnerArgs) -> bool {
     }
 
     true
-}
-
-/// Group failures by (defender, toolchain) and write `<defender>-<toolchain>feedback.txt`.
-/// Preserves the historical filename shape (`TA-LLVMfeedback.txt`, etc).
-fn write_feedback_files(failures: &[TournamentFailure], out_dir: &Path) -> std::io::Result<()> {
-    let mut grouped: HashMap<(String, String), Vec<&TournamentFailure>> = HashMap::new();
-    for f in failures {
-        grouped
-            .entry((f.defender.clone(), f.toolchain.clone()))
-            .or_default()
-            .push(f);
-    }
-    for ((defender, toolchain), items) in &grouped {
-        let path = out_dir.join(format!(
-            "{}-{}feedback.txt",
-            slugify(defender),
-            slugify(toolchain)
-        ));
-        let mut f = fs::File::create(&path)?;
-        for item in items {
-            writeln!(
-                f,
-                "{}\nTest: {}\n\nExpected Output: {:?}\nGenerated Output: {:?}",
-                "=".repeat(80),
-                item.test_file,
-                String::from_utf8_lossy(&item.expected_out),
-                String::from_utf8_lossy(&item.generated_out),
-            )?;
-        }
-    }
-    Ok(())
-}
-
-/// Write solution results in the legacy log format.
-fn write_solution_logs(
-    results: &[TournamentSolutionResult],
-    failure_log: &Path,
-    out_dir: &Path,
-) -> std::io::Result<()> {
-    let pass_path = out_dir.join("pass_log.txt");
-    // Truncate pass_log so it stays in sync with the freshly written CSVs;
-    // failure_log is user-named and stays in append mode.
-    let mut pass = fs::File::create(&pass_path)?;
-    let mut fail = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(failure_log)?;
-    for r in results {
-        let line = format!("{} {} {}", r.toolchain, r.attacker, r.test_path.display());
-        if r.did_pass {
-            writeln!(pass, "{line}")?;
-        } else {
-            writeln!(fail, "{line}")?;
-        }
-    }
-    Ok(())
 }

@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use colored::Colorize;
 use serde::Deserialize;
 
 use crate::cli::RunnerArgs;
@@ -11,7 +12,7 @@ use crate::error::{DragonError, Validate};
 use crate::testfile::TestFile;
 use crate::toolchain::{Step, ToolChain};
 use crate::util::{path_lookup, resolve_relative};
-use crate::{debug, trace, trace2};
+use crate::{debug, error, trace, trace2};
 
 /// Raw JSON shape of a config file, deserialized directly by serde.
 #[derive(Deserialize, Default)]
@@ -410,6 +411,21 @@ impl Config {
 impl fmt::Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(self, f)
+    }
+}
+
+/// Load a config file or abort the process with a diagnostic on failure.
+pub fn load_or_exit(path: &Path, args: Option<&RunnerArgs>) -> Config {
+    match load_config(path, args) {
+        Ok(c) => c,
+        Err(errors) => {
+            error!(0, "Found Config {} error(s):", errors.len());
+            error!(0, "Parsed {} below:", path.display());
+            for e in &errors {
+                error!(0, "{}", format!("{e}").red());
+            }
+            std::process::exit(1);
+        }
     }
 }
 
