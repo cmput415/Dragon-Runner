@@ -5,26 +5,26 @@ from dragon_runner.src.utils    import file_to_str, str_to_bytes, file_to_bytes
 from dragon_runner.src.errors   import Verifiable, ErrorCollection, TestFileError
 
 class TestFile(Verifiable):
-    __test__ = False 
+    __test__ = False
     def __init__(self, test_path: str, input_dir="input", input_stream_dir="input-stream",
-                                  output_dir="output", comment_syntax="//"):   
+                                  output_dir="output", comment_syntax="//"):
         self.path = test_path
         self.stem, self.extension = os.path.splitext(os.path.basename(test_path))
-        self.file:str = self.stem + self.extension  
+        self.file:str = self.stem + self.extension
         self.input_dir = input_dir
-        self.input_stream_dir = input_stream_dir          
-        self.output_dir = output_dir                
+        self.input_stream_dir = input_stream_dir
+        self.output_dir = output_dir
         self.comment_syntax = comment_syntax # default C99 //
-        self.expected_out: Union[bytes, TestFileError] = self.get_content("CHECK:", "CHECK_FILE:")
+        self.expected_out: Union[bytes, TestFileError] = self.get_content("CHECK:", "CHECK_FILE:", "CHECK_EMPTY:")
         self.input_stream: Union[bytes, TestFileError] = self.get_content("INPUT:", "INPUT_FILE:")
-    
+
     @classmethod
     def from_test_contents(cls, content: bytes, test_name: str):
 
         instance = cls.__new__(cls)
-         
+
         return instance
-    
+
     def set_input_stream(self, input_stream: bytes):
         """
         Manually set the input stream.
@@ -54,45 +54,52 @@ class TestFile(Verifiable):
         Ensure the paths supplied in CHECK_FILE and INPUT_FILE exist
         """
         collection = ErrorCollection()
-        # If a parse and read of a tests input or output fails, propagate here 
+        # If a parse and read of a tests input or output fails, propagate here
         if isinstance(self.expected_out, TestFileError):
             collection.add(self.expected_out)
         if isinstance(self.input_stream, TestFileError):
-            collection.add(self.input_stream) 
+            collection.add(self.input_stream)
         return collection
 
-    def get_content(self, inline_directive: str, file_directive: str) -> Union[bytes, TestFileError]:
+    def get_content(self, inline_directive: str, file_directive: str,
+                    empty_directive: Optional[str] = None) -> Union[bytes, TestFileError]:
         """
-        Generic method to get content based on directives
+        Generic method to get content based on directives.
+
+        When empty_directive is supplied, inline_directive and empty_directive are
+        scanned together in a single ordered pass.
         """
-        inline_contents = self._get_directive_contents(inline_directive)
+        if empty_directive is not None:
+            inline_contents = self._get_directive_contents(inline_directive, empty_directive)
+        else:
+            inline_contents = self._get_directive_contents(inline_directive)
         file_contents = self._get_directive_contents(file_directive)
-        
+
         if inline_contents and file_contents:
             return TestFileError(f"Directive Conflict for test {self.file}: Supplied both\
                                  {inline_directive} and {file_directive}")
-        
+
         elif inline_contents:
             return inline_contents
 
-        elif file_contents: 
+        elif file_contents:
             if isinstance(file_contents, TestFileError):
                 return file_contents
 
             file_str = file_contents.decode()
- 
+
             full_path = os.path.join(os.path.dirname(self.path), file_str.strip())
             if not os.path.exists(full_path):
                 return TestFileError(f"Failed to locate path supplied to {file_directive}\n\tTest:{self.path}\n\tPath:{full_path}\n")
-            
+
             file_bytes = file_to_bytes(full_path)
             if file_bytes is None:
                 return TestFileError(f"Failed to convert file {full_path} to bytes")
-            
-            return file_bytes 
+
+            return file_bytes
         else:
             return b''
-    
+
     def _get_file_bytes(self, file_path: str) -> Optional[bytes]:
         """
         Get file contents in bytes
@@ -101,14 +108,19 @@ class TestFile(Verifiable):
             with open(file_path, "rb") as f:
                 file_bytes = f.read()
                 assert isinstance(file_bytes, bytes), "expected bytes"
-                return file_bytes 
+                return file_bytes
         except FileNotFoundError:
             return None
 
-    def _get_directive_contents(self, directive_prefix: str) -> Optional[Union[bytes, TestFileError]]:
+    def _get_directive_contents(self, directive_prefix: str,
+                                empty_directive: Optional[str] = None) -> Optional[Union[bytes, TestFileError]]:
         """
         Look into the testfile itself for contents defined in directives.
-        Directives can appear anywhere in a line, as long as they're preceded by a comment syntax.
+        Directives can appear anywhere in a line, as long as they're preceded by
+        a comment syntax.
+
+        When empty_directive is supplied, both directives are matched in the same
+        ordered pass.
         """
         contents = BytesIO()
         first_match = True
@@ -116,19 +128,26 @@ class TestFile(Verifiable):
             with open(self.path, 'r') as test_file:
                 for line in test_file:
                     comment_index = line.find(self.comment_syntax)
-                    directive_index = line.find(directive_prefix)
-                    if comment_index == -1 or directive_index == -1 or\
-                       comment_index > directive_index:
+                    if comment_index == -1:
                         continue
-                    
-                    rhs_line = line.split(directive_prefix, 1)[1]
-                    rhs_bytes = str_to_bytes(rhs_line, chop_newline=True)
-                    if rhs_bytes is None:
-                        return None
+
+                    directive_index = line.find(directive_prefix)
+                    empty_index = line.find(empty_directive) if empty_directive is not None else -1
+
+                    if directive_index != -1 and comment_index <= directive_index:
+                        rhs_line = line.split(directive_prefix, 1)[1]
+                        rhs_bytes = str_to_bytes(rhs_line, chop_newline=True)
+                        if rhs_bytes is None:
+                            return None
+                    elif empty_index != -1 and comment_index <= empty_index:
+                        rhs_bytes = b''
+                    else:
+                        continue
+
                     if not first_match:
                         contents.write(b'\n')
 
-                    contents.write(rhs_bytes)                
+                    contents.write(rhs_bytes)
                     first_match = False
             contents.seek(0)
             return contents.getvalue() if contents else None
@@ -142,7 +161,7 @@ class TestFile(Verifiable):
         test_name = os.path.basename(self.path)
         if len(test_name) > max_test_name_length:
             test_name = test_name[:max_test_name_length - 3] + "..."
-        
+
         expected_out = b''
         if isinstance(self.expected_out, bytes):
             expected_out = self.expected_out
@@ -154,15 +173,15 @@ class TestFile(Verifiable):
         return (f"{test_name:<{max_test_name_length}}"
                 f"{len(expected_out):>4}\t"
                 f"{len(input_stream):>4}")
-    
-    def to_dict(self) -> Dict:  
+
+    def to_dict(self) -> Dict:
         out = str(self.expected_out)
         ins = str(self.input_stream)
         return {
             "name": self.stem,
             "path": self.path,
             "expected_output": out,
-            "input_stream": ins 
+            "input_stream": ins
         }
 
     def pretty_print(self) -> str:
@@ -171,34 +190,34 @@ class TestFile(Verifiable):
         with borders around it.
         """
         file_content = file_to_str(self.path)
-        if not file_content: 
+        if not file_content:
             return f"Error reading file {self.path}:"
-        
+
         # query size of border to draw for user
         try:
             term_width = os.get_terminal_size().columns if hasattr(os, 'get_terminal_size') else 80
         except OSError:
             term_width = 80
-        content_width = min(term_width - 10, 100) 
-        
+        content_width = min(term_width - 10, 100)
+
         # ascii border characters
         top_border = '┌' + '─' * (content_width - 2) + '┐'
         bottom_border = '└' + '─' * (content_width - 2) + '┘'
-        
+
         # apply border format to each line in the file
         formatted_lines = []
-        formatted_lines.append(top_border) 
+        formatted_lines.append(top_border)
         for line in file_content.splitlines():
             # truncate long lines
             if len(line) > content_width - 4:
                 display_line = line[:content_width - 7] + '...'
             else:
-                display_line = line  
-            
-            # format content with border 
-            padded_line = display_line.ljust(content_width - 4)
-            formatted_lines.append(f'│ {padded_line} │') 
+                display_line = line
 
-        formatted_lines.append(bottom_border) 
+            # format content with border
+            padded_line = display_line.ljust(content_width - 4)
+            formatted_lines.append(f'│ {padded_line} │')
+
+        formatted_lines.append(bottom_border)
         return '\n'.join(formatted_lines)
 

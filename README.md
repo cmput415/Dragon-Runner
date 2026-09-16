@@ -72,6 +72,7 @@ Dragon-Runner uses JSON configuration files to define test packages, executables
 | `toolchains` | Map of toolchain names to step lists | ✓ |
 | `runtimes` | Map of runtime libraries (optional) | |
 | `solutionExecutable` | Reference solution ID (optional) | |
+| `commentPrefix` | Comment syntax used to introduce inline directives (optional, default `//`) | |
 
 #### Toolchain Steps
 | Property | Description | Required |
@@ -109,9 +110,25 @@ int main() {
 - `INPUT:` - Single line of stdin (no newline)
 - `INPUT_FILE:` - Path to input file
 - `CHECK:` - Expected stdout (no newline)  
+- `CHECK_EMPTY:` - Expected empty line of stdout
 - `CHECK_FILE:` - Path to expected output file
 
 Multiple `INPUT:` and `CHECK:` directives are supported. `INPUT:` and `INPUT_FILE:` cannot be used together.
+
+The text after `CHECK:` is taken literally, including any leading space (`//CHECK:5`
+expects `5`, `//CHECK: 5` expects ` 5`). Consecutive `CHECK:`/`CHECK_EMPTY:` directives
+are joined with a single newline in the order they appear, with no trailing newline. Use
+`CHECK_EMPTY:` to encode a blank line — including a trailing blank line, which is how you
+express output that ends in a newline:
+
+```c
+//CHECK:5
+//CHECK:7
+//CHECK_EMPTY:   // expected stdout is "5\n7\n"
+```
+
+A single `CHECK_EMPTY:` on its own asserts empty output. `CHECK:`/`CHECK_EMPTY:` and
+`CHECK_FILE:` cannot be used together.
 
 ## Command Line Reference
 

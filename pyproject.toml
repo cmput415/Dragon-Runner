@@ -9,7 +9,7 @@ description = "An experimental successor to the 415 tester"
 authors = [{name = "Justin Meimar", email = "meimar@ualberta.ca"}]
 license = {file = "LICENSE"}
 readme = "README.md"
-requires-python = ">=3.6"
+requires-python = ">=3.10"
 classifiers = ["Tester"]
 dependencies = [
     "colorama==0.4.6",

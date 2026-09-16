@@ -14,14 +14,15 @@ class SubPackage(Verifiable):
     """
     Represents a set of tests in a directory.
     """
-    def __init__(self, path: str): 
+    def __init__(self, path: str, comment_prefix: str = "//"):
         self.path: str              = path
         self.name: str              = os.path.basename(path)
-        self.tests: List[TestFile]  = [] 
+        self.comment_prefix: str    = comment_prefix
+        self.tests: List[TestFile]  = []
         if os.path.isdir(path):
             self.tests = self.gather_tests()
         else:
-            self.tests = [TestFile(path)]
+            self.tests = [TestFile(path, comment_syntax=comment_prefix)]
 
     def verify(self) -> ErrorCollection:
         """
@@ -50,23 +51,24 @@ class SubPackage(Verifiable):
         for file in os.listdir(self.path):
             test_path = os.path.join(self.path, file)
             if self.is_test(test_path):
-                tests.append(TestFile(test_path))
-        return sorted(tests, key=lambda x: x.file) 
+                tests.append(TestFile(test_path, comment_syntax=self.comment_prefix))
+        return sorted(tests, key=lambda x: x.file)
 
 class Package(Verifiable):
     """
     Represents a single test package. Shoud have a corresponding CCID if submitted. 
     """
-    def __init__(self, path: str):
+    def __init__(self, path: str, comment_prefix: str = "//"):
         self.path: str      = path
         self.name: str      = os.path.basename(path)
+        self.comment_prefix = comment_prefix
         self.n_tests        = 0
-        self.subpackages    = [] 
-        
+        self.subpackages    = []
+
         if os.path.isdir(path):
             self.gather_subpackages()
         else:
-            self.subpackages.append(SubPackage(path))
+            self.subpackages.append(SubPackage(path, comment_prefix))
 
     def verify(self) -> ErrorCollection:
         """
@@ -86,12 +88,12 @@ class Package(Verifiable):
         Collect any directory within a package and create a subpackage.
         """
         subpackages = []
-        top_level_spkg = SubPackage(self.path) 
+        top_level_spkg = SubPackage(self.path, self.comment_prefix)
         if len(top_level_spkg.tests) > 0:
             self.add_subpackage(top_level_spkg)
         for parent_path, dirs, _ in os.walk(self.path):
             for dirname in dirs:
-                spkg = SubPackage(os.path.join(parent_path, dirname))
+                spkg = SubPackage(os.path.join(parent_path, dirname), self.comment_prefix)
                 if len(spkg.tests) > 0:
                     self.add_subpackage(spkg)
         return subpackages
@@ -174,6 +176,7 @@ class Config:
         self.executables        = self.parse_executables(config_data['testedExecutablePaths'],
                                                    config_data.get('runtimes', ""))
         self.solution_exe       = config_data.get('solutionExecutable', None)
+        self.comment_prefix     = config_data.get('commentPrefix', '//')
         self.toolchains         = self.parse_toolchains(config_data['toolchains'])
         self.packages           = self.gather_packages()
         self.error_collection   = self.verify()
@@ -208,13 +211,13 @@ class Config:
         """
         packages = []
         if self.debug_package:
-            packages.append(Package(self.debug_package))
+            packages.append(Package(self.debug_package, self.comment_prefix))
             return packages
 
         for parent_path, dirs, _ in os.walk(self.test_dir):
             for dirname in dirs:
                 pkg_path = os.path.join(parent_path, dirname)
-                packages.append(Package(pkg_path))
+                packages.append(Package(pkg_path, self.comment_prefix))
             break
         return packages
 
