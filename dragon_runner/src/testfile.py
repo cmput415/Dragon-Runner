@@ -66,14 +66,22 @@ class TestFile(Verifiable):
         """
         Generic method to get content based on directives.
 
-        When empty_directive is supplied, inline_directive and empty_directive are
-        scanned together in a single ordered pass.
+        inline_directive (e.g. CHECK:) contributes each directive's literal RHS to
+        an ordered newline-join; an empty RHS encodes a blank line, so a trailing
+        empty directive encodes output that ends in a newline. file_directive
+        (e.g. CHECK_FILE:) points at a file. empty_directive (e.g. CHECK_EMPTY:),
+        when supplied, asserts the expected output is exactly empty (0 bytes) and
+        cannot be combined with the inline or file directives.
         """
-        if empty_directive is not None:
-            inline_contents = self._get_directive_contents(inline_directive, empty_directive)
-        else:
-            inline_contents = self._get_directive_contents(inline_directive)
+        inline_contents = self._get_directive_contents(inline_directive)
         file_contents = self._get_directive_contents(file_directive)
+
+        if empty_directive is not None and self._has_directive(empty_directive):
+            if inline_contents or file_contents:
+                return TestFileError(
+                    f"Directive Conflict for test {self.file}: {empty_directive} asserts "
+                    f"empty output and cannot be combined with {inline_directive} or {file_directive}")
+            return b''
 
         if inline_contents and file_contents:
             return TestFileError(f"Directive Conflict for test {self.file}: Supplied both\
@@ -112,15 +120,12 @@ class TestFile(Verifiable):
         except FileNotFoundError:
             return None
 
-    def _get_directive_contents(self, directive_prefix: str,
-                                empty_directive: Optional[str] = None) -> Optional[Union[bytes, TestFileError]]:
+    def _get_directive_contents(self, directive_prefix: str) -> Optional[Union[bytes, TestFileError]]:
         """
         Look into the testfile itself for contents defined in directives.
         Directives can appear anywhere in a line, as long as they're preceded by
-        a comment syntax.
-
-        When empty_directive is supplied, both directives are matched in the same
-        ordered pass.
+        a comment syntax. Each matching directive contributes its literal RHS to an
+        ordered newline-join (an empty RHS encodes a blank line).
         """
         contents = BytesIO()
         first_match = True
@@ -128,22 +133,15 @@ class TestFile(Verifiable):
             with open(self.path, 'r') as test_file:
                 for line in test_file:
                     comment_index = line.find(self.comment_syntax)
-                    if comment_index == -1:
-                        continue
-
                     directive_index = line.find(directive_prefix)
-                    empty_index = line.find(empty_directive) if empty_directive is not None else -1
-
-                    if directive_index != -1 and comment_index <= directive_index:
-                        rhs_line = line.split(directive_prefix, 1)[1]
-                        rhs_bytes = str_to_bytes(rhs_line, chop_newline=True)
-                        if rhs_bytes is None:
-                            return None
-                    elif empty_index != -1 and comment_index <= empty_index:
-                        rhs_bytes = b''
-                    else:
+                    if comment_index == -1 or directive_index == -1 or\
+                       comment_index > directive_index:
                         continue
 
+                    rhs_line = line.split(directive_prefix, 1)[1]
+                    rhs_bytes = str_to_bytes(rhs_line, chop_newline=True)
+                    if rhs_bytes is None:
+                        return None
                     if not first_match:
                         contents.write(b'\n')
 
@@ -155,6 +153,23 @@ class TestFile(Verifiable):
             return TestFileError(e.reason)
         except Exception as e:
             return TestFileError(f"Unkown error occured while parsing testfile: {self.path}")
+
+    def _has_directive(self, directive_prefix: str) -> bool:
+        """
+        Return True if any line carries the given comment directive. Used for
+        presence-only directives such as CHECK_EMPTY: that assert 0-byte output.
+        """
+        try:
+            with open(self.path, 'r') as test_file:
+                for line in test_file:
+                    comment_index = line.find(self.comment_syntax)
+                    directive_index = line.find(directive_prefix)
+                    if comment_index != -1 and directive_index != -1 and\
+                       comment_index <= directive_index:
+                        return True
+        except Exception:
+            return False
+        return False
 
     def __repr__(self):
         max_test_name_length = 30

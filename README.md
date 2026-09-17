@@ -109,26 +109,32 @@ int main() {
 ### Directives
 - `INPUT:` - Single line of stdin (no newline)
 - `INPUT_FILE:` - Path to input file
-- `CHECK:` - Expected stdout (no newline)  
-- `CHECK_EMPTY:` - Expected empty line of stdout
+- `CHECK:` - One line of expected stdout
+- `CHECK_EMPTY:` - Asserts the expected stdout is empty (0 bytes)
 - `CHECK_FILE:` - Path to expected output file
 
 Multiple `INPUT:` and `CHECK:` directives are supported. `INPUT:` and `INPUT_FILE:` cannot be used together.
 
 The text after `CHECK:` is taken literally, including any leading space (`//CHECK:5`
-expects `5`, `//CHECK: 5` expects ` 5`). Consecutive `CHECK:`/`CHECK_EMPTY:` directives
-are joined with a single newline in the order they appear, with no trailing newline. Use
-`CHECK_EMPTY:` to encode a blank line — including a trailing blank line, which is how you
+expects `5`, `//CHECK: 5` expects ` 5`). Consecutive `CHECK:` directives are joined
+with a single newline in the order they appear, with no trailing newline. An empty
+`CHECK:` encodes a blank line — including a trailing blank line, which is how you
 express output that ends in a newline:
 
 ```c
 //CHECK:5
 //CHECK:7
-//CHECK_EMPTY:   // expected stdout is "5\n7\n"
+//CHECK:          // expected stdout is "5\n7\n"
 ```
 
-A single `CHECK_EMPTY:` on its own asserts empty output. `CHECK:`/`CHECK_EMPTY:` and
-`CHECK_FILE:` cannot be used together.
+`CHECK_EMPTY:` asserts the program produces no output at all (0 bytes). It is only
+for that case and cannot be combined with `CHECK:` or `CHECK_FILE:`:
+
+```c
+//CHECK_EMPTY:    // expected stdout is "" (0 bytes)
+```
+
+`CHECK:` and `CHECK_FILE:` cannot be used together.
 
 ## Command Line Reference
 
